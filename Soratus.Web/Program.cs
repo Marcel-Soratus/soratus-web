@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.RateLimiting;
 using Soratus.Web.Components;
 using Soratus.Web.Endpoints;
@@ -59,6 +60,22 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Canonical-host redirect: www.soratus.com → soratus.com (301)
+app.Use(async (context, next) =>
+{
+    var host = context.Request.Host.Host;
+    if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+    {
+        var target = new UriBuilder(context.Request.GetEncodedUrl())
+        {
+            Host = host[4..]
+        };
+        context.Response.Redirect(target.ToString(), permanent: true);
+        return;
+    }
+    await next();
+});
 
 app.Use(async (context, next) =>
 {
