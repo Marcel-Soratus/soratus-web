@@ -1,0 +1,78 @@
+:root {
+  --bg: #13162a;
+  --bg-2: #1a1e36;
+  --ink: #f4f5fb;
+  --ink-dim: #a8aec6;
+  --ink-mute: #6b7290;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
+
+  --navy: #1B1F8C;
+  --navy-2: #2A2FCC;
+  --blue: #2B5BFF;
+  --blue-2: #5C82FF;
+  --green: #34E27A;
+  --green-2: #9DF7BD;
+  --warn: #FFD86B;
+
+  --grad: linear-gradient(135deg, #2B5BFF 0%, #34E27A 100%);
+  --grad-2: linear-gradient(135deg, #1B1F8C 0%, #2B5BFF 50%, #34E27A 100%);
+
+  --light-bg: #f6f7fb;
+  --light-ink: #0a0d1a;
+
+  --text-meta: 12px;
+  --text-eyebrow: 13px;
+  --text-body: 15px;
+  --text-lede: clamp(17px, 1.5vw, 21px);
+  --text-h4: 22px;
+  --text-h3: 28px;
+  --text-h2: clamp(40px, 5.5vw, 76px);
+  --text-h1: clamp(56px, 9vw, 148px);
+  --text-wordmark: 30px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 28px;
+  --space-6: 40px;
+  --space-7: 56px;
+  --space-8: 88px;
+  --space-9: 120px;
+
+  --radius-sm: 8px;
+  --radius: 18px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.3);
+  --shadow-btn: 0 8px 30px rgba(255, 255, 255, 0.18);
+  --glow-green: 0 0 12px var(--green);
+  --glow-green-lg: 0 0 40px rgba(52, 226, 122, 0.45);
+  --glow-blue: 0 0 12px var(--blue-2);
+  --glow-warn: 0 0 8px var(--warn);
+
+  --ease: cubic-bezier(.6, .05, .3, 1);
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-snap: cubic-bezier(.7, 0, .2, 1);
+
+  --dur-instant: 120ms;
+  --dur-fast: 200ms;
+  --dur: 350ms;
+  --dur-slow: 600ms;
+  --dur-reveal: 850ms;
+
+  --bp-xs: 480px;
+  --bp-sm: 600px;
+  --bp-md: 720px;
+  --bp-lg: 980px;
+  --bp-xl: 1240px;
+
+  --z-field: 0;
+  --z-noise: 1;
+  --z-content: 2;
+  --z-nav: 50;
+  --z-chat: 80;
+  --z-modal: 90;
+}

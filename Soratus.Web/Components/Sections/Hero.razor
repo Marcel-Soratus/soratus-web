@@ -1,0 +1,66 @@
+@inject IOptions<BrandOptions> Brand
+
+<section class="hero" id="top">
+    <div class="wrap">
+        <Eyebrow />
+        <h1 class="h1 reveal" data-comment-anchor="hero-h1">
+            <span class="strike" data-text="Software laten bouwen">Software laten bouwen</span><br />
+            is <span class="italic">voorbij</span>.<br />
+            Wij bouwen <span class="grad">intelligentie</span>.
+        </h1>
+
+        <div class="hero-grid">
+            <div class="reveal">
+                <p class="hero-lede">
+                    Soratus is de <b>AI-development partner</b> voor MKB en enterprise. Wij leveren software die zichzelf verbetert, processen die zichzelf optimaliseren, en agents die het werk doen waar je vandaag nog mensen voor inhuurt.
+                </p>
+                <div class="hero-cta">
+                    <Button Variant="glow" ShowDot="true" data-comment-anchor="hero-cta"
+                            Attrs="@(new Dictionary<string,object>{ ["onclick"] = "window.soratus && soratus.openChat()" })">
+                        Start een gesprek
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+                    </Button>
+                    <Button Variant="default" Href="#wat">Zie wat we maken</Button>
+                </div>
+                <div class="meta-row">
+                    <span><Pip Color="var(--blue-2)" /> @Brand.Value.Stats.ActiveProjects actieve projecten</span>
+                    <span><Pip Color="var(--green)" /> @Brand.Value.Stats.AgentsInProduction AI-agents in productie</span>
+                    <span><Pip Color="var(--warn)" /> Antwoord &lt; @Brand.Value.Stats.ResponseTimeHours uur</span>
+                </div>
+            </div>
+
+            <div class="orb-stage reveal" id="orbStage">
+                <div class="mesh-halo"></div>
+                <div class="ring r3" aria-hidden="true"></div>
+                <div class="ring r2" aria-hidden="true"></div>
+                <svg class="mesh" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                    <defs>
+                        <radialGradient id="g-navy"><stop offset="0%" stop-color="#8b90ff" /><stop offset="55%" stop-color="#2A2FCC" /><stop offset="100%" stop-color="#0e1166" /></radialGradient>
+                        <radialGradient id="g-green"><stop offset="0%" stop-color="#e0ffec" /><stop offset="40%" stop-color="#5cf598" /><stop offset="100%" stop-color="#1ba85a" /></radialGradient>
+                        <radialGradient id="g-blue"><stop offset="0%" stop-color="#cdd9ff" /><stop offset="45%" stop-color="#5C82FF" /><stop offset="100%" stop-color="#1A3FCC" /></radialGradient>
+                        <radialGradient id="g-white"><stop offset="0%" stop-color="#ffffff" /><stop offset="100%" stop-color="#9aa6ff" stop-opacity="0" /></radialGradient>
+                        <filter id="f-glow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="4" result="blur" />
+                            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                        </filter>
+                    </defs>
+                    <circle cx="300" cy="300" r="270" fill="none" stroke="rgba(255,255,255,0.04)" stroke-dasharray="2 6" />
+                    <circle cx="300" cy="300" r="200" fill="none" stroke="rgba(255,255,255,0.05)" />
+                    <circle cx="300" cy="300" r="130" fill="none" stroke="rgba(43,91,255,0.18)" stroke-dasharray="1 4" />
+                    <g class="sweep">
+                        <line x1="300" y1="300" x2="300" y2="30" stroke="rgba(52,226,122,0.7)" stroke-width="1.2" />
+                    </g>
+                    <g id="meshEdges" stroke-linecap="round"></g>
+                    <g id="meshPulses"></g>
+                    <g id="meshNodes"></g>
+                </svg>
+
+                <div class="codestrip" id="codestrip">init.system();</div>
+
+                <div class="float-card fc-1"><span class="led"></span> agent.deploy() ✓</div>
+                <div class="float-card fc-2"><span class="led" style="background:#5C82FF;box-shadow:0 0 10px #5C82FF"></span> 1.4M req/min</div>
+                <div class="float-card fc-3"><span class="led" style="background:#FFD86B;box-shadow:0 0 10px #FFD86B"></span> Latency 84ms</div>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,78 @@
+@inject IOptions<BrandOptions> Brand
+
+<section id="wat">
+    <div class="wrap">
+        <SectionHeader Tag="01 · Wat we doen"
+                       Aside="Wij maken de vetste AI oplossingen — van autonome agents tot custom platforms — voor bedrijven die niet alleen mee willen, maar voorop willen lopen.">
+            <Title>
+                Geen websites. <span class="italic">Systemen</span> die voor je werken.
+            </Title>
+        </SectionHeader>
+
+        <div class="bento reveal">
+            <article class="card feat c-1">
+                <div class="kicker"><span>AI Agents</span><span class="num">— 01</span></div>
+                <h3>Agents die <span class="italic" style="font-family:'Instrument Serif',serif">denken</span>, beslissen en handelen — 24/7.</h3>
+                <div class="feat-visual">
+                    <div class="terminal-bar">
+                        <span class="tdot" style="background:#FF5F57"></span>
+                        <span class="tdot" style="background:#FEBC2E"></span>
+                        <span class="tdot" style="background:#28C840"></span>
+                        <span style="color:var(--ink-mute);margin-left:14px;font-size:11px">agent.soratus.run</span>
+                    </div>
+                    <div class="terminal-body" id="terminal">
+                        <div class="ln"><span class="cm">// new customer · 09:42</span></div>
+                        <div class="ln"><span class="ks">intent</span> = <span class="vs">"return_request"</span></div>
+                        <div class="ln"><span class="ks">checking</span> order #SR-8420…</div>
+                        <div class="ln"><span class="ks">policy.check()</span> → <span class="vs">eligible</span></div>
+                        <div class="ln"><span class="ks">label.generate()</span> → <span class="vs">PDF + email sent</span></div>
+                        <div class="ln"><span class="cm">// resolved · 09:42:08 · 8s</span><span class="caret"></span></div>
+                    </div>
+                </div>
+                <p>Klantenservice, sales, ops, finance. Onze agents draaien op jouw data en spreken jouw taal — letterlijk.</p>
+            </article>
+
+            <article class="card c-2">
+                <div class="kicker"><span>Custom Software</span><span class="num">— 02</span></div>
+                <h3>Software op maat. Geen template, geen plugin, geen excuses.</h3>
+                <p>SaaS platforms, dashboards, interne tools, integraties. We bouwen wat er nog niet is.</p>
+                <div class="pillset">
+                    @foreach (var p in Brand.Value.CapabilityPills)
+                    {
+                        <span class="pill">@p</span>
+                    }
+                </div>
+            </article>
+
+            <article class="card c-3">
+                <div class="kicker"><span>Snelheid</span><span class="num">— 03</span></div>
+                <div class="stat-big">14<span style="font-size:48px;color:#34E27A">d</span></div>
+                <div class="stat-row">
+                    <p style="max-width:60%">Van eerste call tot werkende eerste versie. Niet 6 maanden. Niet 6 weken.</p>
+                </div>
+            </article>
+
+            <article class="card c-4">
+                <div class="kicker"><span>Integratie</span><span class="num">— 04</span></div>
+                <h3>Verbonden met alles wat je al gebruikt.</h3>
+                <p>Exact, AFAS, Salesforce, Shopify, HubSpot, Slack, Teams, WhatsApp, Outlook. Wij praten met je stack.</p>
+            </article>
+
+            <article class="card c-5">
+                <div class="kicker"><span>Privacy</span><span class="num">— 05</span></div>
+                <h3>EU-hosted. AVG-proof. Jouw data blijft van jou.</h3>
+                <p>Eigen modellen, geen training op klantdata, ISO-27001 partners. Volledige audit-trail.</p>
+            </article>
+
+            <article class="card c-6">
+                <div class="cta-strip">
+                    <h3>Niet zeker waar te beginnen? <span class="italic">Onze AI weet het wel.</span></h3>
+                    <Button Variant="glow" ShowDot="true"
+                            Attrs="@(new Dictionary<string,object>{ ["onclick"] = "window.soratus && soratus.openChat()", ["style"] = "flex-shrink:0" })">
+                        Vraag het de agent
+                    </Button>
+                </div>
+            </article>
+        </div>
+    </div>
+</section>

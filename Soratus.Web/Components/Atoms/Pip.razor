@@ -1,0 +1,6 @@
+@code {
+    [Parameter] public string Color { get; set; } = "var(--blue-2)";
+    [Parameter] public bool Pulse { get; set; } = false;
+}
+<span class="pip @(Pulse ? "pip-pulse" : "")"
+      style="background:@Color; box-shadow: 0 0 8px @Color"></span>

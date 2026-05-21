@@ -1,0 +1,35 @@
+@page "/Error"
+@using System.Diagnostics
+
+<PageTitle>Soratus — Er ging iets mis</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<section class="end">
+    <div class="wrap reveal in">
+        <div class="sec-tag" style="justify-content:center">500 · Server error</div>
+        <h2 class="h1" style="margin:18px 0 0">Er ging <span class="italic">iets</span> mis.</h2>
+        <p>Onze excuses. Probeer het over een paar seconden opnieuw, of mail ons.</p>
+        @if (ShowRequestId)
+        {
+            <p style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-mute)">
+                Request ID: <code>@RequestId</code>
+            </p>
+        }
+        <div class="end-cta">
+            <a href="/" class="btn btn-primary">Terug naar home</a>
+            <a href="mailto:hallo@soratus.com" class="btn">hallo@soratus.com</a>
+        </div>
+    </div>
+</section>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

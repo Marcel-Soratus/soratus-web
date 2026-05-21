@@ -1,0 +1,71 @@
+@code {
+    private record Q(string Quote, string AvatarStyle, string Role, string Industry, string Chip);
+
+    private static readonly Q[] _quotes =
+    [
+        new("\"Wat onze vorige bouwer in zes maanden niet voor elkaar kreeg, stond bij Soratus na <em>twee weken</em> live. En het werkt nog steeds beter.\"",
+            "background:radial-gradient(circle at 30% 30%,#5C82FF,#13162a 70%)",
+            "COO", "productiebedrijf · 450 fte", "−62% doorlooptijd"),
+        new("\"Onze AI-agent beantwoordt <em>73% van de klantvragen</em> autonoom. Mijn team werkt nu aan de interessante helft.\"",
+            "background:conic-gradient(from 210deg at 50% 50%,#34E27A,#2A6FDB,#5C82FF,#34E27A)",
+            "Head of Customer Success", "e-commerce · DTC brand", "73% auto-resolved"),
+        new("\"Eindelijk een partij die <em>niet eerst zes weken workshoppen</em> wil. Dinsdag briefing, vrijdag prototype, levert.\"",
+            "background:linear-gradient(200deg,#5C82FF 0%,#34E27A 60%,#13162a 100%)",
+            "CFO", "logistiek · 12 vestigingen", "14 dagen live"),
+        new("\"De factuurverwerking draait <em>volledig automatisch</em>. Wat eerst 2 fte kostte, is nu één agent die nooit verlof neemt.\"",
+            "background:radial-gradient(circle at 70% 65%,#5C82FF,#13162a 75%)",
+            "Finance Lead", "groothandel · €80M omzet", "2 fte vrijgemaakt"),
+        new("\"Ze bouwden in <em>drie weken</em> wat een groot bureau ons voor drie ton wilde verkopen. En het is beter.\"",
+            "background:conic-gradient(from 45deg at 60% 40%,#34E27A,#13162a,#2A6FDB,#34E27A)",
+            "CEO", "SaaS scale-up · Series A", "€280k bespaard"),
+        new("\"Het platform leert zichzelf. Elke maand vinden we features die we niet hadden gevraagd, maar nu <em>niet meer kunnen missen</em>.\"",
+            "background:radial-gradient(circle at 25% 75%,#34E27A,#2A6FDB 70%)",
+            "CTO", "healthtech · NL/BE", "ISO 27001 ✓"),
+        new("\"Soratus is geen leverancier. Het voelt meer als <em>een tweede engineering team</em> dat alleen meedoet als het ertoe doet.\"",
+            "background:linear-gradient(60deg,#13162a 0%,#2A6FDB 50%,#5C82FF 100%)",
+            "VP Engineering", "enterprise · 1.200 fte", "3 jaar partner"),
+    ];
+}
+<div class="wrap">
+    <div class="quote reveal">
+        <div class="quote-head">
+            <div class="sec-tag">04 · Wat klanten zeggen</div>
+            <div class="qcount" id="qcount">01 / 0@(_quotes.Length)</div>
+        </div>
+        <div class="quote-stage" id="quoteStage">
+            @for (var i = 0; i < _quotes.Length; i++)
+            {
+                var q = _quotes[i];
+                var cls = i == 0 ? "qcard active" : "qcard";
+                <div class="@cls">
+                    <blockquote>@((MarkupString)q.Quote)</blockquote>
+                    <div class="qmeta">
+                        <span class="qav" style="@q.AvatarStyle"></span>
+                        <div>
+                            <div class="qname">@q.Role</div>
+                            <div class="qrole">@q.Industry</div>
+                        </div>
+                        <span class="qchip">@q.Chip</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="quote-controls">
+            <div class="quote-dots" id="quoteDots">
+                @for (var i = 0; i < _quotes.Length; i++)
+                {
+                    var cls = i == 0 ? "qdot active" : "qdot";
+                    <button class="@cls" data-i="@i" aria-label="@($"Quote {i + 1}")"><span class="fill"></span></button>
+                }
+            </div>
+            <div class="quote-nav">
+                <button class="qnav" id="qPrev" aria-label="Vorige">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                </button>
+                <button class="qnav" id="qNext" aria-label="Volgende">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,10 @@
+@code {
+    [Parameter] public int Size { get; set; } = 32;
+    [Parameter] public string? Mono { get; set; }
+}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"
+     width="@Size" height="@Size" role="img" aria-label="Soratus" class="brand-mark">
+    <circle cx="6" cy="26" r="3" fill="@(Mono ?? "#2A2FCC")" />
+    <circle cx="16" cy="16" r="4" fill="@(Mono ?? "#5C82FF")" />
+    <circle cx="26" cy="6" r="5" fill="@(Mono ?? "#34E27A")" />
+</svg>

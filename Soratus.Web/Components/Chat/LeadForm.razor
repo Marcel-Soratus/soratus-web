@@ -1,0 +1,82 @@
+@using System.ComponentModel.DataAnnotations
+@inject LeadSink Sink
+@inject ILogger<LeadForm> Log
+
+<div class="lead-card">
+    <div class="lead-head">
+        <div class="lead-icon">→</div>
+        <div>
+            <div class="lead-title">Laat ons terugbellen</div>
+            <div class="lead-sub">Antwoord &lt; 4 uur · werkdagen</div>
+        </div>
+    </div>
+
+    <EditForm Model="_model" OnValidSubmit="Send" FormName="lead">
+        <DataAnnotationsValidator />
+        <div class="lead-grid">
+            <InputText class="lead-in" placeholder="Naam *" @bind-Value="_model.Name" disabled="@_busy" />
+            <InputText class="lead-in" placeholder="Bedrijf" @bind-Value="_model.Company" disabled="@_busy" />
+            <InputText class="lead-in" placeholder="Telefoon *" @bind-Value="_model.Phone" disabled="@_busy" />
+            <InputText class="lead-in" placeholder="E-mail" @bind-Value="_model.Email" disabled="@_busy" />
+            <InputTextArea class="lead-in" placeholder="Korte notitie (optioneel)" rows="2" @bind-Value="_model.Note" disabled="@_busy" />
+        </div>
+        <label class="lead-consent">
+            <InputCheckbox @bind-Value="_model.Consent" disabled="@_busy" />
+            <span>Ik ga akkoord dat Soratus mij eenmalig contact opneemt over deze aanvraag.</span>
+        </label>
+        <button class="lead-send" type="submit" disabled="@_busy">@(_busy ? "Versturen…" : "Verstuur aanvraag")</button>
+        <div class="lead-status @_statusClass">@_status</div>
+    </EditForm>
+</div>
+
+@code {
+    private LeadModel _model = new();
+    private bool _busy;
+    private string _status = "";
+    private string _statusClass = "";
+
+    private sealed class LeadModel
+    {
+        [Required(ErrorMessage = "Naam is verplicht.")]
+        public string Name { get; set; } = "";
+        public string Company { get; set; } = "";
+        [Required(ErrorMessage = "Telefoon is verplicht.")]
+        public string Phone { get; set; } = "";
+        [EmailAddress(ErrorMessage = "Geen geldig e-mailadres.")]
+        public string? Email { get; set; }
+        public string? Note { get; set; }
+        public bool Consent { get; set; }
+    }
+
+    private async Task Send()
+    {
+        if (!_model.Consent)
+        {
+            _status = "Je moet akkoord gaan om verzonden te kunnen worden.";
+            _statusClass = "err";
+            return;
+        }
+
+        _busy = true;
+        _status = "Verzenden…";
+        _statusClass = "";
+
+        try
+        {
+            var lead = new Lead(_model.Name, _model.Company, _model.Phone, _model.Email, _model.Note, _model.Consent);
+            await Sink.SaveAsync(lead, CancellationToken.None);
+            _status = "Verzonden. We bellen snel terug.";
+            _statusClass = "ok";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Lead submission failed");
+            _status = "Er ging iets mis. Probeer het zo opnieuw.";
+            _statusClass = "err";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

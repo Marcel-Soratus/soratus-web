@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Soratus — Blazor handoff package</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#13162a; --bg-2:#1a1e36;
+    --ink:#f4f5fb; --ink-dim:#a8aec6; --ink-mute:#6b7290;
+    --line:rgba(255,255,255,0.09); --line-strong:rgba(255,255,255,0.2);
+    --green:#34E27A; --blue:#2B5BFF; --blue-2:#5C82FF;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Space Grotesk",sans-serif;-webkit-font-smoothing:antialiased}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(900px 600px at 80% 10%, rgba(43,91,255,0.18), transparent 60%),
+      radial-gradient(700px 500px at 10% 90%, rgba(52,226,122,0.12), transparent 60%);
+  }
+  main{position:relative;z-index:1}
+  .wrap{max-width:1100px;margin:0 auto;padding:64px 32px 120px}
+  @media (max-width:720px){.wrap{padding:40px 20px 80px}}
+
+  /* Header */
+  .head{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;margin-bottom:64px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .mark{position:relative;width:32px;height:32px;flex-shrink:0}
+  .mark .d1,.mark .d2,.mark .d3{position:absolute;border-radius:99px}
+  .mark .d1{width:6px;height:6px;background:#2A2FCC;left:3px;top:23px}
+  .mark .d2{width:8px;height:8px;background:#5C82FF;left:12px;top:12px}
+  .mark .d3{width:10px;height:10px;background:#34E27A;left:21px;top:1px}
+  .brand-name{font-family:"Sora",sans-serif;font-weight:200;font-size:30px;letter-spacing:-0.04em;line-height:1}
+  .head-meta{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-mute);letter-spacing:0.12em;text-transform:uppercase;text-align:right}
+
+  /* Hero */
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.14em;color:var(--green);text-transform:uppercase;display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .eyebrow::before{content:"";width:24px;height:1px;background:var(--green)}
+  h1{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:clamp(40px,5.5vw,72px);line-height:1;letter-spacing:-0.035em;margin:0 0 24px;max-width:22ch}
+  h1 .italic{font-family:"Instrument Serif",serif;font-style:italic;font-weight:400}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink-dim);max-width:60ch;margin:0 0 40px}
+  .lede b{color:var(--ink);font-weight:500}
+
+  /* Stat row */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:64px}
+  @media (max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:var(--bg);padding:24px 22px;display:flex;flex-direction:column;gap:6px}
+  .stat .v{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:32px;letter-spacing:-0.02em;line-height:1}
+  .stat .v .u{font-family:"Instrument Serif",serif;font-style:italic;font-weight:400;color:var(--green);font-size:24px;letter-spacing:0;margin-left:4px}
+  .stat .k{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:0.1em;color:var(--ink-mute);text-transform:uppercase}
+
+  /* Section */
+  section{margin-bottom:88px}
+  .sec-tag{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.14em;color:var(--green);text-transform:uppercase;display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .sec-tag::before{content:"";width:24px;height:1px;background:var(--green)}
+  h2{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:36px;letter-spacing:-0.025em;margin:0 0 24px;line-height:1.05}
+  h2 .italic{font-family:"Instrument Serif",serif;font-style:italic;font-weight:400}
+  p{color:var(--ink-dim);line-height:1.6;font-size:15px;margin:0 0 16px;max-width:72ch}
+  p b{color:var(--ink);font-weight:500}
+
+  /* Doc card grid */
+  .docs{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  @media (max-width:720px){.docs{grid-template-columns:1fr}}
+  .doc{background:var(--bg);padding:28px 28px 24px;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;transition:background .2s}
+  .doc:hover{background:#181b35}
+  .doc .num{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:0.1em;color:var(--ink-mute)}
+  .doc h3{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:22px;letter-spacing:-0.02em;margin:0;line-height:1.15}
+  .doc p{font-size:14px;color:var(--ink-dim);margin:4px 0 0;line-height:1.5}
+  .doc .arr{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--green);margin-top:auto;padding-top:14px;opacity:.6;transition:opacity .2s}
+  .doc:hover .arr{opacity:1}
+
+  /* Brand sample */
+  .brandgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:24px}
+  @media (max-width:720px){.brandgrid{grid-template-columns:1fr 1fr}}
+  .bcell{background:var(--bg);padding:24px;display:flex;flex-direction:column;justify-content:space-between;min-height:140px;gap:18px}
+  .bcell.light{background:#f6f7fb}
+  .bcell .label{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:0.08em;color:var(--ink-mute);text-transform:uppercase}
+  .bcell.light .label{color:#6b7290}
+  .bcell .visual{display:flex;align-items:center;justify-content:center;flex:1}
+  .bcell .visual img{max-width:100%;height:auto}
+
+  /* CTA strip */
+  .cta{
+    border:1px solid var(--line);border-radius:28px;
+    background:linear-gradient(180deg, rgba(43,91,255,0.08), rgba(52,226,122,0.04));
+    padding:48px;display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;
+  }
+  .cta h3{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:28px;letter-spacing:-0.02em;margin:0;line-height:1.15;max-width:24ch}
+  .cta h3 .italic{font-family:"Instrument Serif",serif;font-style:italic;font-weight:400}
+  .cta .btn{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:14px 22px;border-radius:999px;font-size:14.5px;font-weight:500;
+    background:var(--ink);color:#000;border:none;cursor:pointer;
+    box-shadow:0 8px 30px rgba(255,255,255,0.18);
+    text-decoration:none;
+  }
+
+  /* Type sample */
+  .typeface{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:24px}
+  @media (max-width:720px){.typeface{grid-template-columns:1fr}}
+  .tf{background:var(--bg);padding:28px}
+  .tf .name{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:0.1em;color:var(--ink-mute);text-transform:uppercase;margin-bottom:10px}
+  .tf .sample-sora{font-family:"Sora",sans-serif;font-weight:200;font-size:46px;letter-spacing:-0.04em;line-height:1}
+  .tf .sample-grotesk{font-family:"Space Grotesk",sans-serif;font-weight:500;font-size:34px;letter-spacing:-0.025em;line-height:1}
+  .tf .sample-serif{font-family:"Instrument Serif",serif;font-style:italic;font-weight:400;font-size:38px;letter-spacing:-0.01em;line-height:1}
+  .tf .sample-mono{font-family:"JetBrains Mono",monospace;font-size:13px;letter-spacing:0.06em;color:var(--green);text-transform:uppercase}
+
+  /* Color row */
+  .colors{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  @media (max-width:720px){.colors{grid-template-columns:repeat(3,1fr)}}
+  .swatch{padding:24px 18px;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;font-family:"JetBrains Mono",monospace;font-size:11px;color:#fff}
+  .swatch .h{font-size:13px;letter-spacing:0.04em}
+
+  /* footer */
+  footer{margin-top:80px;padding-top:32px;border-top:1px solid var(--line);font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-mute);letter-spacing:0.06em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+</style>
+</head>
+<body>
+<main>
+<div class="wrap">
+
+  <div class="head">
+    <div class="brand">
+      <span class="mark"><span class="d1"></span><span class="d2"></span><span class="d3"></span></span>
+      <span class="brand-name">soratus</span>
+    </div>
+    <div class="head-meta">handoff · v1.0 · mei 2026</div>
+  </div>
+
+  <div class="eyebrow">Voor Claude Code</div>
+  <h1>Bouw de marketingsite. <span class="italic">Exact</span> zoals het prototype.</h1>
+  <p class="lede">Dit pakket bevat alles om het Soratus-prototype om te zetten naar een productie-rijpe <b>Blazor Web App (.NET 9)</b>. Designtokens, componentspecs, backend-endpoints en deploypipeline — niets is aan de fantasie overgelaten.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="v">7<span class="u">md</span></div><div class="k">document files</div></div>
+    <div class="stat"><div class="v">16<span class="u">x</span></div><div class="k">brand assets</div></div>
+    <div class="stat"><div class="v">1<span class="u">.razor</span></div><div class="k">interactive island</div></div>
+    <div class="stat"><div class="v">0<span class="u">deps</span></div><div class="k">UI kits added</div></div>
+  </div>
+
+  <section>
+    <div class="sec-tag">01 · Documenten</div>
+    <h2>Lees in volgorde. <span class="italic">Geen sla&shy;over.</span></h2>
+    <p>Elk document is opzichzelfstaand maar bouwt op de vorige. Start bij <code>CLAUDE.md</code> — die zet de regels voor de hele repo.</p>
+    <div class="docs">
+      <a class="doc" href="README.md"><span class="num">00</span><h3>README.md</h3><p>Pakket-overzicht, render-mode keuze, wat blijft en wat verandert in de port.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="CLAUDE.md"><span class="num">★</span><h3>CLAUDE.md</h3><p>Drop in de repo root. Standing orders voor Claude Code: regels, conventies, push-back lijst.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="01-architecture.md"><span class="num">01</span><h3>01 · Architecture</h3><p>Solution layout, .NET 9 Blazor Web App, Program.cs, appsettings.json shape.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="02-design-tokens.md"><span class="num">02</span><h3>02 · Design tokens</h3><p>Kleuren, type, spacing, radii, motion, breakpoints — letterlijk de tokens.css.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="03-components.md"><span class="num">03</span><h3>03 · Components</h3><p>Atoms, layout, sections, chat. Per component: props, markup, regels naar prototype.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="04-pages.md"><span class="num">04</span><h3>04 · Pages</h3><p>Home.razor compositie, ankers, meta, structured data, OG image.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="05-backend.md"><span class="num">05</span><h3>05 · Backend</h3><p>/api/chat met SSE-stream naar Claude. /api/lead via SendGrid. Systeem-prompt.</p><span class="arr">→ open</span></a>
+      <a class="doc" href="06-deployment.md"><span class="num">06</span><h3>06 · Deployment</h3><p>Azure App Service West-Europa, GitHub Actions, Key Vault, kosten, checklist.</p><span class="arr">→ open</span></a>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-tag">02 · Brand mark v2</div>
+    <h2>Drie punten op stijgende koers.</h2>
+    <p>Geometrie op een 32-grid, gesnapt op hele pixels — scherp op 16px favicon én 512px splash. Kleuren lopen van navy via blauw naar groen: de visuele vertaling van <i style="font-family:'Instrument Serif',serif">time changing</i>. Vier varianten dekken elk gebruik.</p>
+    <div class="brandgrid">
+      <div class="bcell"><div class="label">logo-light.svg</div><div class="visual"><img src="brand/logo-light.svg" alt="" width="220"></div></div>
+      <div class="bcell light"><div class="label">logo-dark.svg</div><div class="visual"><img src="brand/logo-dark.svg" alt="" width="220"></div></div>
+      <div class="bcell"><div class="label">logo-mono-light.svg</div><div class="visual"><img src="brand/logo-mono-light.svg" alt="" width="220"></div></div>
+      <div class="bcell"><div class="label">logo-mark.svg · 96px</div><div class="visual"><img src="brand/logo-mark.svg" alt="" width="96" height="96"></div></div>
+      <div class="bcell"><div class="label">favicon-32.png</div><div class="visual"><img src="brand/favicon-32.png" alt="" width="32" height="32" style="image-rendering:pixelated"></div></div>
+      <div class="bcell"><div class="label">lockup met tagline</div><div class="visual"><img src="brand/logo-lockup-light.svg" alt="" width="280"></div></div>
+    </div>
+    <p style="font-size:13px;color:var(--ink-mute);font-family:'JetBrains Mono',monospace;letter-spacing:0.04em">→ Volledig overzicht: <a href="brand/preview.html" style="color:var(--green)">brand/preview.html</a></p>
+  </section>
+
+  <section>
+    <div class="sec-tag">03 · Type</div>
+    <h2>Vier fonts, geen uitzonderingen.</h2>
+    <div class="typeface">
+      <div class="tf">
+        <div class="name">Sora 200 · wordmark</div>
+        <div class="sample-sora">soratus</div>
+      </div>
+      <div class="tf">
+        <div class="name">Space Grotesk 500 · UI</div>
+        <div class="sample-grotesk">Software die werkt.</div>
+      </div>
+      <div class="tf">
+        <div class="name">Instrument Serif italic · emphasis</div>
+        <div class="sample-serif">time changing</div>
+      </div>
+      <div class="tf">
+        <div class="name">JetBrains Mono 500 · meta</div>
+        <div class="sample-mono">01 · WAT WE DOEN</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-tag">04 · Kleur</div>
+    <h2>Donker canvas. Groen signaal.</h2>
+    <div class="colors">
+      <div class="swatch" style="background:#13162a"><span>bg</span><span class="h">#13162a</span></div>
+      <div class="swatch" style="background:#1B1F8C"><span>navy</span><span class="h">#1B1F8C</span></div>
+      <div class="swatch" style="background:#2A2FCC"><span>navy-2</span><span class="h">#2A2FCC</span></div>
+      <div class="swatch" style="background:#2B5BFF"><span>blue</span><span class="h">#2B5BFF</span></div>
+      <div class="swatch" style="background:#5C82FF"><span>blue-2</span><span class="h">#5C82FF</span></div>
+      <div class="swatch" style="background:#34E27A;color:#000"><span>green</span><span class="h">#34E27A</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-tag">05 · Referentie</div>
+    <h2>Het prototype is de <span class="italic">waarheid</span>.</h2>
+    <p>Bij iedere twijfel — wat is de hover-state, hoe ver wrap die headline, op welk breakpoint krimpt die grid — opent Claude Code <code>reference/index.html</code> in een browser ernaast. Geen Figma, geen mockups, geen screenshots. De HTML is de spec.</p>
+    <p><a href="reference/index.html" style="color:var(--green);font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.04em">→ open reference/index.html</a></p>
+  </section>
+
+  <div class="cta">
+    <h3>Klaar om te bouwen? <span class="italic">Start bij CLAUDE.md.</span></h3>
+    <a class="btn" href="CLAUDE.md">
+      Open CLAUDE.md
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+    </a>
+  </div>
+
+  <footer>
+    <div>SORATUS B.V. · KvK 68752326</div>
+    <div>handoff package · gegenereerd mei 2026</div>
+  </footer>
+
+</div>
+</main>
+</body>
+</html>

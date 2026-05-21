@@ -1,0 +1,40 @@
+@code {
+    private record Item(string Number, string Title, string Hint, string? Action = null);
+
+    private static readonly Item[] _items =
+    [
+        new("01", "Retail & E-commerce",      "→ klantenservice agents · dynamische prijzen"),
+        new("02", "Productie & Industrie",    "→ predictive maintenance · order flow"),
+        new("03", "Financieel & Accounting",  "→ document AI · compliance bots"),
+        new("04", "Logistiek & Transport",    "→ route optimalisatie · ETA voorspelling"),
+        new("05", "Zorg & Gezondheid",        "→ planning AI · dossier samenvatting"),
+        new("06", "Bouw & Vastgoed",          "→ offertes in seconden · BIM koppeling"),
+        new("07", "Juridisch & HR",           "→ contract review · onboarding agents"),
+        new("08", "Jouw branche",             "→ vraag de AI wat we hier kunnen doen",
+            "Wat zou Soratus kunnen doen in mijn branche?")
+    ];
+}
+<section id="branches">
+    <div class="wrap">
+        <SectionHeader Tag="03 · Branches"
+                       Aside="We werken met scale-ups, familiebedrijven en multinationals. Industrie maakt ons niet uit, ambitie wel.">
+            <Title>Eén ding gemeen: ze willen <span class="italic">vooruit</span>.</Title>
+        </SectionHeader>
+
+        <div class="branches reveal">
+            @foreach (var item in _items)
+            {
+                var onclick = item.Action is null
+                    ? "window.soratus && soratus.openChat()"
+                    : $"window.soratus && soratus.openChatWith('{item.Action.Replace("'", "\\'")}')";
+                <a class="branche" onclick="@onclick" tabindex="0">
+                    <div>
+                        <div class="bnum">@item.Number</div>
+                        <h4>@item.Title</h4>
+                    </div>
+                    <span class="arrow">@item.Hint</span>
+                </a>
+            }
+        </div>
+    </div>
+</section>

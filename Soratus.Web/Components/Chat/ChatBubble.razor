@@ -1,0 +1,11 @@
+@code {
+    [Parameter, EditorRequired] public ChatTurn Turn { get; set; } = default!;
+    [Parameter] public bool Streaming { get; set; }
+}
+<div class="msg @(Turn.Role == "user" ? "user" : "bot")">
+    @((MarkupString)Turn.Html)
+    @if (Streaming)
+    {
+        <span class="caret" style="vertical-align:-2px"></span>
+    }
+</div>

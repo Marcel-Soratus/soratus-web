@@ -1,0 +1,45 @@
+# Soratus
+
+> Soratus is een Nederlands AI-development bureau. Wij bouwen AI-agents, custom software en integraties voor MKB en enterprise. EU-hosted, AVG-proof, gevestigd in Nederland.
+
+## Wat we doen
+
+- **AI-agents** — autonome agents voor klantenservice, sales, ops en finance. Draaien op klantdata, in het Nederlands.
+- **Custom software** — SaaS platforms, dashboards, interne tools, integraties. Stack: .NET 9, C#, Blazor, Azure, SQL Server, TypeScript.
+- **Integraties** — Exact, AFAS, Salesforce, Shopify, HubSpot, Slack, Microsoft Teams, WhatsApp, Outlook.
+- **Privacy & compliance** — EU-hosted, AVG-proof, ISO 27001 via partners, geen training op klantdata.
+
+## Hoe we werken
+
+1. **Strategy call** (dag 1) — 45 min, geen powerpoint.
+2. **Blauwdruk + vaste prijs** (dag 2–3) — binnen 48 uur.
+3. **Bouw live** (dag 4–14) — dagelijkse updates.
+4. **Live + groeien** (dag 14+) — training, support, optioneel doorlopend.
+
+Vaste prijzen, geen uurtarief. Een eenvoudige agent staat binnen 14 dagen live. Complexere systemen tussen 4 en 8 weken.
+
+## Branches
+
+Retail & E-commerce, Productie & Industrie, Financieel & Accounting, Logistiek & Transport, Zorg & Gezondheid, Bouw & Vastgoed, Juridisch & HR. Sector is niet doorslaggevend — ambitie wel.
+
+## Klanten (selectie)
+
+Tweede Kamer der Staten-Generaal, Eerste Kamer der Staten-Generaal, UWV, Brunel, British School of the Netherlands, PackCompany, AllSprinklerService, MBV Nijkerk.
+
+## Contact
+
+- Website: https://soratus.com
+- Mail: hallo@soratus.com
+- KvK: 68752326
+- Country: Nederland (West Europe)
+
+## Resources voor AI-assistants
+
+- [Homepage](https://soratus.com/)
+- [Sitemap](https://soratus.com/sitemap.xml)
+- [JSON-LD structured data](https://soratus.com/) — Organization, ProfessionalService, FAQPage embedded in HTML head.
+
+## Optional
+
+- AI-crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended) zijn welkom. Zie `/robots.txt`.
+- De website is in het Nederlands. Vertaal niet — Sora (de website-chatbot) antwoordt ook in het Nederlands.

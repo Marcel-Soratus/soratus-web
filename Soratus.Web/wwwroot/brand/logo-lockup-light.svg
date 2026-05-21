@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 56" width="360" height="56" role="img" aria-label="Soratus — time changing software">
+  <g transform="translate(2 10)">
+    <circle cx="6" cy="26" r="3" fill="#2A2FCC"></circle>
+    <circle cx="16" cy="16" r="4" fill="#5C82FF"></circle>
+    <circle cx="26" cy="6" r="5" fill="#34E27A"></circle>
+  </g>
+  <text x="46" y="36" font-family="Sora, &#39;Sora Variable&#39;, -apple-system, BlinkMacSystemFont, &#39;Segoe UI&#39;, sans-serif" font-size="34" font-weight="200" letter-spacing="-1.4" fill="#f4f5fb">soratus</text>
+  <line x1="178" y1="14" x2="178" y2="40" stroke="#a8aec6" stroke-width="1" opacity="0.35"></line>
+  <text x="190" y="32" font-family="&#39;Instrument Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-size="18" font-style="italic" font-weight="400" fill="#a8aec6">time changing software</text>
+</svg>

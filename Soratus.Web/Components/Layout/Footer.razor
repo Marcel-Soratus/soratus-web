@@ -1,0 +1,17 @@
+@inject IOptions<CompanyOptions> Company
+<footer id="footer">
+    <div class="wrap foot">
+        <div class="foot-brand">
+            <img src="/brand/logo-mark.svg" width="34" height="34" alt="" class="brand-mark" aria-hidden="true" />
+            <span class="brand-name">soratus</span>
+            <span class="foot-divider"></span>
+            <span class="foot-slogan">
+                <span class="foot-slogan-em">time</span><span class="foot-slogan-rest">&nbsp;changing software</span>
+                <span class="foot-slogan-cursor" aria-hidden="true"></span>
+            </span>
+        </div>
+        <div>
+            © @DateTime.UtcNow.Year @Company.Value.LegalName · KvK @Company.Value.Kvk · gebouwd in @Company.Value.Country
+        </div>
+    </div>
+</footer>

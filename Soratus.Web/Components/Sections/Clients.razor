@@ -1,0 +1,30 @@
+@code {
+    private record Cli(string Name, string Sub, string Badge, int StyleIdx);
+
+    private static readonly Cli[] _clients =
+    [
+        new("Tweede Kamer", "der Staten-Generaal", "Overheid", 1),
+        new("Eerste Kamer", "der Staten-Generaal", "Overheid", 2),
+        new("Brunel", "technical staffing", "Detachering", 3),
+        new("PackCompany", "industriële verpakkingen", "Industrie", 4),
+        new("AllSprinklerService", "sprinklerinstallaties", "Brandveiligheid", 5),
+        new("MBV Nijkerk", "accountants · adviseurs", "Accountancy", 6),
+        new("British School", "of the Netherlands", "Onderwijs", 3),
+        new("UWV", "publieke dienstverlener · werk & inkomen", "Overheid", 2),
+    ];
+}
+<div class="wrap">
+    <div class="clients reveal">
+        <div class="clients-tag">In vertrouwen gebouwd voor</div>
+        <div class="clients-row">
+            @foreach (var c in _clients)
+            {
+                <div class="cli cli-@c.StyleIdx">
+                    <span class="gov-badge">@c.Badge</span>
+                    <div class="cli-name">@c.Name</div>
+                    <div class="cli-sub">@c.Sub</div>
+                </div>
+            }
+        </div>
+    </div>
+</div>

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Soratus — Brand Marks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#13162a; --ink:#f4f5fb; --ink-dim:#a8aec6; --ink-mute:#6b7290;
+    --line:rgba(255,255,255,0.09); --line-strong:rgba(255,255,255,0.2);
+    --green:#34E27A; --blue:#2B5BFF;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Space Grotesk",sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1240px;margin:0 auto;padding:48px 32px 96px}
+  h1{font-family:"Sora",sans-serif;font-weight:200;font-size:56px;letter-spacing:-0.04em;margin:0 0 8px}
+  .lede{color:var(--ink-dim);max-width:60ch;font-size:16px;line-height:1.5;margin:0 0 48px}
+  .tag{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--green);letter-spacing:0.14em;text-transform:uppercase;display:flex;align-items:center;gap:10px;margin:48px 0 18px}
+  .tag::before{content:"";width:24px;height:1px;background:var(--green)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  .cell{background:var(--bg);padding:32px;display:flex;flex-direction:column;justify-content:space-between;min-height:200px;gap:24px}
+  .cell.light{background:#f6f7fb;color:#0a0d1a}
+  .cell.bgwhite{background:#ffffff;color:#0a0d1a}
+  .cell .meta{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-mute);letter-spacing:0.06em}
+  .cell.light .meta,.cell.bgwhite .meta{color:#6b7290}
+  .preview{display:flex;align-items:center;justify-content:center;flex:1}
+  .preview svg{max-width:100%;height:auto}
+
+  .swatchgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  .sw{padding:24px 18px;min-height:140px;display:flex;flex-direction:column;justify-content:space-between;font-family:"JetBrains Mono",monospace;font-size:11px;color:#fff}
+  .sw .hex{font-size:13px;letter-spacing:0.04em}
+  .sw .nm{opacity:.8}
+
+  .sizes{display:flex;align-items:flex-end;gap:24px;padding:24px;background:#0b0e1c;border:1px solid var(--line);border-radius:18px}
+  .sizes .size{display:flex;flex-direction:column;align-items:center;gap:8px;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-mute)}
+  .sizes img{image-rendering:auto;display:block}
+
+  .signature{
+    border:1px solid var(--line);border-radius:14px;padding:20px 24px;background:#0b0e1c;
+    font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:var(--ink-dim);
+    max-width:600px;
+  }
+  .signature .name{color:#fff;font-weight:600;font-size:16px}
+  .signature .role{color:var(--ink-dim);font-size:13px;margin-top:2px}
+  .signature .div{height:1px;background:var(--line);margin:14px 0;border:none}
+  .signature .contact{font-size:12px;color:var(--ink-mute);font-family:"JetBrains Mono",monospace;letter-spacing:0.04em}
+  .signature a{color:var(--green);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Brand · mark v2</h1>
+  <p class="lede">Drie punten op stijgende koers. Klein → groot, navy → groen. Leesbaar van 16px favicon tot fullscreen splash. Pixelgesnapt op een 32-grid voor scherpte op elke schaalfactor.</p>
+
+  <div class="tag">01 · Wordmark lockups</div>
+  <div class="grid">
+    <div class="cell">
+      <div class="meta">logo-light.svg · dark bg</div>
+      <div class="preview"><img src="logo-light.svg" alt="" width="220"></div>
+    </div>
+    <div class="cell light">
+      <div class="meta">logo-dark.svg · light bg</div>
+      <div class="preview"><img src="logo-dark.svg" alt="" width="220"></div>
+    </div>
+    <div class="cell">
+      <div class="meta">logo-mono-light.svg · monochrome on dark</div>
+      <div class="preview"><img src="logo-mono-light.svg" alt="" width="220"></div>
+    </div>
+    <div class="cell light">
+      <div class="meta">logo-mono-dark.svg · monochrome on light</div>
+      <div class="preview"><img src="logo-mono-dark.svg" alt="" width="220"></div>
+    </div>
+  </div>
+
+  <div class="tag">02 · Mark only</div>
+  <div class="grid">
+    <div class="cell">
+      <div class="meta">logo-mark.svg · brand colors</div>
+      <div class="preview"><img src="logo-mark.svg" alt="" width="96" height="96"></div>
+    </div>
+    <div class="cell light">
+      <div class="meta">logo-mark-mono-dark.svg</div>
+      <div class="preview"><img src="logo-mark-mono-dark.svg" alt="" width="96" height="96"></div>
+    </div>
+    <div class="cell">
+      <div class="meta">logo-mark-mono-light.svg</div>
+      <div class="preview"><img src="logo-mark-mono-light.svg" alt="" width="96" height="96"></div>
+    </div>
+    <div class="cell bgwhite">
+      <div class="meta">logo-square-lightbg-256.png</div>
+      <div class="preview"><img src="logo-square-lightbg-256.png" alt="" width="120" height="120"></div>
+    </div>
+  </div>
+
+  <div class="tag">03 · Tagline lockup (email + footer)</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="cell">
+      <div class="meta">logo-lockup-light.svg</div>
+      <div class="preview"><img src="logo-lockup-light.svg" alt="" width="360"></div>
+    </div>
+    <div class="cell light">
+      <div class="meta">logo-lockup-dark.svg</div>
+      <div class="preview"><img src="logo-lockup-dark.svg" alt="" width="360"></div>
+    </div>
+  </div>
+
+  <div class="tag">04 · Schaalbaarheid (favicon → splash)</div>
+  <div class="sizes">
+    <div class="size"><img src="favicon-16.png" width="16" height="16">16</div>
+    <div class="size"><img src="favicon-32.png" width="32" height="32">32</div>
+    <div class="size"><img src="favicon-64.png" width="64" height="64">64</div>
+    <div class="size"><img src="favicon-180.png" width="96" height="96">apple-touch · 180</div>
+    <div class="size"><img src="favicon-512.png" width="120" height="120">512</div>
+  </div>
+
+  <div class="tag">05 · Kleurpalet</div>
+  <div class="swatchgrid">
+    <div class="sw" style="background:#13162a"><span class="nm">bg / canvas</span><span class="hex">#13162a</span></div>
+    <div class="sw" style="background:#1B1F8C"><span class="nm">navy</span><span class="hex">#1B1F8C</span></div>
+    <div class="sw" style="background:#2A2FCC"><span class="nm">navy-2</span><span class="hex">#2A2FCC</span></div>
+    <div class="sw" style="background:#2B5BFF"><span class="nm">blue</span><span class="hex">#2B5BFF</span></div>
+    <div class="sw" style="background:#5C82FF"><span class="nm">blue-2</span><span class="hex">#5C82FF</span></div>
+    <div class="sw" style="background:#34E27A;color:#000"><span class="nm">green</span><span class="hex">#34E27A</span></div>
+  </div>
+
+  <div class="tag">06 · E-mail handtekening (HTML)</div>
+  <div class="signature">
+    <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">
+      <tr>
+        <td style="padding-right:18px;vertical-align:middle">
+          <img src="logo-square-darkbg-256.png" width="64" height="64" alt="Soratus" style="display:block;border-radius:12px">
+        </td>
+        <td style="vertical-align:middle">
+          <div class="name">Voornaam Achternaam</div>
+          <div class="role">Functie · Soratus</div>
+          <hr class="div"/>
+          <div class="contact">
+            voornaam@soratus.com · +31 6 00 00 00 00<br/>
+            <a href="https://soratus.com">soratus.com</a> · <em style="font-family:'Instrument Serif',serif;color:var(--ink-dim)">time changing software</em>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

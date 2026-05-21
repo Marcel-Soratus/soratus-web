@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Soratus.Web.Tests/Soratus.Web.Tests.csproj" />
+  <Project Path="Soratus.Web/Soratus.Web.csproj" />
+</Solution>

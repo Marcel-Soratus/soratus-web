@@ -1,0 +1,15 @@
+@code {
+    [Parameter] public string Tag { get; set; } = "";
+    [Parameter] public RenderFragment? Title { get; set; }
+    [Parameter] public string? Aside { get; set; }
+}
+<div class="sec-head reveal">
+    <div>
+        <div class="sec-tag">@Tag</div>
+        <h2 class="sec-title">@Title</h2>
+    </div>
+    @if (Aside is not null)
+    {
+        <p class="sec-aside">@Aside</p>
+    }
+</div>

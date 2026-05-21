@@ -1,0 +1,39 @@
+@page "/"
+@inject IOptions<CompanyOptions> Company
+@inject IOptions<BrandOptions> Brand
+
+<PageTitle>Soratus — Time changing software</PageTitle>
+<HeadContent>
+    <meta name="description" content="Soratus is de AI-development partner voor MKB en enterprise. Wij leveren software die zichzelf verbetert, processen die zichzelf optimaliseren, en agents die het werk doen waar je vandaag nog mensen voor inhuurt." />
+    <meta name="keywords" content="AI development, AI agents, custom software, Blazor, .NET 9, Azure, Nederland, MKB, enterprise, AVG, EU-hosted" />
+    <meta name="author" content="@Company.Value.LegalName" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta property="og:title" content="Soratus — Time changing software" />
+    <meta property="og:description" content="AI-development partner. Agents, automation, integraties. Gebouwd in Nederland." />
+    <meta property="og:image" content="@(Company.Value.Url)/brand/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="@Company.Value.Url" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="nl_NL" />
+    <meta property="og:site_name" content="Soratus" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Soratus — Time changing software" />
+    <meta name="twitter:description" content="AI-development partner. Agents, automation, integraties. Gebouwd in Nederland." />
+    <meta name="twitter:image" content="@(Company.Value.Url)/brand/og-image.png" />
+
+    <script type="application/ld+json">
+        @((MarkupString)JsonLd.Build(Company.Value))
+    </script>
+</HeadContent>
+
+<Hero />
+<Marquee />
+<WhatWeDo />
+<HowWeWork />
+<Branches />
+<section id="bewijs" style="padding-top:0;padding-bottom:0">
+    <Clients />
+    <Testimonials />
+</section>
+<FinalCta />

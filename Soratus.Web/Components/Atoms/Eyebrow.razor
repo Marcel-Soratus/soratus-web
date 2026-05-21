@@ -1,0 +1,8 @@
+@code {
+    [Parameter] public string Year { get; set; } = DateTime.UtcNow.Year.ToString();
+    [Parameter] public string Tagline { get; set; } = "De toekomst van programmeren · gebouwd in Nederland";
+}
+<div class="eyebrow reveal">
+    <span class="badge">@Year</span>
+    <span>@Tagline</span>
+</div>

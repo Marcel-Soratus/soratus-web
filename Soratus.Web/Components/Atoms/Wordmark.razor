@@ -1,0 +1,9 @@
+@code {
+    [Parameter] public int MarkSize { get; set; } = 32;
+    [Parameter] public string TextColor { get; set; } = "var(--ink)";
+    [Parameter] public string Href { get; set; } = "#top";
+}
+<a href="@Href" class="brand" aria-label="Soratus home">
+    <img src="/brand/logo-mark.svg" width="@MarkSize" height="@MarkSize" alt="" class="brand-mark" aria-hidden="true" />
+    <span class="brand-name" style="color: @TextColor">soratus</span>
+</a>

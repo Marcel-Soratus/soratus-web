@@ -1,0 +1,10 @@
+@inject IOptions<BrandOptions> Brand
+
+<div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+        @foreach (var term in Brand.Value.Marquee.Concat(Brand.Value.Marquee))
+        {
+            <span>@term <span class="star">✦</span></span>
+        }
+    </div>
+</div>

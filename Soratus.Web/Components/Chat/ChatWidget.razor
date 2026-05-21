@@ -1,0 +1,189 @@
+@rendermode InteractiveServer
+@inject AnthropicClient Anthropic
+@inject SystemPromptBuilder PromptBuilder
+@inject IJSRuntime JS
+@inject ILogger<ChatWidget> Log
+@implements IAsyncDisposable
+
+<div class="chat-window @(_isOpen ? "open" : "")" id="chatWindow"
+     role="dialog" aria-modal="false" aria-label="Sora · AI chat" aria-hidden="@(!_isOpen)">
+    <div class="chat-head">
+        <div class="agent">
+            <div class="agent-avatar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" aria-hidden="true">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+            </div>
+            <div>
+                <div class="agent-name">SORA · AI Agent</div>
+                <div class="agent-status">● online · antwoordt direct</div>
+            </div>
+        </div>
+        <button class="chat-close" @onclick="Close" aria-label="Sluit chat">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+
+    <div class="chat-body" id="chatBody">
+        @if (_turns.Count == 0 && !_streaming && !_showLead)
+        {
+            <div class="msg bot">
+                Hoi — ik ben Sora, de AI-assistent van Soratus. Stel me een vraag over AI-agents, custom software of hoe wij werken.
+            </div>
+        }
+        @foreach (var turn in _turns)
+        {
+            <ChatBubble Turn="turn" />
+        }
+        @if (_streaming && _partial is not null)
+        {
+            <ChatBubble Turn="_partial" Streaming="true" />
+        }
+        @if (_showLead)
+        {
+            <LeadForm />
+        }
+    </div>
+
+    <Suggestions Visible="!_hasSent && !_showLead" OnPick="QuickPick" />
+
+    <div class="chat-foot">
+        <input id="chatInput" type="text" placeholder="Vraag me iets over Soratus…" autocomplete="off"
+               @bind="_draft" @bind:event="oninput" @onkeyup="OnKey" disabled="@_streaming" />
+        <button class="chat-send" @onclick="Send" disabled="@(_streaming || string.IsNullOrWhiteSpace(_draft))" aria-label="Verstuur">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
+        </button>
+    </div>
+    <div class="chat-tos">aangedreven door soratus · claude-haiku-4.5</div>
+</div>
+
+<ChatLauncher OnClick="Toggle" />
+
+@code {
+    private bool _isOpen;
+    private bool _hasSent;
+    private bool _streaming;
+    private bool _showLead;
+    private string _draft = "";
+    private readonly List<ChatTurn> _turns = new();
+    private ChatTurn? _partial;
+    private DotNetObjectReference<ChatWidget>? _selfRef;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("soratus.registerChat", _selfRef);
+        }
+    }
+
+    [JSInvokable]
+    public Task JsOpenWith(string? prefill)
+    {
+        _isOpen = true;
+        if (!string.IsNullOrWhiteSpace(prefill))
+        {
+            _draft = prefill;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task JsToggle()
+    {
+        _isOpen = !_isOpen;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void Toggle() { _isOpen = !_isOpen; }
+    private void Close() { _isOpen = false; }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await Send();
+        }
+    }
+
+    private async Task QuickPick(string text)
+    {
+        if (text == "__lead")
+        {
+            _showLead = true;
+            _hasSent = true;
+            return;
+        }
+        _draft = text;
+        await Send();
+    }
+
+    private async Task Send()
+    {
+        var prompt = _draft?.Trim();
+        if (string.IsNullOrWhiteSpace(prompt) || _streaming) return;
+
+        _draft = "";
+        _hasSent = true;
+        _turns.Add(new ChatTurn("user", prompt) { Html = System.Net.WebUtility.HtmlEncode(prompt) });
+        _partial = new ChatTurn("assistant", "") { Html = "" };
+        _streaming = true;
+        StateHasChanged();
+
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        try
+        {
+            var buffer = new System.Text.StringBuilder();
+            await foreach (var chunk in Anthropic.StreamAsync(PromptBuilder.Build(), _turns, token))
+            {
+                buffer.Append(chunk);
+                _partial = new ChatTurn("assistant", buffer.ToString()) { Html = RenderMarkdown(buffer.ToString()) };
+                StateHasChanged();
+                await Task.Yield();
+            }
+            var final = buffer.ToString();
+            _turns.Add(new ChatTurn("assistant", final) { Html = RenderMarkdown(final) });
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Chat stream failed");
+            _turns.Add(new ChatTurn("assistant", "Er ging iets mis. Probeer het zo opnieuw.")
+                { Html = "Er ging iets mis. Probeer het zo opnieuw." });
+        }
+        finally
+        {
+            _streaming = false;
+            _partial = null;
+            StateHasChanged();
+        }
+    }
+
+    private static readonly Markdig.MarkdownPipeline _pipeline =
+        new Markdig.MarkdownPipelineBuilder().Build();
+
+    private static string RenderMarkdown(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return Markdig.Markdown.ToHtml(text, _pipeline);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _selfRef?.Dispose();
+        await Task.CompletedTask;
+    }
+}
