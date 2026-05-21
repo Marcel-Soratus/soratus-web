@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# One-time setup scripts
+setup-azure.ps1
+fed-params.json

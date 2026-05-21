@@ -99,11 +99,11 @@ app.Use(async (context, next) =>
     headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), interest-cohort=()";
     headers["Content-Security-Policy"] =
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline'; " +
+        "script-src 'self' 'unsafe-inline' https://www.clarity.ms https://*.clarity.ms; " +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "font-src 'self' https://fonts.gstatic.com; " +
         "img-src 'self' data: https:; " +
-        "connect-src 'self' wss: https://api.anthropic.com; " +
+        "connect-src 'self' wss: https://api.anthropic.com https://*.clarity.ms https://c.bing.com; " +
         "frame-ancestors 'none'; " +
         "base-uri 'self'; " +
         "form-action 'self';";
