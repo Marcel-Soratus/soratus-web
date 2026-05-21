@@ -61,17 +61,30 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Canonical-host redirect: www.soratus.com → soratus.com (301)
+// Canonical-host redirect:
+//   uvidai.com / www.uvidai.com  → soratus.com  (301)
+//   www.soratus.com               → soratus.com  (301)
+const string canonicalHost = "soratus.com";
+var redirectFromHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+{
+    "uvidai.com",
+    "www.uvidai.com",
+    "www.soratus.com"
+};
+
 app.Use(async (context, next) =>
 {
     var host = context.Request.Host.Host;
-    if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+    if (redirectFromHosts.Contains(host))
     {
         var target = new UriBuilder(context.Request.GetEncodedUrl())
         {
-            Host = host[4..]
+            Host = canonicalHost,
+            Port = context.Request.IsHttps ? 443 : 80
         };
-        context.Response.Redirect(target.ToString(), permanent: true);
+        // UriBuilder includes default ports verbosely; strip them
+        var url = target.Uri.ToString();
+        context.Response.Redirect(url, permanent: true);
         return;
     }
     await next();
