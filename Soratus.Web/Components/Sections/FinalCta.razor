@@ -2,13 +2,13 @@
 <section class="end" id="contact">
     <div class="wrap reveal">
         <h2 class="h1">
-            Klaar om <span class="grad">vooruit</span> te gaan?
+            Klaar om iets te <span class="grad">bouwen</span>?
         </h2>
-        <p>Eén korte call. Geen verkooppraat. Binnen één werkdag antwoord — vaak van een AI, soms van een mens, altijd iemand die meedenkt.</p>
+        <p>Eén korte call. Geen verkooppraat. Antwoord binnen één werkdag.</p>
         <div class="end-cta">
             <Button Variant="glow" ShowDot="true"
                     Attrs="@(new Dictionary<string,object>{ ["onclick"] = "window.soratus && soratus.openChat()" })">
-                Praat nu met onze AI
+                Start een gesprek
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
             </Button>
             <Button Variant="default" Href="@($"mailto:{Company.Value.Email}")">@Company.Value.Email</Button>

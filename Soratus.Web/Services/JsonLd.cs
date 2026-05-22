@@ -38,7 +38,7 @@ public static class JsonLd
               "provider": { "@id": "{{url}}#organization" },
               "areaServed": "NL",
               "serviceType": "AI agents, custom software, integraties",
-              "description": "AI agents, custom software in .NET 9 / Blazor / Azure, integraties met Exact, AFAS, Salesforce, Shopify, HubSpot, Slack, Teams, WhatsApp, Outlook."
+              "description": "AI agents, custom software in .NET 10 / Blazor / Azure, integraties met Exact, AFAS, Salesforce, Shopify, HubSpot, Slack, Teams, WhatsApp, Outlook."
             },
             {
               "@type": "FAQPage",
