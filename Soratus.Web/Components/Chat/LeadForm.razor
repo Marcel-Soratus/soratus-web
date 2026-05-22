@@ -11,7 +11,7 @@
         </div>
     </div>
 
-    <EditForm Model="_model" OnValidSubmit="Send" FormName="lead">
+    <EditForm Model="_model" OnValidSubmit="Send">
         <DataAnnotationsValidator />
         <div class="lead-grid">
             <InputText class="lead-in" placeholder="Naam *" @bind-Value="_model.Name" disabled="@_busy" />
@@ -20,11 +20,10 @@
             <InputText class="lead-in" placeholder="E-mail" @bind-Value="_model.Email" disabled="@_busy" />
             <InputTextArea class="lead-in" placeholder="Korte notitie (optioneel)" rows="2" @bind-Value="_model.Note" disabled="@_busy" />
         </div>
-        <label class="lead-consent">
-            <InputCheckbox @bind-Value="_model.Consent" disabled="@_busy" />
-            <span>Ik ga akkoord dat Soratus mij eenmalig contact opneemt over deze aanvraag.</span>
-        </label>
         <button class="lead-send" type="submit" disabled="@_busy">@(_busy ? "Versturen…" : "Verstuur aanvraag")</button>
+        <div class="lead-disclaimer">
+            Door op &lsquo;Verstuur aanvraag&rsquo; te klikken ga je akkoord dat Soratus eenmalig contact met je opneemt over deze aanvraag.
+        </div>
         <div class="lead-status @_statusClass">@_status</div>
     </EditForm>
 </div>
@@ -50,16 +49,12 @@
 
     private async Task Send()
     {
-        if (!_model.Consent)
-        {
-            _status = "Je moet akkoord gaan om verzonden te kunnen worden.";
-            _statusClass = "err";
-            return;
-        }
-
         _busy = true;
         _status = "Verzenden…";
         _statusClass = "";
+
+        // Clicking the submit button implies consent (disclosed in the disclaimer below the button).
+        _model.Consent = true;
 
         try
         {

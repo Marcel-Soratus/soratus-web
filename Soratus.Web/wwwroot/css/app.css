@@ -641,8 +641,7 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .lead-status { font-size: 11px; font-family: "JetBrains Mono", monospace; color: var(--ink-mute); min-height: 14px; }
 .lead-status.ok { color: var(--green); }
 .lead-status.err { color: #ff8590; }
-.lead-consent { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: var(--ink-mute); line-height: 1.4; }
-.lead-consent input { margin-top: 2px; accent-color: var(--green); }
+.lead-disclaimer { font-size: 11px; color: var(--ink-mute); line-height: 1.45; margin-top: 8px; }
 
 /* ─── Mobile polish (≤720px) ─── */
 @media (max-width: 720px) {
