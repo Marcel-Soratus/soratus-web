@@ -486,3 +486,5 @@ setup-azure.ps1
 fed-params.json
 set-anthropic-key.ps1
 set-openai-key.ps1
+set-local-secrets.ps1
+set-acs-email.ps1

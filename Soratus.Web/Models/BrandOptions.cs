@@ -33,9 +33,9 @@ public sealed class AzureOpenAIOptions
     public string ApiKey { get; set; } = "";
 }
 
-public sealed class SendGridOptions
+public sealed class AzureEmailOptions
 {
-    public string ApiKey { get; set; } = "";
-    public string FromAddress { get; set; } = "noreply@soratus.com";
+    public string ConnectionString { get; set; } = "";
+    public string FromAddress { get; set; } = "DoNotReply@soratus.com";
     public string FromName { get; set; } = "Soratus website";
 }

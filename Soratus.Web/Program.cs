@@ -13,7 +13,7 @@ builder.Services.AddRazorComponents()
 builder.Services.Configure<BrandOptions>(builder.Configuration.GetSection("Brand"));
 builder.Services.Configure<CompanyOptions>(builder.Configuration.GetSection("Company"));
 builder.Services.Configure<AzureOpenAIOptions>(builder.Configuration.GetSection("AzureOpenAI"));
-builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
+builder.Services.Configure<AzureEmailOptions>(builder.Configuration.GetSection("AzureEmail"));
 
 builder.Services.AddHttpClient<AzureOpenAIClient>((sp, http) =>
 {
