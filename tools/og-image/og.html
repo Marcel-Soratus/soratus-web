@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Soratus · OG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400;500;600&family=Space+Grotesk:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+  html,body { width:1200px; height:630px; overflow:hidden; }
+  body {
+    background: #13162a;
+    color: #f4f5fb;
+    font-family: "Space Grotesk", sans-serif;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Radial blobs — same vibe as the site */
+  .field {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(900px 560px at 86% 8%, rgba(43, 91, 255, 0.45), transparent 60%),
+      radial-gradient(720px 480px at 8% 92%, rgba(52, 226, 122, 0.30), transparent 60%),
+      radial-gradient(560px 400px at 50% 50%, rgba(92, 130, 255, 0.18), transparent 70%);
+  }
+  /* Subtle grid */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 78%);
+            mask-image: radial-gradient(ellipse at center, #000 30%, transparent 78%);
+  }
+  /* Dot pattern (very subtle texture) */
+  .dots {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0);
+    background-size: 3px 3px;
+    opacity: .35;
+    mix-blend-mode: overlay;
+  }
+
+  .frame {
+    position: relative;
+    width: 100%; height: 100%;
+    padding: 64px 80px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+
+  /* Header — lockup logo */
+  .lockup { display: flex; align-items: center; gap: 14px; }
+  .lockup-dots { display: flex; align-items: flex-end; gap: 0; height: 32px; width: 36px; position: relative; }
+  .lockup-dots .d { position: absolute; border-radius: 50%; }
+  .lockup-dots .d1 { left: 2px;  bottom: 0;  width: 6px;  height: 6px;  background: #2A2FCC; }
+  .lockup-dots .d2 { left: 12px; bottom: 8px; width: 8px;  height: 8px;  background: #5C82FF; }
+  .lockup-dots .d3 { left: 22px; bottom: 18px; width: 10px; height: 10px; background: #34E27A; }
+  .lockup-name { font-family: "Sora", sans-serif; font-weight: 200; font-size: 44px; letter-spacing: -0.04em; line-height: 1; color: #f4f5fb; }
+
+  /* Chip top-right */
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.10);
+    font-family: "JetBrains Mono", monospace; font-size: 13px;
+    color: #a8aec6; letter-spacing: 0.04em;
+  }
+  .chip .led { width: 8px; height: 8px; border-radius: 50%; background: #34E27A; box-shadow: 0 0 12px #34E27A; }
+  .top { display: flex; align-items: center; justify-content: space-between; }
+
+  /* Headline block */
+  .body { display: flex; flex-direction: column; gap: 22px; max-width: 980px; }
+  .eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #34E27A;
+    display: inline-flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before { content:""; width: 28px; height: 1px; background:#34E27A; display:inline-block; }
+  .h1 {
+    font-family: "Sora", sans-serif;
+    font-weight: 300;
+    font-size: 92px;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    color: #f4f5fb;
+  }
+  .h1 em {
+    font-family: "Instrument Serif", serif;
+    font-style: italic; font-weight: 400;
+    background: linear-gradient(120deg, #34E27A, #5C82FF);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    letter-spacing: -0.01em;
+  }
+  .lede {
+    font-size: 26px; line-height: 1.45; color: #a8aec6; max-width: 880px;
+    font-weight: 400;
+  }
+  .lede b { color: #f4f5fb; font-weight: 500; }
+
+  /* Footer meta row */
+  .foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: "JetBrains Mono", monospace; font-size: 14px;
+    color: #6b7290; letter-spacing: 0.08em;
+  }
+  .foot .left { display: flex; gap: 22px; align-items: center; }
+  .foot .dotsep { color: #34E27A; }
+  .foot .url { color: #f4f5fb; }
+</style>
+</head>
+<body>
+  <div class="field"></div>
+  <div class="grid"></div>
+  <div class="dots"></div>
+
+  <div class="frame">
+    <div class="top">
+      <div class="lockup">
+        <div class="lockup-dots">
+          <span class="d d1"></span>
+          <span class="d d2"></span>
+          <span class="d d3"></span>
+        </div>
+        <div class="lockup-name">soratus</div>
+      </div>
+      <div class="chip"><span class="led"></span>online · EU-hosted</div>
+    </div>
+
+    <div class="body">
+      <div class="eyebrow">AI-agents &nbsp;·&nbsp; Custom software</div>
+      <div class="h1">We bouwen <em>time&#8209;changing</em> software.</div>
+      <div class="lede"><b>AI-agents, dashboards, integraties.</b> Azure-native, EU-hosted, gebouwd met .NET&nbsp;10 &amp; Blazor.</div>
+    </div>
+
+    <div class="foot">
+      <div class="left">
+        <span class="url">soratus.com</span>
+        <span class="dotsep">●</span>
+        <span>hallo@soratus.com</span>
+      </div>
+      <div>made in nederland</div>
+    </div>
+  </div>
+</body>
+</html>
