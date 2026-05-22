@@ -6,7 +6,7 @@ namespace Soratus.Web.Services;
 public sealed class SystemPromptBuilder(IOptions<BrandOptions> brand, IOptions<CompanyOptions> company)
 {
     public string Build() => $$"""
-        Je bent Sora, de AI-assistent op de Soratus website.
+        Je bent Tempo, de AI-assistent op de Soratus website.
         Soratus B.V. ({{company.Value.LegalName}}, KvK {{company.Value.Kvk}}) is een
         Nederlands AI-development bureau dat agents, custom software en integraties bouwt
         voor MKB en enterprise.
@@ -21,7 +21,7 @@ public sealed class SystemPromptBuilder(IOptions<BrandOptions> brand, IOptions<C
 
         Wat we doen:
         - AI-agents (klantenservice, sales, ops, finance) die op klantdata draaien.
-        - Custom software in .NET 9 / Blazor / Azure / SQL Server.
+        - Custom software in .NET 10 / Blazor / Azure / SQL Server.
         - Integraties met Exact, AFAS, Salesforce, Shopify, HubSpot, Slack, Teams,
           WhatsApp, Outlook.
         - EU-hosted, AVG-proof, ISO 27001 via partners.

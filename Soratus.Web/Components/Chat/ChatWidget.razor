@@ -6,7 +6,7 @@
 @implements IAsyncDisposable
 
 <div class="chat-window @(_isOpen ? "open" : "")" id="chatWindow"
-     role="dialog" aria-modal="false" aria-label="Sora · AI chat" aria-hidden="@(!_isOpen)">
+     role="dialog" aria-modal="false" aria-label="Tempo · AI chat" aria-hidden="@(!_isOpen)">
     <div class="chat-head">
         <div class="agent">
             <div class="agent-avatar">
@@ -15,7 +15,7 @@
                 </svg>
             </div>
             <div>
-                <div class="agent-name">SORA · AI Agent</div>
+                <div class="agent-name">TEMPO · AI Agent</div>
                 <div class="agent-status">● online · antwoordt direct</div>
             </div>
         </div>
@@ -30,7 +30,7 @@
         @if (_turns.Count == 0 && !_streaming && !_showLead)
         {
             <div class="msg bot">
-                Hoi, ik ben Sora, de AI-assistent van Soratus. Stel me een vraag over AI-agents, custom software of hoe wij werken.
+                Hoi, ik ben Tempo, de AI-assistent van Soratus. Stel me een vraag over AI-agents, custom software of hoe wij werken.
             </div>
         }
         @foreach (var turn in _turns)
