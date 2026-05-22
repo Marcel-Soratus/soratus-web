@@ -1,5 +1,5 @@
 @rendermode InteractiveServer
-@inject AnthropicClient Anthropic
+@inject AzureOpenAIClient Ai
 @inject SystemPromptBuilder PromptBuilder
 @inject IJSRuntime JS
 @inject ILogger<ChatWidget> Log
@@ -58,7 +58,7 @@
             </svg>
         </button>
     </div>
-    <div class="chat-tos">aangedreven door soratus · claude-haiku-4.5</div>
+    <div class="chat-tos">aangedreven door soratus · gpt-4o-mini · EU-hosted</div>
 </div>
 
 <ChatLauncher OnClick="Toggle" />
@@ -145,7 +145,7 @@
         try
         {
             var buffer = new System.Text.StringBuilder();
-            await foreach (var chunk in Anthropic.StreamAsync(PromptBuilder.Build(), _turns, token))
+            await foreach (var chunk in Ai.StreamAsync(PromptBuilder.Build(), _turns, token))
             {
                 buffer.Append(chunk);
                 _partial = new ChatTurn("assistant", buffer.ToString()) { Html = RenderMarkdown(buffer.ToString()) };

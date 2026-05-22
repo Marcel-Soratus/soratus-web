@@ -24,10 +24,11 @@ public sealed class CompanyOptions
     public string Url { get; set; } = "";
 }
 
-public sealed class AnthropicOptions
+public sealed class AzureOpenAIOptions
 {
-    public string BaseUrl { get; set; } = "https://api.anthropic.com";
-    public string Model { get; set; } = "claude-haiku-4-5";
+    public string Endpoint { get; set; } = "";
+    public string DeploymentName { get; set; } = "gpt-4o-mini";
+    public string ApiVersion { get; set; } = "2024-08-01-preview";
     public int MaxTokens { get; set; } = 1024;
     public string ApiKey { get; set; } = "";
 }

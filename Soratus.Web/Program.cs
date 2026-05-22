@@ -12,13 +12,14 @@ builder.Services.AddRazorComponents()
 
 builder.Services.Configure<BrandOptions>(builder.Configuration.GetSection("Brand"));
 builder.Services.Configure<CompanyOptions>(builder.Configuration.GetSection("Company"));
-builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection("Anthropic"));
+builder.Services.Configure<AzureOpenAIOptions>(builder.Configuration.GetSection("AzureOpenAI"));
 builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
 
-builder.Services.AddHttpClient<AnthropicClient>((sp, http) =>
+builder.Services.AddHttpClient<AzureOpenAIClient>((sp, http) =>
 {
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AnthropicOptions>>().Value;
-    http.BaseAddress = new Uri(opts.BaseUrl);
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AzureOpenAIOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(opts.Endpoint))
+        http.BaseAddress = new Uri(opts.Endpoint);
     http.Timeout = TimeSpan.FromSeconds(60);
 })
 .AddStandardResilienceHandler(o =>
@@ -92,7 +93,7 @@ app.Use(async (context, next) =>
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "font-src 'self' https://fonts.gstatic.com; " +
         "img-src 'self' data: https:; " +
-        "connect-src 'self' wss: https://api.anthropic.com https://*.clarity.ms https://c.bing.com; " +
+        "connect-src 'self' wss: https://*.openai.azure.com https://*.clarity.ms https://c.bing.com; " +
         "frame-ancestors 'none'; " +
         "base-uri 'self'; " +
         "form-action 'self';";
@@ -111,7 +112,7 @@ app.MapChatEndpoint();
 app.MapLeadEndpoint();
 
 app.MapGet("/healthz", () => Results.Ok(new { ok = true }));
-app.MapGet("/readyz", async (AnthropicClient c, CancellationToken ct) =>
+app.MapGet("/readyz", async (AzureOpenAIClient c, CancellationToken ct) =>
 {
     var ok = await c.PingAsync(ct);
     return ok ? Results.Ok(new { ok = true }) : Results.StatusCode(503);

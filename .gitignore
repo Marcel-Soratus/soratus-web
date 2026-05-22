@@ -484,3 +484,5 @@ $RECYCLE.BIN/
 # One-time setup scripts
 setup-azure.ps1
 fed-params.json
+set-anthropic-key.ps1
+set-openai-key.ps1

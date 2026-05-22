@@ -11,7 +11,7 @@ public static class ChatEndpoint
     {
         app.MapPost("/api/chat", async (
                 ChatRequest req,
-                AnthropicClient claude,
+                AzureOpenAIClient ai,
                 SystemPromptBuilder prompt,
                 HttpContext ctx,
                 CancellationToken ct) =>
@@ -24,7 +24,7 @@ public static class ChatEndpoint
                 ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
                 var system = prompt.Build();
-                await foreach (var chunk in claude.StreamAsync(system, req.Messages, ct))
+                await foreach (var chunk in ai.StreamAsync(system, req.Messages, ct))
                 {
                     var line = $"data: {JsonSerializer.Serialize(new { delta = chunk, done = false })}\n\n";
                     await ctx.Response.WriteAsync(line, Encoding.UTF8, ct);
