@@ -10,9 +10,12 @@
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta property="og:title" content="Soratus · Time changing software" />
     <meta property="og:description" content="AI-agents, custom software en integraties voor MKB en enterprise. Vaste prijs, in productie binnen 14 dagen." />
-    <meta property="og:image" content="@(Company.Value.Url)/brand/og-image.png" />
+    <meta property="og:image" content="@(Company.Value.Url)/brand/og-image.png?v=2" />
+    <meta property="og:image:secure_url" content="@(Company.Value.Url)/brand/og-image.png?v=2" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Soratus · We bouwen time changing software" />
     <meta property="og:url" content="@Company.Value.Url" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="nl_NL" />
@@ -20,7 +23,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Soratus · Time changing software" />
     <meta name="twitter:description" content="AI-agents, custom software en integraties voor MKB en enterprise. Vaste prijs, in productie binnen 14 dagen." />
-    <meta name="twitter:image" content="@(Company.Value.Url)/brand/og-image.png" />
+    <meta name="twitter:image" content="@(Company.Value.Url)/brand/og-image.png?v=2" />
 
     <script type="application/ld+json">
         @((MarkupString)JsonLd.Build(Company.Value))
