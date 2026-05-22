@@ -61,30 +61,19 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Canonical-host redirect:
-//   uvidai.com / www.uvidai.com  → soratus.com  (301)
-//   www.soratus.com               → soratus.com  (301)
-const string canonicalHost = "soratus.com";
-var redirectFromHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-{
-    "uvidai.com",
-    "www.uvidai.com",
-    "www.soratus.com"
-};
-
+// Canonical-host redirect: www.soratus.com → soratus.com (301)
+// (uvidai.com → soratus.com is handled by Namecheap URL forwarding at the
+//  registrar, so it never reaches us.)
 app.Use(async (context, next) =>
 {
     var host = context.Request.Host.Host;
-    if (redirectFromHosts.Contains(host))
+    if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
     {
         var target = new UriBuilder(context.Request.GetEncodedUrl())
         {
-            Host = canonicalHost,
-            Port = context.Request.IsHttps ? 443 : 80
+            Host = host[4..]
         };
-        // UriBuilder includes default ports verbosely; strip them
-        var url = target.Uri.ToString();
-        context.Response.Redirect(url, permanent: true);
+        context.Response.Redirect(target.ToString(), permanent: true);
         return;
     }
     await next();
