@@ -16,7 +16,7 @@ public static class JsonLd
               "@id": "{{url}}#organization",
               "name": "{{co.LegalName}}",
               "url": "{{url}}",
-              "logo": "{{url}}/brand/favicon-512.png",
+              "logo": "{{url}}/brand/og-image.png",
               "image": "{{url}}/brand/og-image.png",
               "email": "{{co.Email}}",
               "address": { "@type": "PostalAddress", "addressCountry": "NL" },
