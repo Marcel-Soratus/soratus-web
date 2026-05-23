@@ -1,6 +1,7 @@
 @rendermode InteractiveServer
 @inject AzureOpenAIClient Ai
 @inject SystemPromptBuilder PromptBuilder
+@inject LeadSink Sink
 @inject IJSRuntime JS
 @inject ILogger<ChatWidget> Log
 @implements IAsyncDisposable
@@ -16,7 +17,7 @@
             </div>
             <div>
                 <div class="agent-name">TEMPO · AI Agent</div>
-                <div class="agent-status">● online · antwoordt direct</div>
+                <div class="agent-status">@(_leadSubmitted ? "● aanvraag verzonden" : "● online · antwoordt direct")</div>
             </div>
         </div>
         <button class="chat-close" @onclick="Close" aria-label="Sluit chat">
@@ -27,27 +28,61 @@
     </div>
 
     <div class="chat-body" id="chatBody">
-        @if (_turns.Count == 0 && !_streaming && !_showLead)
+        @if (_turns.Count == 0 && !_streaming)
         {
             <div class="msg bot">
                 Hoi, ik ben Tempo, de AI-assistent van Soratus. Stel me een vraag over AI-agents, custom software of hoe wij werken.
             </div>
         }
-        @foreach (var turn in _turns)
+        @foreach (var turn in _turns.Where(IsVisible))
         {
             <ChatBubble Turn="turn" />
         }
-        @if (_streaming && _partial is not null)
+        @if (_streaming && _partial is not null && !string.IsNullOrEmpty(_partial.Content))
         {
             <ChatBubble Turn="_partial" Streaming="true" />
         }
-        @if (_showLead)
+        @if (_capturing)
         {
-            <LeadForm />
+            <div class="capture-pill" role="status" aria-live="polite">
+                <span class="pulse-dot"></span>
+                <span class="capture-label">contactgegevens noteren…</span>
+                @if (_captureFields.Count > 0)
+                {
+                    <div class="capture-fields">
+                        @foreach (var (label, value) in CapturePreviewItems())
+                        {
+                            <div class="capture-field @(string.IsNullOrEmpty(value) ? "pending" : "filled")">
+                                <span class="cf-mark">@(string.IsNullOrEmpty(value) ? "…" : "✓")</span>
+                                <span class="cf-label">@label</span>
+                                @if (!string.IsNullOrEmpty(value))
+                                {
+                                    <span class="cf-value">@value</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        @if (_leadSubmitted && _submittedSummary is not null)
+        {
+            <div class="lead-success" role="status">
+                <div class="ls-head">
+                    <span class="ls-check">✓</span>
+                    <span class="ls-title">Aanvraag verzonden</span>
+                </div>
+                <div class="ls-body">
+                    @foreach (var line in _submittedSummary)
+                    {
+                        <div>@line</div>
+                    }
+                </div>
+            </div>
         }
     </div>
 
-    <Suggestions Visible="!_hasSent && !_showLead" OnPick="QuickPick" />
+    <Suggestions Visible="!_hasSent && !_leadSubmitted" OnPick="QuickPick" />
 
     <div class="chat-foot">
         <input id="chatInput" type="text" placeholder="Vraag me iets over Soratus…" autocomplete="off"
@@ -67,12 +102,20 @@
     private bool _isOpen;
     private bool _hasSent;
     private bool _streaming;
-    private bool _showLead;
     private string _draft = "";
     private readonly List<ChatTurn> _turns = new();
     private ChatTurn? _partial;
     private DotNetObjectReference<ChatWidget>? _selfRef;
     private CancellationTokenSource? _cts;
+
+    // Lead-capture state
+    private bool _capturing;
+    private bool _leadSubmitted;
+    private List<string>? _submittedSummary;
+    private readonly Dictionary<string, string> _captureFields = new(StringComparer.OrdinalIgnoreCase);
+
+    // Per call-id buffer of partial arguments JSON, for live preview
+    private readonly Dictionary<string, System.Text.StringBuilder> _argBuffers = new();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -116,12 +159,6 @@
 
     private async Task QuickPick(string text)
     {
-        if (text == "__lead")
-        {
-            _showLead = true;
-            _hasSent = true;
-            return;
-        }
         _draft = text;
         await Send();
     }
@@ -134,7 +171,6 @@
         _draft = "";
         _hasSent = true;
         _turns.Add(new ChatTurn("user", prompt) { Html = System.Net.WebUtility.HtmlEncode(prompt) });
-        _partial = new ChatTurn("assistant", "") { Html = "" };
         _streaming = true;
         StateHasChanged();
 
@@ -144,30 +180,224 @@
 
         try
         {
-            var buffer = new System.Text.StringBuilder();
-            await foreach (var chunk in Ai.StreamAsync(PromptBuilder.Build(), _turns, token))
+            // Round 1 — user message in, model responds (text and/or tool calls).
+            var pending = await RunRoundAsync(token);
+
+            // If the model called submit_lead, execute it and run round 2 for the closing message.
+            if (pending.Count > 0)
             {
-                buffer.Append(chunk);
-                _partial = new ChatTurn("assistant", buffer.ToString()) { Html = RenderMarkdown(buffer.ToString()) };
+                foreach (var call in pending)
+                {
+                    var result = await HandleToolCallAsync(call, token);
+                    _turns.Add(new ChatTurn("tool", result)
+                    {
+                        ToolCallId = call.Id,
+                        ToolName = call.Name,
+                        Html = "" // not rendered
+                    });
+                }
                 StateHasChanged();
-                await Task.Yield();
+                // Round 2 — let the model produce its closing message after seeing the tool result.
+                await RunRoundAsync(token);
             }
-            var final = buffer.ToString();
-            _turns.Add(new ChatTurn("assistant", final) { Html = RenderMarkdown(final) });
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Log.LogError(ex, "Chat stream failed");
-            _turns.Add(new ChatTurn("assistant", "Er ging iets mis. Probeer het zo opnieuw.")
-                { Html = "Er ging iets mis. Probeer het zo opnieuw." });
+            Log.LogError(ex, "Chat round failed");
+            var msg = "Er ging iets mis. Probeer het zo opnieuw.";
+            _turns.Add(new ChatTurn("assistant", msg) { Html = msg });
         }
         finally
         {
             _streaming = false;
             _partial = null;
+            _capturing = false;
+            _captureFields.Clear();
+            _argBuffers.Clear();
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Streams one round. Appends the assistant text turn (and any tool_calls
+    /// on it) to <see cref="_turns"/>. Returns the list of pending tool calls
+    /// the model emitted, or an empty list if it produced only text.
+    /// </summary>
+    private async Task<List<PendingToolCall>> RunRoundAsync(CancellationToken ct)
+    {
+        var textBuffer = new System.Text.StringBuilder();
+        _partial = new ChatTurn("assistant", "") { Html = "" };
+
+        // Tool-call accumulators for this round
+        var collected = new Dictionary<string, PendingCallBuilder>();
+
+        await foreach (var ev in Ai.StreamChatAsync(PromptBuilder.Build(), _turns, ChatTools.All, ct))
+        {
+            switch (ev)
+            {
+                case TextDelta td:
+                    textBuffer.Append(td.Text);
+                    _partial = new ChatTurn("assistant", textBuffer.ToString())
+                    {
+                        Html = RenderMarkdown(textBuffer.ToString())
+                    };
+                    StateHasChanged();
+                    await Task.Yield();
+                    break;
+
+                case ToolCallStarted s:
+                    _capturing = true;
+                    _captureFields.Clear();
+                    collected[s.CallId] = new PendingCallBuilder { Id = s.CallId, Name = s.ToolName };
+                    _argBuffers[s.CallId] = new System.Text.StringBuilder();
+                    StateHasChanged();
+                    await Task.Yield();
+                    break;
+
+                case ToolCallArgsDelta d:
+                    if (_argBuffers.TryGetValue(d.CallId, out var buf))
+                    {
+                        buf.Append(d.JsonFragment);
+                        TryUpdateFieldPreview(buf.ToString());
+                        StateHasChanged();
+                        await Task.Yield();
+                    }
+                    break;
+
+                case ToolCallReady r:
+                    collected[r.CallId] = new PendingCallBuilder
+                    {
+                        Id = r.CallId,
+                        Name = r.ToolName,
+                        ArgumentsJson = r.ArgumentsJson
+                    };
+                    break;
+            }
+        }
+
+        var finalText = textBuffer.ToString();
+        var pendingCalls = collected.Values
+            .Select(b => new PendingToolCall(b.Id, b.Name, b.ArgumentsJson))
+            .ToList();
+
+        // Persist the assistant turn (text + optional tool_calls) so round 2 has full history.
+        var assistantTurn = new ChatTurn("assistant", finalText)
+        {
+            Html = RenderMarkdown(finalText),
+            ToolCalls = pendingCalls.Count > 0 ? pendingCalls : null
+        };
+        _turns.Add(assistantTurn);
+        _partial = null;
+
+        return pendingCalls;
+    }
+
+    /// <summary>
+    /// Dispatches a single tool call. Returns the JSON-encoded tool-result
+    /// payload that will be fed back to the model.
+    /// </summary>
+    private async Task<string> HandleToolCallAsync(PendingToolCall call, CancellationToken ct)
+    {
+        if (call.Name != "submit_lead")
+            return """{"ok":false,"error":"unknown_tool"}""";
+
+        if (_leadSubmitted)
+            return """{"ok":true,"note":"already_sent"}""";
+
+        LeadToolArgs? args;
+        try
+        {
+            args = System.Text.Json.JsonSerializer.Deserialize<LeadToolArgs>(call.ArgumentsJson);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Log.LogWarning(ex, "Could not parse submit_lead args: {Args}", call.ArgumentsJson);
+            return """{"ok":false,"error":"args_invalid"}""";
+        }
+
+        if (args is null)
+            return """{"ok":false,"error":"args_invalid"}""";
+
+        var validation = LeadValidator.Validate(args);
+        if (!validation.IsValid)
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                ok = false,
+                error = validation.Error ?? "validation_failed"
+            });
+
+        try
+        {
+            await Sink.SaveAsync(validation.Lead!, ct);
+            _leadSubmitted = true;
+            _submittedSummary = BuildSummary(validation.Lead!);
+            return """{"ok":true}""";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Lead submission failed");
+            return """{"ok":false,"error":"mail_failed"}""";
+        }
+    }
+
+    /// <summary>
+    /// Best-effort extract of <c>name</c>, <c>company</c>, <c>phone</c>, <c>email</c>, <c>note</c>
+    /// from a possibly-incomplete JSON fragment, so the UI can show live progress.
+    /// Pure cosmetic — failures are silent.
+    /// </summary>
+    private void TryUpdateFieldPreview(string partialJson)
+    {
+        foreach (var field in new[] { "name", "company", "phone", "email", "note" })
+        {
+            // crude but resilient against partial JSON: look for "name":"…"
+            // (we want any value that has a *closing* quote)
+            var pattern = $"\"{field}\"\\s*:\\s*\"([^\"]*)\"";
+            var m = System.Text.RegularExpressions.Regex.Match(partialJson, pattern);
+            if (m.Success)
+            {
+                var value = m.Groups[1].Value;
+                if (!string.IsNullOrWhiteSpace(value))
+                    _captureFields[field] = value;
+            }
+        }
+    }
+
+    private IEnumerable<(string Label, string Value)> CapturePreviewItems()
+    {
+        var labels = new (string Key, string Label)[]
+        {
+            ("name", "naam"),
+            ("company", "bedrijf"),
+            ("phone", "telefoon"),
+            ("email", "e-mail"),
+            ("note", "notitie")
+        };
+        foreach (var (key, label) in labels)
+        {
+            if (_captureFields.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v))
+                yield return (label, v);
+        }
+    }
+
+    private static List<string> BuildSummary(Lead lead)
+    {
+        var lines = new List<string>();
+        var headLine = string.IsNullOrEmpty(lead.Company) ? lead.Name : $"{lead.Name} · {lead.Company}";
+        lines.Add(headLine);
+        lines.Add(lead.Phone);
+        if (!string.IsNullOrWhiteSpace(lead.Email)) lines.Add(lead.Email);
+        if (!string.IsNullOrWhiteSpace(lead.Note))  lines.Add(lead.Note);
+        return lines;
+    }
+
+    private static bool IsVisible(ChatTurn t)
+    {
+        // tool-result turns are invisible (history-only for the model)
+        if (t.Role == "tool") return false;
+        // assistant turns that are pure tool-calls without text aren't rendered either
+        if (t.Role == "assistant" && string.IsNullOrEmpty(t.Content) && t.ToolCalls is { Count: > 0 }) return false;
+        return true;
     }
 
     private static readonly Markdig.MarkdownPipeline _pipeline =
@@ -185,5 +415,12 @@
         _cts?.Dispose();
         _selfRef?.Dispose();
         await Task.CompletedTask;
+    }
+
+    private sealed class PendingCallBuilder
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string ArgumentsJson { get; set; } = "";
     }
 }

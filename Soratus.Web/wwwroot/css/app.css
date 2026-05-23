@@ -611,37 +611,78 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .chat-tos { padding: 0 20px 12px; font-size: 10px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; text-align: center; }
 
 /* ─── Lead capture card inside chat ─── */
-.lead-card {
-  align-self: stretch; background: linear-gradient(180deg, rgba(52, 226, 122, 0.07), rgba(43, 91, 255, 0.06));
-  border: 1px solid rgba(52, 226, 122, 0.28); border-radius: 14px; padding: 14px;
-  display: flex; flex-direction: column; gap: 10px;
-  box-shadow: 0 12px 32px rgba(43, 91, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+/* ─── Conversational lead capture (Tempo tool calling) ─── */
+.capture-pill {
+  align-self: stretch;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border-radius: 12px;
+  background: rgba(52, 226, 122, 0.06);
+  border: 1px solid rgba(52, 226, 122, 0.22);
+  font-family: "JetBrains Mono", monospace;
+  animation: capture-in .25s ease;
 }
-.lead-head { display: flex; align-items: center; gap: 10px; }
-.lead-icon {
-  width: 28px; height: 28px; border-radius: var(--radius-pill); display: grid; place-items: center;
-  background: var(--grad); color: #000; font-weight: 700; flex-shrink: 0; font-size: 14px;
+.capture-pill > .pulse-dot {
+  width: 7px; height: 7px; border-radius: var(--radius-pill);
+  background: var(--green); box-shadow: 0 0 12px var(--green);
+  animation: pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
 }
-.lead-title { font-size: 13px; font-weight: 600; color: #fff; }
-.lead-sub { font-size: 11px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; letter-spacing: 0.04em; }
-.lead-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
-.lead-in {
-  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 8px;
-  padding: 9px 11px; color: #fff; font-family: inherit; font-size: 13px; outline: none;
-  transition: border-color .2s, background .2s;
+.capture-pill > .capture-label {
+  font-size: 11px; color: var(--green); letter-spacing: 0.04em;
 }
-.lead-in:focus { border-color: var(--green); background: rgba(52, 226, 122, 0.05); }
-.lead-in:disabled { opacity: .6; }
-.lead-send {
-  width: 100%; padding: 10px 14px; border-radius: 10px; background: var(--grad); color: #000;
-  font-weight: 600; font-size: 13px; cursor: pointer; transition: .2s; border: none; font-family: inherit;
+.capture-pill > .pulse-dot,
+.capture-pill > .capture-label {
+  display: inline-block; vertical-align: middle;
 }
-.lead-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(52, 226, 122, 0.35); }
-.lead-send:disabled { opacity: .7; cursor: default; }
-.lead-status { font-size: 11px; font-family: "JetBrains Mono", monospace; color: var(--ink-mute); min-height: 14px; }
-.lead-status.ok { color: var(--green); }
-.lead-status.err { color: #ff8590; }
-.lead-disclaimer { font-size: 11px; color: var(--ink-mute); line-height: 1.45; margin-top: 8px; }
+.capture-pill > .pulse-dot + .capture-label { margin-left: 8px; }
+
+.capture-fields {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 4px;
+}
+.capture-field {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12px; line-height: 1.4;
+  animation: capture-in .2s ease;
+}
+.capture-field .cf-mark {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600; min-width: 14px;
+}
+.capture-field.filled .cf-mark { color: var(--green); }
+.capture-field.pending .cf-mark { color: var(--ink-mute); }
+.capture-field .cf-label { color: var(--ink-mute); min-width: 64px; }
+.capture-field.filled .cf-value { color: var(--ink); font-family: "Space Grotesk", sans-serif; }
+
+.lead-success {
+  align-self: stretch;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(52, 226, 122, 0.10), rgba(43, 91, 255, 0.05));
+  border: 1px solid rgba(52, 226, 122, 0.32);
+  border-left: 3px solid var(--green);
+  box-shadow: 0 8px 22px rgba(52, 226, 122, 0.12);
+  animation: success-in .35s var(--ease, ease);
+}
+.lead-success .ls-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+}
+.lead-success .ls-check {
+  width: 18px; height: 18px; border-radius: var(--radius-pill);
+  background: var(--green); color: #000;
+  display: inline-grid; place-items: center;
+  font-size: 11px; font-weight: 700;
+}
+.lead-success .ls-title { color: var(--ink); }
+.lead-success .ls-body {
+  font-size: 12px; color: var(--ink-dim); line-height: 1.5;
+  font-family: "JetBrains Mono", monospace;
+}
+.lead-success .ls-body > div + div { margin-top: 2px; }
+
+@keyframes capture-in  { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes success-in  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ─── Mobile polish (≤720px) ─── */
 @media (max-width: 720px) {
