@@ -29,6 +29,16 @@ window.soratus = {
   },
   openChat() { openOnRef(null); },
   openChatWith(prefill) { openOnRef(prefill || null); },
+  scrollChatToBottom() {
+    const el = document.getElementById('chatBody');
+    if (!el) return;
+    // Only auto-scroll if the user is already near the bottom — leave them
+    // alone if they scrolled up to read the history.
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distance < 160) {
+      el.scrollTop = el.scrollHeight;
+    }
+  },
   toggleNavSheet() {
     const sheet = document.getElementById('navSheet');
     const burger = document.getElementById('navBurger');

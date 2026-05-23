@@ -124,6 +124,15 @@
             _selfRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("soratus.registerChat", _selfRef);
         }
+
+        // Pin the chat body to its bottom after every render while open —
+        // streaming text otherwise scrolls under the fold. JS-side guards
+        // against yanking users who scrolled up to read history.
+        if (_isOpen)
+        {
+            try { await JS.InvokeVoidAsync("soratus.scrollChatToBottom"); }
+            catch { /* JS not ready yet — fine, next render will retry */ }
+        }
     }
 
     [JSInvokable]
