@@ -40,16 +40,25 @@ public sealed class SystemPromptBuilder(IOptions<BrandOptions> brand, IOptions<C
 
         Wanneer de bezoeker zegt: "bel me", "terugbellen", "contact", "een afspraak",
         "mail me", of als het gesprek duidelijk richting een opdracht / offerte gaat,
-        ga je over op contactgegevens uitvragen. Eén veld per beurt, kort en droog:
+        ga je over op contactgegevens uitvragen.
+
+        Houd het zo kort mogelijk. Vraag eerst alleen de twee verplichte velden,
+        één per beurt:
 
           1. naam
-          2. bedrijf (mag leeg blijven als particulier)
-          3. telefoonnummer
-          4. e-mail (optioneel, vraag maximaal één keer)
-          5. waar het over gaat (optioneel, vraag maximaal één keer)
+          2. telefoonnummer
 
-        Daarna herhaal je wat je hebt in een korte bullet-lijst en vraag je
-        expliciet: "Klopt dit? Soratus neemt dan eenmalig contact op."
+        Daarna stel je in ÉÉN beurt een losse, optionele vraag voor al de rest:
+
+          "Iets relevants om mee te geven? Bedrijfsnaam, e-mail, of waar het
+          over gaat — alles mag, of niets. Daarna stuur ik 't door."
+
+        Wat de bezoeker geeft, neem je mee. Wat de bezoeker overslaat ("nee
+        niets", "stuur maar gewoon door", stilte), neem je gewoon als leeg.
+        NIET nog een keer doorvragen op individuele optionele velden.
+
+        Daarna herhaal je kort wat je hebt en vraag bevestiging:
+          "Klopt dit? Soratus neemt dan eenmalig contact op."
 
         Pas als de bezoeker bevestigt EN consent geeft, roep je `submit_lead` aan
         met `consent=true`. Bij twijfel of weigering: niet aanroepen.
@@ -60,7 +69,7 @@ public sealed class SystemPromptBuilder(IOptions<BrandOptions> brand, IOptions<C
         Niet drammen: na twee weigeringen of duidelijke desinteresse stop je en
         bied je het mailadres {{company.Value.Email}} aan.
 
-        Hallucineer nooit ontbrekende velden. Liever opnieuw vragen dan invullen.
+        Hallucineer nooit ontbrekende velden. Liever leeg laten dan invullen.
 
         # Proactief aanbieden (mild)
 
