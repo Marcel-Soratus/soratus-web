@@ -1,15 +1,22 @@
 @code {
-    private record Item(string Number, string Title, string Hint, string? Action = null);
+    private record Item(string Number, string Title, string Hint, string Prompt);
 
     private static readonly Item[] _items =
     [
-        new("01", "Retail & E-commerce",      "→ klantenservice agents · dynamische prijzen"),
-        new("02", "Productie & Industrie",    "→ predictive maintenance · order flow"),
-        new("03", "Financieel & Accounting",  "→ document AI · compliance bots"),
-        new("04", "Logistiek & Transport",    "→ route optimalisatie · ETA voorspelling"),
-        new("05", "Zorg & Gezondheid",        "→ planning AI · dossier samenvatting"),
-        new("06", "Bouw & Vastgoed",          "→ offertes in seconden · BIM koppeling"),
-        new("07", "Juridisch & HR",           "→ contract review · onboarding agents"),
+        new("01", "Retail & E-commerce",      "→ klantenservice agents · dynamische prijzen",
+            "Wat doen jullie voor retail & e-commerce? Klantenservice-agents, dynamische prijzen — hoe werkt dat?"),
+        new("02", "Productie & Industrie",    "→ predictive maintenance · order flow",
+            "Welke AI-projecten doen jullie in productie & industrie? Predictive maintenance bijvoorbeeld?"),
+        new("03", "Financieel & Accounting",  "→ document AI · compliance bots",
+            "Wat hebben jullie gebouwd voor financieel & accounting? Document AI en compliance?"),
+        new("04", "Logistiek & Transport",    "→ route optimalisatie · ETA voorspelling",
+            "Wat doen jullie in logistiek & transport? Route-optimalisatie, ETA-voorspelling?"),
+        new("05", "Zorg & Gezondheid",        "→ planning AI · dossier samenvatting",
+            "Hoe werken jullie binnen zorg & gezondheid? Planning, dossier-samenvatting?"),
+        new("06", "Bouw & Vastgoed",          "→ offertes in seconden · BIM koppeling",
+            "Wat hebben jullie voor bouw & vastgoed gemaakt? Snelle offertes, BIM-integratie?"),
+        new("07", "Juridisch & HR",           "→ contract review · onboarding agents",
+            "Welke AI-toepassingen doen jullie in juridisch & HR? Contract review, onboarding?"),
         new("08", "Jouw branche",             "→ vraag de AI wat we hier kunnen doen",
             "Wat zou Soratus kunnen doen in mijn branche?")
     ];
@@ -24,10 +31,7 @@
         <div class="branches reveal">
             @foreach (var item in _items)
             {
-                var onclick = item.Action is null
-                    ? "window.soratus && soratus.openChat()"
-                    : $"window.soratus && soratus.openChatWith('{item.Action.Replace("'", "\\'")}')";
-                <a class="branche" onclick="@onclick" tabindex="0">
+                <a class="branche askable" data-chat-prompt="@item.Prompt" tabindex="0" role="button" aria-label="@($"Vraag Tempo over {item.Title}")">
                     <div>
                         <div class="bnum">@item.Number</div>
                         <h4>@item.Title</h4>

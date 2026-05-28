@@ -45,7 +45,10 @@
                             <div class="qname">@q.Role</div>
                             <div class="qrole">@q.Industry</div>
                         </div>
-                        <span class="qchip">@q.Chip</span>
+                        <span class="qchip askable"
+                              data-chat-prompt="@($"Hoe hebben jullie '{q.Chip}' bereikt? Wat is daar voor gebouwd?")"
+                              role="button" tabindex="0"
+                              aria-label="@($"Vraag Tempo over: {q.Chip}")">@q.Chip</span>
                     </div>
                 </div>
             }

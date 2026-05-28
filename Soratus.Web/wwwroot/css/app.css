@@ -611,6 +611,37 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .chat-tos { padding: 0 20px 12px; font-size: 10px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; text-align: center; }
 
 /* ─── Lead capture card inside chat ─── */
+/* ─── Click-to-chat affordances (data-chat-prompt) ─── */
+.askable { cursor: pointer; }
+.askable:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
+}
+/* WhatWeDo cards: hover hint that this opens Tempo */
+.card.askable { position: relative; }
+.card.askable::after {
+  content: "vraag Tempo →";
+  position: absolute;
+  bottom: 14px; right: 16px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px; letter-spacing: 0.08em;
+  color: var(--green);
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+}
+.card.askable:hover::after,
+.card.askable:focus-visible::after { opacity: 1; transform: translateX(0); }
+
+/* Testimonial chip becomes a subtle pill button */
+.qchip.askable {
+  transition: background .2s, border-color .2s, color .2s;
+}
+.qchip.askable:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
 /* ─── Conversational lead capture (Tempo tool calling) ─── */
 .capture-pill {
   align-self: stretch;

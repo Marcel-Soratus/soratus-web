@@ -19,7 +19,10 @@
         <div class="clients-row">
             @foreach (var c in _clients)
             {
-                <div class="cli cli-@c.StyleIdx">
+                <div class="cli cli-@c.StyleIdx askable"
+                     data-chat-prompt="@($"Wat hebben jullie voor {c.Name} gemaakt?")"
+                     role="button" tabindex="0"
+                     aria-label="@($"Vraag Tempo wat Soratus voor {c.Name} heeft gemaakt")">
                     <span class="gov-badge">@c.Badge</span>
                     <div class="cli-name">@c.Name</div>
                     <div class="cli-sub">@c.Sub</div>

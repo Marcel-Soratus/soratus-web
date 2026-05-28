@@ -72,6 +72,37 @@ document.addEventListener('click', (e) => {
   if (e.target === sheet) window.soratus.closeNavSheet();
 });
 
+// Delegated handler: any element (or ancestor) with data-chat-prompt opens
+// the chat preloaded with that question. Lets us sprinkle ask-Tempo affordances
+// across the page without per-component JS.
+function fireChatPromptFrom(target) {
+  const trigger = target?.closest?.('[data-chat-prompt]');
+  if (!trigger) return false;
+  const prompt = trigger.getAttribute('data-chat-prompt');
+  if (!prompt) return false;
+  window.soratus?.openChatWith(prompt);
+  return true;
+}
+
+document.addEventListener('click', (e) => {
+  // Don't hijack clicks on real links/buttons nested inside the trigger
+  const nested = e.target.closest('a[href], button:not([data-chat-prompt])');
+  if (nested && nested.closest('[data-chat-prompt]') !== nested) {
+    // The nested link/button is INSIDE a data-chat-prompt element — let it win
+    return;
+  }
+  if (fireChatPromptFrom(e.target)) e.preventDefault();
+});
+
+// Keyboard activation for tabindex=0 askable elements
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const trigger = e.target?.closest?.('[data-chat-prompt]');
+  if (!trigger) return;
+  e.preventDefault();
+  fireChatPromptFrom(e.target);
+});
+
 function boot() { window.soratus.init(); }
 
 if (document.readyState === 'loading') {
