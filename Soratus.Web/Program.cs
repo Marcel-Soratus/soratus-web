@@ -123,4 +123,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Catch-all fallback: any path that didn't match a Razor route, endpoint,
+// static file, or health probe gets a 301 to the homepage. Mostly catches
+// inbound traffic on legacy Wix URLs that have been linked / indexed.
+app.MapFallback(context =>
+{
+    context.Response.Redirect("/", permanent: true);
+    return Task.CompletedTask;
+});
+
 app.Run();
