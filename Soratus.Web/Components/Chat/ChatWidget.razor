@@ -136,15 +136,21 @@
     }
 
     [JSInvokable]
-    public Task JsOpenWith(string? prefill)
+    public async Task JsOpenWith(string? prefill)
     {
         _isOpen = true;
-        if (!string.IsNullOrWhiteSpace(prefill))
+
+        if (string.IsNullOrWhiteSpace(prefill))
         {
-            _draft = prefill;
+            StateHasChanged();
+            return;
         }
+
+        // User clicked an explicit "ask Tempo about X" affordance somewhere
+        // on the page — fire the question immediately, no Send-button friction.
+        _draft = prefill;
         StateHasChanged();
-        return Task.CompletedTask;
+        await Send();
     }
 
     [JSInvokable]
