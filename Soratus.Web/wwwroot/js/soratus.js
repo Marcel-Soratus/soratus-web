@@ -19,6 +19,7 @@ window.soratus = {
     initCodestrip(document.getElementById('codestrip'));
     initTestimonials();
     initTerminal(document.getElementById('terminal'));
+    setupTempoPeek();
   },
   registerChat(ref) {
     chatRef = ref;
@@ -102,6 +103,89 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   fireChatPromptFrom(e.target);
 });
+
+/**
+ * Tempo peek-bubble.
+ *
+ * After 8 seconds of page dwell, a small Tempo-branded teaser slides in above
+ * the chat-launcher to nudge engagement. It auto-fades after 15 seconds if
+ * ignored, and is permanently dismissed (per-session) on click or X. If the
+ * visitor opens the chat by any means first, the timer is cancelled.
+ */
+function setupTempoPeek() {
+  if (sessionStorage.getItem('tempo-peek-dismissed') === '1') return;
+
+  let peekEl = null;
+  let showTimer = null;
+  let autoHideTimer = null;
+
+  function dismissPermanent() {
+    sessionStorage.setItem('tempo-peek-dismissed', '1');
+    hidePeek();
+  }
+
+  function hidePeek() {
+    if (autoHideTimer) { clearTimeout(autoHideTimer); autoHideTimer = null; }
+    if (!peekEl) return;
+    peekEl.classList.remove('show');
+    const el = peekEl;
+    peekEl = null;
+    setTimeout(() => el.remove(), 300);
+  }
+
+  function showPeek() {
+    if (peekEl) return;
+    if (document.querySelector('.chat-window.open')) return;
+
+    const el = document.createElement('div');
+    el.className = 'tempo-peek';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'Tempo — uitnodiging tot een vraag');
+    el.innerHTML = `
+      <button class="tp-close" type="button" aria-label="Sluit dit bericht">×</button>
+      <div class="tp-head">
+        <span class="tp-dot"></span>
+        <span class="tp-name">Tempo</span>
+        <span class="tp-sep">·</span>
+        <span class="tp-status">online</span>
+      </div>
+      <div class="tp-msg">Stel me iets. Ik denk graag mee.</div>
+      <div class="tp-cue">klik om te beginnen</div>
+    `;
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.tp-close')) {
+        dismissPermanent();
+        return;
+      }
+      dismissPermanent();
+      window.soratus?.openChat();
+    });
+    document.body.appendChild(el);
+    peekEl = el;
+    requestAnimationFrame(() => el.classList.add('show'));
+
+    // Auto-fade after 15s — not permanently dismissed, so it can re-show on
+    // next page load. Avoids being a permanent eyesore.
+    autoHideTimer = setTimeout(hidePeek, 15000);
+  }
+
+  // Watch for the chat opening (by any path: launcher click, data-chat-prompt,
+  // direct API call). Cancel any pending peek and remove a showing one.
+  function watchChatOpen() {
+    const chatWin = document.querySelector('.chat-window');
+    if (!chatWin) { setTimeout(watchChatOpen, 200); return; }
+    const obs = new MutationObserver(() => {
+      if (chatWin.classList.contains('open')) {
+        if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+        dismissPermanent();
+      }
+    });
+    obs.observe(chatWin, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  watchChatOpen();
+  showTimer = setTimeout(showPeek, 8000);
+}
 
 function boot() { window.soratus.init(); }
 

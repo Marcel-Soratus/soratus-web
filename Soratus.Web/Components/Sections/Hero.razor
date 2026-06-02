@@ -3,25 +3,53 @@
 <section class="hero" id="top">
     <div class="wrap">
         <Eyebrow />
-        <h1 class="h1 reveal" data-comment-anchor="hero-h1">
-            <span class="strike" data-text="Software laten bouwen">Software laten bouwen</span><br />
-            is <span class="italic">voorbij</span>.<br />
-            Wij bouwen <span class="grad">intelligentie</span>.
-        </h1>
 
         <div class="hero-grid">
-            <div class="reveal">
-                <p class="hero-lede">
-                    <b>Soratus bouwt AI-agents en custom software</b> voor MKB en enterprise. Vaste prijs, in productie binnen 14 dagen. EU-hosted en AVG-proof.
-                </p>
-                <div class="hero-cta">
-                    <Button Variant="glow" ShowDot="true" data-comment-anchor="hero-cta"
-                            Attrs="@(new Dictionary<string,object>{ ["onclick"] = "window.soratus && soratus.openChat()" })">
-                        Start een gesprek
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
-                    </Button>
-                    <Button Variant="default" Href="#wat">Zie wat we maken</Button>
+            <div class="reveal hero-chat">
+                <div class="hc-head">
+                    <span class="hc-avatar">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" aria-hidden="true">
+                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                        </svg>
+                    </span>
+                    <span class="hc-name">Tempo</span>
+                    <span class="hc-sep">·</span>
+                    <span class="hc-status"><span class="hc-dot"></span> online</span>
                 </div>
+
+                <h1 class="h1 hc-msg" data-comment-anchor="hero-h1">
+                    Hoi. Ik ben <span class="grad">Tempo</span>, de AI&#8209;agent van Soratus.
+                </h1>
+
+                <div class="hc-body">
+                    <p>
+                        Geen marketing — gewoon wat we doen:
+                    </p>
+                    <ul class="hc-list">
+                        <li>AI-agents bouwen die in <em>productie</em> staan, niet in een pitchdeck</li>
+                        <li>Custom software in <em>14 dagen</em> live, vaste prijs</li>
+                        <li>Diepe integratie met Exact, AFAS, Salesforce, HubSpot</li>
+                    </ul>
+                    <p class="hc-cta-line">
+                        Wat brengt je vandaag? Klik iets, of typ je eigen vraag.
+                    </p>
+                </div>
+
+                <div class="hc-chips">
+                    <button class="hc-chip askable" data-chat-prompt="Wat kost een AI-agent?" type="button">
+                        Wat kost een AI&#8209;agent?
+                    </button>
+                    <button class="hc-chip askable" data-chat-prompt="Hoe snel kan iets live staan?" type="button">
+                        Hoe snel kan iets live?
+                    </button>
+                    <button class="hc-chip askable" data-chat-prompt="Werkt dit ook met onze stack? We gebruiken bijvoorbeeld..." type="button">
+                        Werkt dit met onze stack?
+                    </button>
+                    <button class="hc-chip hc-chip-prime askable" data-chat-prompt="Ik heb iets specifieks waar ik mee zit" type="button">
+                        Ik heb iets specifieks →
+                    </button>
+                </div>
+
                 <div class="meta-row">
                     <span><Pip Color="var(--blue-2)" /> @Brand.Value.Stats.ActiveProjects actieve projecten</span>
                     <span><Pip Color="var(--green)" /> @Brand.Value.Stats.AgentsInProduction AI-agents in productie</span>

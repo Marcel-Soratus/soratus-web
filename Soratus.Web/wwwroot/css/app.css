@@ -205,6 +205,103 @@ nav.top {
 .hero-lede { font-size: var(--text-lede); color: var(--ink-dim); line-height: 1.45; max-width: 520px; }
 .hero-lede b { color: var(--ink); font-weight: 500; }
 .hero-cta { display: flex; gap: 14px; margin-top: 32px; flex-wrap: wrap; }
+
+/* ─── Hero-chat (Tempo schrijft de hero) ─── */
+.hero-chat { max-width: 620px; }
+.hero-chat .hc-head {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(52, 226, 122, 0.22);
+  font-family: "JetBrains Mono", monospace; font-size: 11px;
+  color: var(--ink-dim); letter-spacing: 0.06em;
+  margin-bottom: 22px;
+  animation: hc-in .25s ease both;
+}
+.hero-chat .hc-avatar {
+  width: 18px; height: 18px; border-radius: var(--radius-pill);
+  background: var(--grad); display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.hero-chat .hc-name { color: var(--ink); font-weight: 600; }
+.hero-chat .hc-sep { color: var(--ink-mute); }
+.hero-chat .hc-status { display: inline-flex; align-items: center; gap: 6px; color: var(--green); }
+.hero-chat .hc-dot {
+  width: 6px; height: 6px; border-radius: var(--radius-pill);
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.hero-chat .hc-msg {
+  margin: 0 0 18px;
+  font-size: clamp(40px, 5.4vw, 76px);
+  line-height: 1.02; letter-spacing: -0.035em; font-weight: 300;
+  animation: hc-in .35s .05s ease both;
+}
+.hero-chat .hc-msg .grad {
+  background: linear-gradient(120deg, var(--green), var(--blue));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.hero-chat .hc-body {
+  font-size: var(--text-lede); color: var(--ink-dim); line-height: 1.5;
+  max-width: 560px;
+  animation: hc-in .35s .15s ease both;
+}
+.hero-chat .hc-body p { margin: 0 0 10px; }
+.hero-chat .hc-list {
+  list-style: none; padding: 0; margin: 0 0 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.hero-chat .hc-list li {
+  position: relative; padding-left: 22px; color: var(--ink);
+}
+.hero-chat .hc-list li::before {
+  content: "→"; position: absolute; left: 0; top: 0;
+  color: var(--green); font-family: "JetBrains Mono", monospace; font-weight: 600;
+}
+.hero-chat .hc-list em {
+  font-style: italic; font-family: "Instrument Serif", serif;
+  color: var(--ink); font-weight: 400;
+  background: linear-gradient(120deg, var(--green), var(--blue));
+  -webkit-background-clip: text; background-clip: text;
+}
+.hero-chat .hc-cta-line { color: var(--ink); }
+
+.hero-chat .hc-chips {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 24px;
+  animation: hc-in .35s .25s ease both;
+}
+.hero-chat .hc-chip {
+  appearance: none; cursor: pointer; font-family: inherit; font-size: 13px;
+  color: var(--ink); background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 9px 14px;
+  transition: background .2s, border-color .2s, transform .15s, color .2s;
+}
+.hero-chat .hc-chip:hover {
+  background: rgba(52, 226, 122, 0.08);
+  border-color: var(--green); color: var(--green);
+  transform: translateY(-1px);
+}
+.hero-chat .hc-chip-prime {
+  background: var(--grad); color: #000; font-weight: 600;
+  border-color: transparent;
+}
+.hero-chat .hc-chip-prime:hover {
+  color: #000; background: var(--grad);
+  box-shadow: 0 6px 18px rgba(52, 226, 122, 0.32);
+  transform: translateY(-1px);
+}
+.hero-chat .hc-chip:focus-visible {
+  outline: 2px solid var(--green); outline-offset: 3px;
+}
+
+@keyframes hc-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
 .meta-row { display: flex; align-items: center; gap: 28px; margin-top: 40px; color: var(--ink-mute); font-family: "JetBrains Mono", monospace; font-size: var(--text-meta); letter-spacing: 0.04em; flex-wrap: wrap; }
 .meta-row span { display: flex; align-items: center; gap: 8px; }
 .meta-row .pip { width: 5px; height: 5px; border-radius: var(--radius-pill); }
@@ -544,6 +641,71 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .brand-mark { flex-shrink: 0; display: block; }
 
 /* ─── Chat widget ─── */
+/* ─── Tempo peek-bubble (proactive nudge after 8s) ─── */
+.tempo-peek {
+  position: fixed; right: 24px; bottom: 104px;
+  z-index: var(--z-chat);
+  max-width: 280px;
+  padding: 14px 16px 14px 16px;
+  background: linear-gradient(180deg, rgba(26, 30, 50, 0.96), rgba(20, 23, 40, 0.96));
+  border: 1px solid rgba(52, 226, 122, 0.32);
+  border-radius: 14px;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+    0 0 40px rgba(52, 226, 122, 0.12);
+  cursor: pointer;
+  opacity: 0; transform: translateY(8px) scale(.96);
+  transition: opacity .3s ease, transform .3s var(--ease, ease);
+  font-family: "Space Grotesk", sans-serif;
+}
+.tempo-peek.show { opacity: 1; transform: translateY(0) scale(1); }
+.tempo-peek::after {
+  /* small tail pointing at the launcher */
+  content: ""; position: absolute; right: 22px; bottom: -7px;
+  width: 14px; height: 14px;
+  background: linear-gradient(180deg, rgba(26, 30, 50, 0.96), rgba(20, 23, 40, 0.96));
+  border-right: 1px solid rgba(52, 226, 122, 0.32);
+  border-bottom: 1px solid rgba(52, 226, 122, 0.32);
+  transform: rotate(45deg);
+}
+.tempo-peek .tp-close {
+  position: absolute; top: 6px; right: 8px;
+  background: transparent; border: none; cursor: pointer;
+  width: 22px; height: 22px; border-radius: 50%;
+  color: var(--ink-mute); font-size: 16px; line-height: 1;
+  display: grid; place-items: center;
+  transition: background .15s, color .15s;
+}
+.tempo-peek .tp-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.tempo-peek .tp-head {
+  display: flex; align-items: center; gap: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px; color: var(--ink-dim); letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.tempo-peek .tp-dot {
+  width: 6px; height: 6px; border-radius: var(--radius-pill);
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.tempo-peek .tp-name { color: var(--ink); font-weight: 600; }
+.tempo-peek .tp-sep { color: var(--ink-mute); }
+.tempo-peek .tp-status { color: var(--green); }
+.tempo-peek .tp-msg {
+  color: var(--ink); font-size: 14px; line-height: 1.4;
+}
+.tempo-peek .tp-cue {
+  margin-top: 8px; font-family: "JetBrains Mono", monospace;
+  font-size: 10px; color: var(--green); letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tempo-peek:hover { border-color: rgba(52, 226, 122, 0.55); }
+@media (max-width: 720px) {
+  .tempo-peek { right: 16px; bottom: 84px; max-width: calc(100vw - 100px); }
+  .tempo-peek::after { right: 18px; }
+}
+
 .chat-launcher {
   position: fixed; right: 24px; bottom: 24px; z-index: var(--z-chat);
   width: 64px; height: 64px; border-radius: var(--radius-pill);
