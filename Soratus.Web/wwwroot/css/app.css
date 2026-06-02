@@ -795,6 +795,29 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .card.askable:hover::after,
 .card.askable:focus-visible::after { opacity: 1; transform: translateX(0); }
 
+/* HowWeWork step cards: subtle lift + green border on hover */
+.step.askable {
+  transition: border-color .2s, transform .2s, background .2s;
+}
+.step.askable:hover {
+  border-color: rgba(52, 226, 122, 0.4);
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(52, 226, 122, 0.04), rgba(255, 255, 255, 0.005));
+}
+.step.askable::after {
+  content: "vraag Tempo →";
+  position: absolute;
+  bottom: 14px; right: 18px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px; letter-spacing: 0.08em;
+  color: var(--green);
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+}
+.step.askable:hover::after,
+.step.askable:focus-visible::after { opacity: 1; transform: translateX(0); }
+
 /* Testimonial chip becomes a subtle pill button */
 .qchip.askable {
   transition: background .2s, border-color .2s, color .2s;
