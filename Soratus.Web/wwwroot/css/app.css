@@ -207,7 +207,7 @@ nav.top {
 .hero-cta { display: flex; gap: 14px; margin-top: 32px; flex-wrap: wrap; }
 
 /* ─── Hero-chat (Tempo schrijft de hero) ─── */
-.hero-chat { max-width: 620px; }
+.hero-chat { width: 100%; }
 .hero-chat .hc-head {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 12px; border-radius: var(--radius-pill);
