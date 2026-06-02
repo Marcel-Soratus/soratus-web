@@ -4,91 +4,54 @@
     <div class="wrap">
         <Eyebrow />
 
-        <div class="hero-grid">
-            <div class="reveal hero-chat">
-                <div class="hc-head">
-                    <span class="hc-avatar">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" aria-hidden="true">
-                            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                        </svg>
-                    </span>
-                    <span class="hc-name">Tempo</span>
-                    <span class="hc-sep">·</span>
-                    <span class="hc-status"><span class="hc-dot"></span> online</span>
-                </div>
+        @* Visually hidden H1 — terminal carries the brand message. *@
+        <h1 class="sr-only">Tempo — AI-agent voor Soratus, AI-development bureau in Nederland.</h1>
 
-                <h1 class="h1 hc-msg" data-comment-anchor="hero-h1">
-                    Hoi. Ik ben <span class="grad">Tempo</span>, de AI&#8209;agent van Soratus.
-                </h1>
+        <div class="hero-terminal reveal" data-comment-anchor="hero-terminal">
+            <header class="ht-bar">
+                <span class="ht-dot ht-dot-r" aria-hidden="true"></span>
+                <span class="ht-dot ht-dot-y" aria-hidden="true"></span>
+                <span class="ht-dot ht-dot-g" aria-hidden="true"></span>
+                <span class="ht-title">tempo.soratus.run</span>
+                <span class="ht-status" aria-label="online">
+                    <span class="ht-status-dot"></span>online
+                </span>
+            </header>
 
-                <div class="hc-body">
-                    <p>
-                        Geen marketing — gewoon wat we doen:
-                    </p>
-                    <ul class="hc-list">
-                        <li>AI-agents bouwen die in <em>productie</em> staan, niet in een pitchdeck</li>
-                        <li>Custom software in <em>14 dagen</em> live, vaste prijs</li>
-                        <li>Diepe integratie met Exact, AFAS, Salesforce, HubSpot</li>
-                    </ul>
-                    <p class="hc-cta-line">
-                        Wat brengt je vandaag? Klik iets, of typ je eigen vraag.
-                    </p>
-                </div>
+            <div class="ht-body">
+                <p class="ht-intro">Geen marketing — gewoon wat we doen:</p>
 
-                <div class="hc-chips">
-                    <button class="hc-chip askable" data-chat-prompt="Wat kost een AI-agent?" type="button">
+                <ul class="ht-list">
+                    <li>AI-agents bouwen die in <em>productie</em> staan, niet in een pitchdeck</li>
+                    <li>Custom software in <em>14 dagen</em> live, vaste prijs</li>
+                    <li>Diepe integratie met Exact, AFAS, Salesforce, HubSpot</li>
+                </ul>
+
+                <p class="ht-prompt">
+                    Wat brengt je vandaag? Klik iets, of typ je eigen vraag.
+                </p>
+
+                <div class="ht-chips">
+                    <button class="ht-chip askable" data-chat-prompt="Wat kost een AI-agent?" type="button">
                         Wat kost een AI&#8209;agent?
                     </button>
-                    <button class="hc-chip askable" data-chat-prompt="Hoe snel kan iets live staan?" type="button">
+                    <button class="ht-chip askable" data-chat-prompt="Hoe snel kan iets live staan?" type="button">
                         Hoe snel kan iets live?
                     </button>
-                    <button class="hc-chip askable" data-chat-prompt="Werkt dit ook met onze stack? We gebruiken bijvoorbeeld..." type="button">
+                    <button class="ht-chip askable" data-chat-prompt="Werkt dit ook met onze stack? We gebruiken bijvoorbeeld..." type="button">
                         Werkt dit met onze stack?
                     </button>
-                    <button class="hc-chip hc-chip-prime askable" data-chat-prompt="Ik heb iets specifieks waar ik mee zit" type="button">
+                    <button class="ht-chip ht-chip-prime askable" data-chat-prompt="Ik heb iets specifieks waar ik mee zit" type="button">
                         Ik heb iets specifieks →
                     </button>
                 </div>
-
-                <div class="meta-row">
-                    <span><Pip Color="var(--blue-2)" /> @Brand.Value.Stats.ActiveProjects actieve projecten</span>
-                    <span><Pip Color="var(--green)" /> @Brand.Value.Stats.AgentsInProduction AI-agents in productie</span>
-                    <span><Pip Color="var(--warn)" /> Antwoord &lt; @Brand.Value.Stats.ResponseTimeHours uur</span>
-                </div>
             </div>
+        </div>
 
-            <div class="orb-stage reveal" id="orbStage">
-                <div class="mesh-halo"></div>
-                <div class="ring r3" aria-hidden="true"></div>
-                <div class="ring r2" aria-hidden="true"></div>
-                <svg class="mesh" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                    <defs>
-                        <radialGradient id="g-navy"><stop offset="0%" stop-color="#8b90ff" /><stop offset="55%" stop-color="#2A2FCC" /><stop offset="100%" stop-color="#0e1166" /></radialGradient>
-                        <radialGradient id="g-green"><stop offset="0%" stop-color="#e0ffec" /><stop offset="40%" stop-color="#5cf598" /><stop offset="100%" stop-color="#1ba85a" /></radialGradient>
-                        <radialGradient id="g-blue"><stop offset="0%" stop-color="#cdd9ff" /><stop offset="45%" stop-color="#5C82FF" /><stop offset="100%" stop-color="#1A3FCC" /></radialGradient>
-                        <radialGradient id="g-white"><stop offset="0%" stop-color="#ffffff" /><stop offset="100%" stop-color="#9aa6ff" stop-opacity="0" /></radialGradient>
-                        <filter id="f-glow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feGaussianBlur stdDeviation="4" result="blur" />
-                            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                        </filter>
-                    </defs>
-                    <circle cx="300" cy="300" r="270" fill="none" stroke="rgba(255,255,255,0.04)" stroke-dasharray="2 6" />
-                    <circle cx="300" cy="300" r="200" fill="none" stroke="rgba(255,255,255,0.05)" />
-                    <circle cx="300" cy="300" r="130" fill="none" stroke="rgba(43,91,255,0.18)" stroke-dasharray="1 4" />
-                    <g class="sweep">
-                        <line x1="300" y1="300" x2="300" y2="30" stroke="rgba(52,226,122,0.7)" stroke-width="1.2" />
-                    </g>
-                    <g id="meshEdges" stroke-linecap="round"></g>
-                    <g id="meshPulses"></g>
-                    <g id="meshNodes"></g>
-                </svg>
-
-                <div class="codestrip" id="codestrip">init.system();</div>
-
-                <div class="float-card fc-1"><span class="led"></span> agent.deploy() ✓</div>
-                <div class="float-card fc-2"><span class="led" style="background:#5C82FF;box-shadow:0 0 10px #5C82FF"></span> 1.4M req/min</div>
-                <div class="float-card fc-3"><span class="led" style="background:#FFD86B;box-shadow:0 0 10px #FFD86B"></span> Latency 84ms</div>
-            </div>
+        <div class="meta-row reveal">
+            <span><Pip Color="var(--blue-2)" /> @Brand.Value.Stats.ActiveProjects actieve projecten</span>
+            <span><Pip Color="var(--green)" /> @Brand.Value.Stats.AgentsInProduction AI-agents in productie</span>
+            <span><Pip Color="var(--warn)" /> Antwoord &lt; @Brand.Value.Stats.ResponseTimeHours uur</span>
         </div>
     </div>
 </section>
