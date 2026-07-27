@@ -1,14 +1,14 @@
 /**
  * In-page anchor navigatie.
  *
- * Nodig sinds de site twee dingen doet die native fragment-scroll in de weg zitten:
- *  1. De content scrollt binnen een container (.tempo-glass-plate), niet op window.
- *  2. Er zijn meerdere pagina's, dus nav-links zijn "/#hoe" in plaats van "#hoe".
- *     Blazor's enhanced navigation kan zo'n link als paginanavigatie behandelen,
- *     waarna er niet naar het fragment gescrold wordt.
+ * Nodig sinds de site meerdere pagina's heeft: nav-links zijn "/#hoe" in plaats
+ * van "#hoe", zodat ze ook vanaf een case-pagina werken. Blazor's enhanced
+ * navigation kan zo'n link als paginanavigatie behandelen, waarna er niet naar
+ * het fragment gescrold wordt.
  *
- * Deze module pakt beide gevallen expliciet op en compenseert de sticky nav,
- * zodat een sectiekop niet achter de navbalk verdwijnt.
+ * Deze module pakt dat expliciet op en compenseert de sticky nav, zodat een
+ * sectiekop niet achter de navbalk verdwijnt. Werkt op window en, mocht de
+ * content ooit in een eigen scroll-container komen, ook daarop.
  */
 
 /** Dichtstbijzijnde daadwerkelijk scrollende voorouder, anders window. */
