@@ -1,0 +1,237 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   cases.css — stijlen voor /cases en /cases/{slug}.
+   Bouwt op tokens.css en hergebruikt app.css waar het kan (.wrap, .step,
+   .flow, .pill, .end, .reveal, SectionHeader). Alles hier is case-specifiek.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Kop van een case-pagina ── */
+.case-top { padding: var(--space-8) 0 var(--space-6); }
+.case-crumb {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--text-meta); color: var(--ink-mute);
+  letter-spacing: .04em; margin-bottom: var(--space-4);
+}
+.case-crumb a { color: var(--green); }
+.case-crumb a:hover { text-decoration: underline; }
+.case-crumb span { margin: 0 6px; }
+
+.case-h1 {
+  font-size: var(--text-h2);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  max-width: 20ch;
+}
+.case-lede {
+  font-size: var(--text-lede); color: var(--ink-dim);
+  max-width: 68ch; margin-top: var(--space-5); line-height: 1.6;
+}
+
+/* feiten-rij: bouwtijd, klant, koppeling */
+.case-facts {
+  display: flex; flex-wrap: wrap; gap: var(--space-7);
+  margin-top: var(--space-6); padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+.case-fact { display: flex; flex-direction: column; gap: 6px; }
+.cf-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--text-meta); color: var(--ink-mute);
+  text-transform: uppercase; letter-spacing: .1em;
+}
+.cf-value {
+  font-size: 40px; font-weight: 600; line-height: 1;
+  letter-spacing: -0.02em;
+}
+.grad-text {
+  background: var(--grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.cf-value-sm { font-size: var(--text-body); color: var(--ink); max-width: 30ch; }
+
+/* ── Lijst met handwerk ── */
+.case-list { list-style: none; padding: 0; margin: 0; max-width: 78ch; }
+.case-list li {
+  position: relative; padding: var(--space-4) 0 var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-dim); font-size: var(--text-body); line-height: 1.6;
+}
+.case-list li::before {
+  content: "×"; position: absolute; left: 0; top: var(--space-4);
+  color: var(--ink-mute); font-family: "JetBrains Mono", monospace;
+}
+
+/* ── Wat het uit handen neemt ── */
+.case-hands {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+.case-hand {
+  display: flex; gap: var(--space-3); align-items: flex-start;
+  padding: var(--space-5);
+  background: rgba(52, 226, 122, .05);
+  border: 1px solid rgba(52, 226, 122, .22);
+  border-radius: var(--radius);
+  color: var(--ink); font-size: var(--text-body); line-height: 1.55;
+}
+.ch-mark {
+  color: var(--green); font-family: "JetBrains Mono", monospace;
+  flex-shrink: 0; font-size: 16px; line-height: 1.4;
+}
+
+/* ── Rekenvoorbeeld ── */
+.case-scenario-intro {
+  font-size: var(--text-lede); color: var(--ink-dim);
+  max-width: 74ch; line-height: 1.6; margin-bottom: var(--space-6);
+}
+.case-table {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; max-width: 1000px;
+}
+.ct-head, .ct-row {
+  display: grid; grid-template-columns: 2.2fr 1fr 1fr;
+  gap: var(--space-4); padding: var(--space-4) var(--space-5);
+  align-items: center;
+}
+.ct-head {
+  background: rgba(255, 255, 255, .04);
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--text-meta); color: var(--ink-mute);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.ct-row { border-top: 1px solid var(--line); font-size: var(--text-body); }
+.ct-task { color: var(--ink); }
+.ct-manual { color: var(--ink-dim); font-family: "JetBrains Mono", monospace; font-size: 13.5px; }
+.ct-agent {
+  color: var(--green-2); font-family: "JetBrains Mono", monospace; font-size: 13.5px;
+}
+.case-outcome {
+  margin-top: var(--space-6); font-size: var(--text-lede);
+  color: var(--ink); max-width: 74ch; line-height: 1.6;
+}
+.case-note {
+  margin-top: var(--space-4); font-family: "JetBrains Mono", monospace;
+  font-size: var(--text-meta); color: var(--ink-mute);
+  max-width: 74ch; line-height: 1.7;
+  padding-left: var(--space-4); border-left: 2px solid var(--line-strong);
+}
+
+/* ── Slotalinea ── */
+.case-takeaway {
+  padding: var(--space-6); border-radius: var(--radius-lg);
+  background: linear-gradient(140deg, rgba(43, 91, 255, .1), rgba(52, 226, 122, .07));
+  border: 1px solid var(--line-strong);
+  max-width: 88ch;
+}
+.case-takeaway p {
+  margin: 0; font-size: var(--text-lede); color: var(--ink); line-height: 1.65;
+}
+
+/* ── Screenshots ── */
+.case-shots {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-5);
+}
+.case-shot { margin: 0; }
+.case-shot img {
+  width: 100%; height: auto; display: block;
+  border-radius: var(--radius); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+.case-shot figcaption {
+  margin-top: var(--space-3); font-size: 13.5px;
+  color: var(--ink-mute); line-height: 1.5;
+}
+/* placeholder zolang de echte schermafbeelding nog niet geleverd is */
+.case-shot-ph {
+  aspect-ratio: 16 / 10; border-radius: var(--radius);
+  border: 1px dashed var(--line-strong);
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.02) 0 10px, transparent 10px 20px),
+    rgba(255, 255, 255, .015);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; text-align: center; padding: var(--space-4);
+}
+.ph-mono {
+  font-family: "JetBrains Mono", monospace; font-size: var(--text-meta);
+  color: var(--ink-mute); text-transform: uppercase; letter-spacing: .12em;
+}
+.ph-file {
+  font-family: "JetBrains Mono", monospace; font-size: 13px;
+  color: var(--green); opacity: .8;
+}
+
+/* ── Case-kaarten (overzicht + "andere cases") ── */
+.case-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-5);
+}
+.case-card {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  transition: transform var(--dur-fast, 200ms) var(--ease),
+              border-color var(--dur-fast, 200ms) var(--ease),
+              box-shadow var(--dur-fast, 200ms) var(--ease);
+}
+.case-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+.case-card-top {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: "JetBrains Mono", monospace; font-size: var(--text-meta);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.case-sector { color: var(--green); }
+.case-time {
+  color: var(--ink); background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 4px 10px; text-transform: none; letter-spacing: .04em;
+}
+.case-card h3 {
+  margin: 0; font-size: var(--text-h4); line-height: 1.2;
+  letter-spacing: -0.02em; color: var(--ink);
+}
+.case-card p {
+  margin: 0; color: var(--ink-dim); font-size: var(--text-body); line-height: 1.6;
+}
+.case-card-foot {
+  margin-top: auto; padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4); flex-wrap: wrap;
+}
+.case-ints { display: flex; gap: 8px; flex-wrap: wrap; }
+.case-ints .pill {
+  font-family: "JetBrains Mono", monospace; font-size: var(--text-meta);
+  color: var(--ink-dim); background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 4px 10px;
+}
+.case-arrow {
+  font-family: "JetBrains Mono", monospace; font-size: 13px;
+  color: var(--green); white-space: nowrap;
+}
+
+/* ── Responsive ── */
+@media (max-width: 980px) {
+  .case-grid, .case-hands, .case-shots { grid-template-columns: 1fr; }
+  .case-facts { gap: var(--space-6); }
+}
+@media (max-width: 720px) {
+  .case-top { padding: var(--space-7) 0 var(--space-5); }
+  .case-h1 { max-width: none; }
+  .ct-head { display: none; }
+  .ct-row {
+    grid-template-columns: 1fr; gap: 6px;
+    padding: var(--space-4) var(--space-4);
+  }
+  .ct-manual::before {
+    content: "met de hand: "; color: var(--ink-mute); text-transform: none;
+  }
+  .ct-agent::before {
+    content: "met de agent: "; color: var(--ink-mute); text-transform: none;
+  }
+  .cf-value { font-size: 32px; }
+  .case-takeaway { padding: var(--space-5); }
+}

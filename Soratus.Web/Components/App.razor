@@ -4,7 +4,8 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Soratus · Time changing software</title>
+    @* Titel komt per pagina uit <PageTitle> via <HeadOutlet />. Geen vaste
+       <title> hier: die zou als eerste titel-element de paginatitels overrulen. *@
     <base href="/" />
     <meta name="theme-color" content="#13162a" />
     <meta name="color-scheme" content="dark" />
@@ -21,6 +22,7 @@
     <link rel="stylesheet" href="@Assets["css/tokens.css"]" />
     <link rel="stylesheet" href="@Assets["css/app.css"]" />
     <link rel="stylesheet" href="@Assets["css/reveal.css"]" />
+    <link rel="stylesheet" href="@Assets["css/cases.css"]" />
 
     <ImportMap />
     <HeadOutlet />

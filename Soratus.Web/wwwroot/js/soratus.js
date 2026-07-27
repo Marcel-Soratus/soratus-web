@@ -3,6 +3,7 @@ import { initNeuralMesh } from './neural-mesh.js';
 import { initCodestrip } from './codestrip.js';
 import { initTestimonials } from './testimonials.js';
 import { initTerminal } from './terminal.js';
+import { initAnchors } from './anchors.js';
 
 let chatRef = null;
 const pending = [];
@@ -19,6 +20,7 @@ window.soratus = {
     initCodestrip(document.getElementById('codestrip'));
     initTestimonials();
     initTerminal(document.getElementById('terminal'));
+    initAnchors();
     setupTempoPeek();
   },
   registerChat(ref) {

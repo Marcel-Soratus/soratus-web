@@ -1,0 +1,243 @@
+@page "/cases/{Slug}"
+@inject IOptions<CompanyOptions> Company
+@inject NavigationManager Nav
+
+@if (_case is null)
+{
+    <PageTitle>Soratus · Case niet gevonden</PageTitle>
+    <section class="case-top">
+        <div class="wrap">
+            <h1 class="h1 reveal in">Niet <span class="italic">gevonden</span>.</h1>
+            <p class="case-lede reveal in">Deze case bestaat niet of is van naam veranderd.</p>
+            <div class="end-cta reveal in">
+                <Button Variant="primary" Href="/cases">Alle cases</Button>
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    <PageTitle>Soratus · @_case.Title</PageTitle>
+    <HeadContent>
+        <meta name="description" content="@_case.MetaDescription" />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <meta property="og:title" content="Soratus · @_case.Title" />
+        <meta property="og:description" content="@_case.MetaDescription" />
+        <meta property="og:image" content="@(Company.Value.Url)/brand/og-image.png?v=2" />
+        <meta property="og:url" content="@(Company.Value.Url)/cases/@_case.Slug" />
+        <meta property="og:type" content="article" />
+        <meta property="og:locale" content="nl_NL" />
+        <meta property="og:site_name" content="Soratus" />
+        <meta name="twitter:card" content="summary_large_image" />
+    </HeadContent>
+
+    @* ── Kop: wie, wat, hoe lang ── *@
+    <section class="case-top">
+        <div class="wrap">
+            <div class="case-crumb reveal in">
+                <a href="/cases">Cases</a> <span>/</span> <span>@_case.Sector</span>
+            </div>
+            <h1 class="h1 case-h1 reveal in">@_case.Title</h1>
+            <p class="case-lede reveal in">@_case.Lede</p>
+            <div class="case-facts reveal in">
+                <div class="case-fact">
+                    <span class="cf-label">Bouwtijd</span>
+                    <span class="cf-value grad-text">@_case.BuildTime</span>
+                </div>
+                <div class="case-fact">
+                    <span class="cf-label">Klant</span>
+                    <span class="cf-value-sm">@_case.Client</span>
+                </div>
+                <div class="case-fact">
+                    <span class="cf-label">Gekoppeld aan</span>
+                    <span class="cf-value-sm">@string.Join(" · ", _case.Integrations)</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ── Het handwerk zoals het was ── *@
+    <section>
+        <div class="wrap">
+            <SectionHeader Tag="01 · Het handwerk"
+                           Aside="Dit gebeurde elke keer opnieuw, met de hand.">
+                <Title>Wat er <span class="italic">wegging</span> aan tijd.</Title>
+            </SectionHeader>
+            <ul class="case-list reveal">
+                @foreach (var p in _case.Problem)
+                {
+                    <li>@p</li>
+                }
+            </ul>
+        </div>
+    </section>
+
+    @* ── Wat we bouwden ── *@
+    <section>
+        <div class="wrap">
+            <SectionHeader Tag="02 · Wat we bouwden"
+                           Aside="Gekoppeld aan het systeem dat er al stond. Geen migratie.">
+                <Title>Hoe de agent het <span class="italic">oppakt</span>.</Title>
+            </SectionHeader>
+            <div class="flow reveal">
+                @foreach (var s in _case.Steps)
+                {
+                    <div class="step">
+                        <div class="stepnum">@s.Number</div>
+                        <h4>@s.Title</h4>
+                        <p>@s.Body</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+
+    @* ── Screenshots ── *@
+    @if (_case.Shots.Length > 0)
+    {
+        <section style="padding-top:0">
+            <div class="wrap">
+                <div class="case-shots reveal">
+                    @foreach (var shot in _case.Shots)
+                    {
+                        <figure class="case-shot">
+                            @if (!string.IsNullOrWhiteSpace(shot.Src))
+                            {
+                                <img src="@shot.Src" alt="@shot.Alt" loading="lazy" />
+                            }
+                            else
+                            {
+                                <div class="case-shot-ph" role="img" aria-label="@shot.Alt">
+                                    <span class="ph-mono">screenshot volgt</span>
+                                    <span class="ph-file">/img/cases/@shot.FileName</span>
+                                </div>
+                            }
+                            <figcaption>@shot.Caption</figcaption>
+                        </figure>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+
+    @* ── Wat het uit handen neemt (de kern) ── *@
+    <section>
+        <div class="wrap">
+            <SectionHeader Tag="03 · Wat het uit handen neemt"
+                           Aside="Het vakoordeel blijft bij de mens. Het sjouwwerk niet.">
+                <Title>Werk dat je <span class="italic">niet</span> meer doet.</Title>
+            </SectionHeader>
+            <div class="case-hands reveal">
+                @foreach (var h in _case.HandsOff)
+                {
+                    <div class="case-hand">
+                        <span class="ch-mark" aria-hidden="true">✓</span>
+                        <span>@h</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+
+    @* ── Rekenvoorbeeld ── *@
+    <section>
+        <div class="wrap">
+            <SectionHeader Tag="04 · Reken mee"
+                           Aside="Indicatief scenario, geen gemeten klantcijfer.">
+                <Title>Hoeveel werk is <span class="italic">dat</span> dan?</Title>
+            </SectionHeader>
+            <p class="case-scenario-intro reveal">@_case.Scenario.Intro</p>
+            <div class="case-table reveal">
+                <div class="ct-head">
+                    <span>Taak</span>
+                    <span>Met de hand</span>
+                    <span>Met de agent</span>
+                </div>
+                @foreach (var row in _case.Scenario.Rows)
+                {
+                    <div class="ct-row">
+                        <span class="ct-task">@row.Task</span>
+                        <span class="ct-manual">@row.Manual</span>
+                        <span class="ct-agent">@row.WithAgent</span>
+                    </div>
+                }
+            </div>
+            <p class="case-outcome reveal">@_case.Scenario.Outcome</p>
+            <p class="case-note reveal">@_case.Scenario.Note</p>
+        </div>
+    </section>
+
+    @* ── Slot ── *@
+    <section style="padding-top:0">
+        <div class="wrap">
+            <div class="case-takeaway reveal">
+                <p>@_case.Takeaway</p>
+            </div>
+        </div>
+    </section>
+
+    @* ── Andere cases ── *@
+    @if (_others.Length > 0)
+    {
+        <section style="padding-top:0">
+            <div class="wrap">
+                <SectionHeader Tag="05 · Verder kijken" Aside="">
+                    <Title>Andere <span class="italic">cases</span>.</Title>
+                </SectionHeader>
+                <div class="case-grid reveal">
+                    @foreach (var c in _others)
+                    {
+                        <a class="case-card" href="/cases/@c.Slug" aria-label="Bekijk case: @c.Title">
+                            <div class="case-card-top">
+                                <span class="case-sector">@c.Sector</span>
+                                <span class="case-time">@c.BuildTime</span>
+                            </div>
+                            <h3>@c.Title</h3>
+                            <p>@c.Lede</p>
+                            <div class="case-card-foot">
+                                <span class="case-ints">
+                                    @foreach (var i in c.Integrations)
+                                    {
+                                        <span class="pill">@i</span>
+                                    }
+                                </span>
+                                <span class="case-arrow">Lees de case →</span>
+                            </div>
+                        </a>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+
+    <section class="end">
+        <div class="wrap">
+            <p class="reveal">
+                Herken je dit in je eigen praktijk?
+                Vertel welk werk elke maand terugkomt, dan zeggen we eerlijk of een agent het aankan.
+            </p>
+            <div class="end-cta reveal">
+                <Button Variant="glow" ShowDot="true"
+                        Attrs="@(new Dictionary<string, object> { ["onclick"] = "window.soratus && soratus.openChat()" })">
+                    Praat met onze AI
+                </Button>
+                <Button Variant="primary" Href="@($"mailto:{Company.Value.Email}")">@Company.Value.Email</Button>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public string? Slug { get; set; }
+
+    private CaseStudy? _case;
+    private CaseStudy[] _others = [];
+
+    protected override void OnParametersSet()
+    {
+        _case = CaseStudies.BySlug(Slug);
+        _others = _case is null
+            ? []
+            : CaseStudies.All.Where(c => c.Slug != _case.Slug).ToArray();
+    }
+}

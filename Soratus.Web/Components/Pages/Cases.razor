@@ -1,0 +1,77 @@
+@page "/cases"
+@inject IOptions<CompanyOptions> Company
+
+<PageTitle>Soratus · Cases</PageTitle>
+<HeadContent>
+    <meta name="description" content="Wat we bouwden en wat het uit handen neemt. AI-agents gekoppeld aan bestaande systemen zoals SnelStart, live binnen dagen." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta property="og:title" content="Soratus · Cases" />
+    <meta property="og:description" content="Wat we bouwden en wat het uit handen neemt. AI-agents gekoppeld aan bestaande systemen, live binnen dagen." />
+    <meta property="og:image" content="@(Company.Value.Url)/brand/og-image.png?v=2" />
+    <meta property="og:url" content="@(Company.Value.Url)/cases" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="nl_NL" />
+    <meta property="og:site_name" content="Soratus" />
+    <meta name="twitter:card" content="summary_large_image" />
+</HeadContent>
+
+<section class="case-top">
+    <div class="wrap">
+        <Eyebrow Tagline="Cases · wat we bouwden en wat het oplevert" />
+        <h1 class="h1 reveal in">
+            Werk dat <span class="italic">weggaat</span>.
+        </h1>
+        <p class="case-lede reveal in">
+            Geen pitchdeck. Dit staat er echt, gekoppeld aan de systemen die de klant al gebruikt.
+            Bij elke case staat wat de agent overneemt, en een rekenvoorbeeld van hoeveel werk dat is.
+        </p>
+        <div class="meta-row reveal in">
+            <span><Pip Color="var(--green)" Pulse="true" /> @CaseStudies.All.Length cases live</span>
+            <span><Pip Color="var(--blue-2)" /> gekoppeld aan bestaande administratie</span>
+            <span><Pip Color="var(--warn)" /> gebouwd in uren, niet maanden</span>
+        </div>
+    </div>
+</section>
+
+<section id="cases" style="padding-top:var(--space-7)">
+    <div class="wrap">
+        <div class="case-grid reveal">
+            @foreach (var c in CaseStudies.All)
+            {
+                <a class="case-card" href="/cases/@c.Slug" aria-label="Bekijk case: @c.Title">
+                    <div class="case-card-top">
+                        <span class="case-sector">@c.Sector</span>
+                        <span class="case-time">@c.BuildTime</span>
+                    </div>
+                    <h3>@c.Title</h3>
+                    <p>@c.Lede</p>
+                    <div class="case-card-foot">
+                        <span class="case-ints">
+                            @foreach (var i in c.Integrations)
+                            {
+                                <span class="pill">@i</span>
+                            }
+                        </span>
+                        <span class="case-arrow">Lees de case →</span>
+                    </div>
+                </a>
+            }
+        </div>
+    </div>
+</section>
+
+<section class="end">
+    <div class="wrap">
+        <p class="reveal">
+            Zelf zo'n stuk werk dat elke maand terugkomt?
+            Vertel wat het is, dan zeggen we eerlijk of een agent het aankan.
+        </p>
+        <div class="end-cta reveal">
+            <Button Variant="glow" ShowDot="true"
+                    Attrs="@(new Dictionary<string, object> { ["onclick"] = "window.soratus && soratus.openChat()" })">
+                Praat met onze AI
+            </Button>
+            <Button Variant="primary" Href="@($"mailto:{Company.Value.Email}")">@Company.Value.Email</Button>
+        </div>
+    </div>
+</section>

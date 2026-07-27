@@ -9,4 +9,22 @@
     <xhtml:link rel="alternate" hreflang="nl-NL" href="https://soratus.com/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://soratus.com/" />
   </url>
+  <url>
+    <loc>https://soratus.com/cases</loc>
+    <lastmod>2026-07-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://soratus.com/cases/snelstart-jaarverslag-agent</loc>
+    <lastmod>2026-07-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://soratus.com/cases/snelstart-declaraties-matchen</loc>
+    <lastmod>2026-07-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
 </urlset>
