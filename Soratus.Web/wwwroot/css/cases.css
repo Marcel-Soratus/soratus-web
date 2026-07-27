@@ -4,8 +4,13 @@
    .flow, .pill, .end, .reveal, SectionHeader). Alles hier is case-specifiek.
    ───────────────────────────────────────────────────────────────────────── */
 
-/* ── Kop van een case-pagina ── */
-.case-top { padding: var(--space-8) 0 var(--space-6); }
+/* ── Kop van een case-pagina ──
+   Krappe onderkant en een kleinere bovenmarge op de eerstvolgende sectie.
+   Anders staat er 160px dode ruimte onder de feiten-rij (40px hier + 120px
+   sectiepadding) en landt de eerste sectiekop net onder de reveal-grens
+   (rootMargin -8%), waardoor je bij het openen een leeg scherm ziet. */
+.case-top { padding: var(--space-7) 0 0; }
+.case-top + section { padding-top: var(--space-6); }
 .case-crumb {
   font-family: "JetBrains Mono", monospace;
   font-size: var(--text-meta); color: var(--ink-mute);
@@ -219,7 +224,7 @@
   .case-facts { gap: var(--space-6); }
 }
 @media (max-width: 720px) {
-  .case-top { padding: var(--space-7) 0 var(--space-5); }
+  .case-top { padding: var(--space-6) 0 0; }
   .case-h1 { max-width: none; }
   .ct-head { display: none; }
   .ct-row {
