@@ -65,18 +65,52 @@ app.UseHttpsRedirection();
 // Canonical-host redirect: www.soratus.com → soratus.com (301)
 // (uvidai.com → soratus.com is handled by Namecheap URL forwarding at the
 //  registrar, so it never reaches us.)
+//
+// Daarnaast de standaard Azure-hostnaam (app-soratus-prod.azurewebsites.net)
+// → soratus.com. Die blijft naast het eigen domein bereikbaar en wordt continu
+// door bots afgescand, wat de statistieken vervuilt en duplicate content geeft.
+//
+// Twee uitzonderingen, anders breken we iets:
+//  - Deployment-slots. Daar wil je juist wél via de azurewebsites.net-URL kunnen
+//    testen. WEBSITE_SLOT_NAME is "Production" in de productieslot en anders de
+//    naam van de slot.
+//  - /healthz. Azure's health check verwacht een 2xx en volgt geen redirect; een
+//    301 zou de app als ongezond markeren.
+var canonicalHost = new Uri(app.Configuration["Company:Url"] ?? "https://soratus.com").Host;
+var slotName = Environment.GetEnvironmentVariable("WEBSITE_SLOT_NAME");
+var isProductionSlot = string.IsNullOrEmpty(slotName)
+    || slotName.Equals("Production", StringComparison.OrdinalIgnoreCase);
+
 app.Use(async (context, next) =>
 {
     var host = context.Request.Host.Host;
+
     if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
     {
         var target = new UriBuilder(context.Request.GetEncodedUrl())
         {
-            Host = host[4..]
+            Scheme = Uri.UriSchemeHttps,
+            Host = host[4..],
+            Port = -1
         };
         context.Response.Redirect(target.ToString(), permanent: true);
         return;
     }
+
+    if (isProductionSlot
+        && host.EndsWith(".azurewebsites.net", StringComparison.OrdinalIgnoreCase)
+        && !context.Request.Path.StartsWithSegments("/healthz"))
+    {
+        var target = new UriBuilder(context.Request.GetEncodedUrl())
+        {
+            Scheme = Uri.UriSchemeHttps,
+            Host = canonicalHost,
+            Port = -1
+        };
+        context.Response.Redirect(target.ToString(), permanent: true);
+        return;
+    }
+
     await next();
 });
 
