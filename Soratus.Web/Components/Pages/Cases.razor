@@ -45,6 +45,13 @@
                     </div>
                     <h3>@c.Title</h3>
                     <p>@c.Lede</p>
+                    @if (!string.IsNullOrWhiteSpace(c.TimeSaved))
+                    {
+                        <div class="case-saving">
+                            <span class="cs-mark">✓</span>
+                            <span>bespaart de klant <strong>@c.TimeSaved</strong></span>
+                        </div>
+                    }
                     <div class="case-card-foot">
                         <span class="case-ints">
                             @foreach (var i in c.Integrations)

@@ -195,6 +195,16 @@
   letter-spacing: .08em; text-transform: uppercase;
 }
 .case-sector { color: var(--green); }
+/* Wat de klant erop overhoudt. Staat op een eigen regel: naast de bouwtijd-badge
+   wordt het te vol en zonder label verwar je twee heel verschillende getallen. */
+.case-saving {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-top: var(--space-4); padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+  font-size: 14.5px; color: var(--ink-dim);
+}
+.case-saving strong { color: var(--green); font-weight: 600; }
+.case-saving .cs-mark { color: var(--green); flex-shrink: 0; }
 .case-time {
   color: var(--ink); background: rgba(255, 255, 255, .06);
   border: 1px solid var(--line); border-radius: var(--radius-pill);

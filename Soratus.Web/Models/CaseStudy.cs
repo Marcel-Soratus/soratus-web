@@ -24,6 +24,13 @@ public sealed record CaseStudy
     /// <summary>Bouwtijd, bijv. "2 uur". Verschijnt prominent als bewijs van snelheid.</summary>
     public required string BuildTime { get; init; }
 
+    /// <summary>
+    /// Wat de klant er jaarlijks aan tijd op overhoudt, bijv. "400 uur per jaar".
+    /// Alleen vullen met een cijfer dat de klant zelf heeft gemeld; dit staat op de
+    /// pagina als resultaat en niet als rekenvoorbeeld. Leeg laten als het er niet is.
+    /// </summary>
+    public string? TimeSaved { get; init; }
+
     /// <summary>Systemen waarmee gekoppeld is, bijv. ["SnelStart"].</summary>
     public required string[] Integrations { get; init; }
 
@@ -73,6 +80,7 @@ public static class CaseStudies
             Title = "Een accountant-agent die het jaarverslag schrijft en zijn cijfers kan uitleggen",
             Lede = "Gekoppeld aan SnelStart. Hij levert een compleet bestuursverslag met balans en kengetallen, zet bij elk ratio de formule waarmee het is berekend, en herschrijft het op verzoek in het gesprek. Bouwtijd: twee uur.",
             BuildTime = "2 uur",
+            TimeSaved = "400 uur per jaar",
             Integrations = ["SnelStart"],
             Problem =
             [
@@ -111,8 +119,8 @@ public static class CaseStudies
                     new("Tweede versie voor een andere lezer", "circa 1 uur", "een vraag in de chat"),
                     new("Controle, vakoordeel en ondertekening", "circa 2 uur", "circa 2 uur"),
                 ],
-                "Van ongeveer negen uur naar ongeveer drie uur per jaarverslag, waarvan het grootste deel controle blijft. Bij vijftig verslagen is dat een paar honderd uur per jaar die vrijkomt voor werk waar een accountant echt voor is ingehuurd.",
-                "Indicatief rekenvoorbeeld om de orde van grootte te laten zien. Geen gemeten klantresultaat. Jouw praktijk heeft andere cijfers, en die rekenen we graag samen door."),
+                "Van ongeveer negen uur naar ongeveer drie uur per jaarverslag, waarvan het grootste deel controle blijft. Bij deze klant kwam dat uit op 400 uur per jaar. Dat is ruim tien werkweken die terugvloeien naar het werk waarvoor een accountant echt is ingehuurd.",
+                "De 400 uur per jaar is wat deze klant zelf heeft teruggekoppeld. De urenverdeling per verslag hierboven is een indicatief rekenvoorbeeld dat laat zien waar die tijd zit. Jouw praktijk heeft andere cijfers, en die rekenen we graag samen door."),
             Shots =
             [
                 new("Startscherm met de chat links en het lege rapport-paneel rechts",
