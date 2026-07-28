@@ -88,7 +88,35 @@ Suggestie voor de eerste comment, varieer per post:
 
 ---
 
-## Buffer
+## Buffer: importeren met de CSV
+
+Snelste route: **`buffer-import.csv`** in deze map is het ingevulde importtemplate. Acht
+rijen, met beeld en publicatiemoment. Gegenereerd door `maak-buffer-csv.py`, dus als je een
+tekst of datum wijzigt draai je dat script opnieuw.
+
+Het schema in de CSV loopt van **dinsdag 4 augustus tot donderdag 27 augustus**, om 08:15.
+Wil je eerder of later beginnen, pas `START` in het script aan.
+
+Drie dingen om te weten voor je importeert:
+
+- **De beelden staan op soratus.com.** Buffer laadt geen bestand van je schijf, het wil een
+  publieke link die eindigt op `.png`. Daarom zijn de acht beelden meegedeployed naar
+  `soratus.com/social/`. Alle acht zijn gecontroleerd: 200 en `image/png`, ruim onder 5MB.
+- **Tags zijn leeg gelaten.** Buffer eist tags die al bestaan en let op hoofdletters. Een
+  tag die niet bestaat laat de hele import mislukken. Vul ze na de import in Buffer aan.
+- **Post 2 wordt geen carrousel via de import.** De CSV kan alleen een afbeelding bevatten,
+  geen PDF. In de CSV staat daarom de eerste slide als losse afbeelding. Wil je de echte
+  carrousel (en die scoort beter), plaats post 2 dan met de hand en upload
+  `img/02-declaraties-carrousel.pdf`.
+
+De posttekst bevat witregels. Dat is geldige CSV en belangrijk voor de leesbaarheid, maar
+als de import ze platslaat: plak die post dan met de hand uit `posts/`.
+
+De links horen **niet** in de CSV. Die plaats je zelf als eerste comment, zie hieronder.
+
+---
+
+## Buffer: met de hand
 
 1. Nieuwe post, kanaal = **Marcels persoonlijke profiel**. Niet de bedrijfspagina.
    Founder-content presteert structureel beter.
