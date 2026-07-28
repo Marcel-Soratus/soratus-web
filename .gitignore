@@ -488,3 +488,6 @@ set-anthropic-key.ps1
 set-openai-key.ps1
 set-local-secrets.ps1
 set-acs-email.ps1
+
+# Originelen van genormaliseerde screenshots (lokaal, niet uitleveren)
+Soratus.Web/wwwroot/img/cases/*.orig.png

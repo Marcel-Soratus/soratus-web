@@ -131,13 +131,20 @@
   margin: 0; font-size: var(--text-lede); color: var(--ink); line-height: 1.65;
 }
 
-/* ── Screenshots ── */
+/* ── Screenshots ──
+   --shot-ratio geldt voor zowel de echte afbeelding als de placeholder, zodat
+   de tegels in de tweekoloms-grid even hoog zijn. Screenshots verschillen van
+   verhouding; normaliseer ze met handoff/cases/normaliseer-screenshots.py en
+   zet die verhouding hier gelijk. object-fit: contain zodat er niets wegvalt. */
 .case-shots {
+  --shot-ratio: 1400 / 1299;
   display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-5);
 }
 .case-shot { margin: 0; }
 .case-shot img {
   width: 100%; height: auto; display: block;
+  aspect-ratio: var(--shot-ratio); object-fit: contain;
+  background: rgba(255, 255, 255, .015);
   border-radius: var(--radius); border: 1px solid var(--line-strong);
   box-shadow: var(--shadow-card);
 }
@@ -147,7 +154,7 @@
 }
 /* placeholder zolang de echte schermafbeelding nog niet geleverd is */
 .case-shot-ph {
-  aspect-ratio: 16 / 10; border-radius: var(--radius);
+  aspect-ratio: var(--shot-ratio); border-radius: var(--radius);
   border: 1px dashed var(--line-strong);
   background:
     repeating-linear-gradient(135deg, rgba(255,255,255,.02) 0 10px, transparent 10px 20px),
