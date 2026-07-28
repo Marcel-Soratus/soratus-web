@@ -1,4 +1,5 @@
 @inject IOptions<CompanyOptions> Company
+@inject IWebHostEnvironment Env
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -36,13 +37,23 @@
     <script src="_framework/blazor.web.js"></script>
     <script type="module" src="@Assets["js/soratus.js"]"></script>
 
-    @* Microsoft Clarity — session replay + heatmaps (no cookies set by default, uses LocalStorage) *@
-    <script>
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "mk41n6gnwb");
-    </script>
+    @* Microsoft Clarity — session replay + heatmaps (no cookies set by default, uses LocalStorage).
+       Twee filters, zodat er alleen echt publiek in de statistieken komt:
+       1. Niet in Development, dus debug-sessies leveren geen opnames op.
+       2. Alleen op de canonieke host. Dat sluit localhost uit bij een lokale
+          productie-run, maar ook de standaard Azure-hostnaam
+          (app-soratus-prod.azurewebsites.net) en eventuele deployment-slots.
+          Die worden continu door bots afgescand en vervuilen anders de data. *@
+    @if (!Env.IsDevelopment())
+    {
+        <script>
+            (function(c,l,a,r,i,t,y){
+                if (l.location.hostname !== "@(new Uri(Company.Value.Url).Host)") return;
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "mk41n6gnwb");
+        </script>
+    }
 </body>
 </html>
