@@ -3,7 +3,7 @@ import { initNeuralMesh } from './neural-mesh.js';
 import { initCodestrip } from './codestrip.js';
 import { initTestimonials } from './testimonials.js';
 import { initTerminal } from './terminal.js';
-import { initAnchors } from './anchors.js';
+import { initAnchors, plaatsScroll } from './anchors.js';
 
 let chatRef = null;
 const pending = [];
@@ -13,16 +13,48 @@ function openOnRef(prefill) {
   else pending.push(prefill ?? null);
 }
 
-window.soratus = {
-  init() {
+/**
+ * Blazor's enhanced navigation vervangt de DOM zonder paginalading. De inits
+ * hieronder zoeken elementen op en moeten dus na elke navigatie opnieuw lopen,
+ * anders is de nieuwe pagina niet geïnitialiseerd. Zonder dit blijft alles met
+ * .reveal op opacity 0 staan en zie je een lege pagina.
+ *
+ * De intervallen die tijdens een init worden aangemaakt houden we bij, zodat we
+ * ze bij de volgende navigatie kunnen stoppen. Anders blijft elke bezochte
+ * pagina zijn timers draaien op elementen die niet meer in het document staan.
+ */
+let paginaTimers = [];
+
+function initPagina() {
+  for (const id of paginaTimers) clearInterval(id);
+  paginaTimers = [];
+
+  const echteSetInterval = window.setInterval;
+  window.setInterval = function (...args) {
+    const id = echteSetInterval.apply(this, args);
+    paginaTimers.push(id);
+    return id;
+  };
+  try {
     initReveal();
     initNeuralMesh(document.querySelector('#orbStage svg.mesh'));
     initCodestrip(document.getElementById('codestrip'));
     initTestimonials();
     initTerminal(document.getElementById('terminal'));
+  } finally {
+    window.setInterval = echteSetInterval;
+  }
+}
+
+window.soratus = {
+  init() {
+    initPagina();
+    // Deze twee hangen listeners op document/window en een eigen timer op, dus
+    // precies één keer per documentlading. Niet bij elke navigatie opnieuw.
     initAnchors();
     setupTempoPeek();
   },
+  initPagina,
   registerChat(ref) {
     chatRef = ref;
     while (pending.length) {
@@ -189,7 +221,23 @@ function setupTempoPeek() {
   showTimer = setTimeout(showPeek, 8000);
 }
 
-function boot() { window.soratus.init(); }
+function boot() {
+  window.soratus.init();
+
+  // Na elke enhanced navigation de pagina-inits opnieuw laten lopen. Blazor kan
+  // nog niet gestart zijn als deze module draait, dus zo nodig even wachten.
+  const koppel = (poging = 0) => {
+    if (window.Blazor?.addEventListener) {
+      window.Blazor.addEventListener('enhancedload', () => {
+        plaatsScroll();
+        initPagina();
+      });
+    } else if (poging < 40) {
+      setTimeout(() => koppel(poging + 1), 100);
+    }
+  };
+  koppel();
+}
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', boot);

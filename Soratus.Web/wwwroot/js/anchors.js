@@ -53,6 +53,25 @@ function targetFromHash(hash) {
   return document.getElementById(id);
 }
 
+/**
+ * Zet de scrollpositie goed bij het binnenkomen op een pagina. Met een fragment
+ * in de URL (bijv. /#hoe vanaf een case-pagina) naar dat blok, anders naar
+ * boven.
+ *
+ * Ook nodig ná een enhanced navigation: Blazor vervangt dan de DOM zonder de
+ * scrollpositie te herstellen. Ga je van /#hoe (ver naar onder gescrold) naar
+ * /cases, dan blijf je zonder dit op dezelfde hoogte staan en kijk je op een
+ * korte pagina naar de leegte onder de content.
+ */
+export function plaatsScroll() {
+  const doel = targetFromHash(location.hash);
+  // Twee frames wachten zodat fonts en layout gezet zijn voor we meten.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (doel) scrollToTarget(doel, 'auto');
+    else window.scrollTo({ top: 0, behavior: 'auto' });
+  }));
+}
+
 export function initAnchors() {
   // Klik op een link die naar een fragment op DEZE pagina wijst.
   document.addEventListener('click', (e) => {
@@ -80,15 +99,7 @@ export function initAnchors() {
     if (url.hash !== location.hash) history.pushState(null, '', url.hash);
   });
 
-  // Binnenkomen met een fragment in de URL (bijv. /#hoe vanaf een case-pagina).
-  // Native scroll faalt hier doordat het doel in een scroll-container zit.
-  const initial = targetFromHash(location.hash);
-  if (initial) {
-    // Twee frames wachten zodat fonts en layout gezet zijn voor we meten.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      scrollToTarget(initial, 'auto');
-    }));
-  }
+  plaatsScroll();
 
   // Terug/vooruit-knop met alleen een fragmentwissel.
   window.addEventListener('hashchange', () => {
