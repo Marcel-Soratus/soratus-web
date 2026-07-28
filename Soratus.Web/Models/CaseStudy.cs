@@ -21,7 +21,11 @@ public sealed record CaseStudy
     /// <summary>Eén regel die de case verkoopt. Verschijnt op de kaart en onder de h1.</summary>
     public required string Lede { get; init; }
 
-    /// <summary>Bouwtijd, bijv. "2 uur". Verschijnt prominent als bewijs van snelheid.</summary>
+    /// <summary>
+    /// Tijd tot een werkende demo, bijv. "2 uur". Overal gelabeld als demo en niet
+    /// als bouwtijd: productieklaar maken is meer werk, en dat moet een prospect
+    /// niet verkeerd kunnen lezen.
+    /// </summary>
     public required string BuildTime { get; init; }
 
     /// <summary>
@@ -91,7 +95,7 @@ public static class CaseStudies
             Sector = "Accountancy",
             Client = "Accountantskantoor met MKB-klanten",
             Title = "Een accountant-agent die het jaarverslag schrijft en zijn cijfers kan uitleggen",
-            Lede = "Gekoppeld aan SnelStart. Hij levert een compleet bestuursverslag met balans en kengetallen, zet bij elk ratio de formule waarmee het is berekend, en herschrijft het op verzoek in het gesprek. Bouwtijd: twee uur.",
+            Lede = "Gekoppeld aan SnelStart. Hij levert een compleet bestuursverslag met balans en kengetallen, zet bij elk ratio de formule waarmee het is berekend, en herschrijft het op verzoek in het gesprek. In twee uur stond er een werkende demo.",
             BuildTime = "2 uur",
             // De winst zat hier in geld, niet in uren: de tool die hiervoor in beeld
             // was zou een ton aan licentiekosten kosten.
@@ -134,7 +138,7 @@ public static class CaseStudies
                     new("Tweede versie voor een andere lezer", "circa 1 uur", "een vraag in de chat"),
                     new("Controle, vakoordeel en ondertekening", "circa 2 uur", "circa 2 uur"),
                 ],
-                "Van ongeveer negen uur naar ongeveer drie uur per jaarverslag, waarvan het grootste deel controle blijft. Maar de aanleiding was hier niet tijd. Het was geld: de tool die hiervoor in beeld was, zou een ton aan licentiekosten kosten. Dat bedrag is in twee uur bouwen van tafel gegaan.",
+                "Van ongeveer negen uur naar ongeveer drie uur per jaarverslag, waarvan het grootste deel controle blijft. Maar de aanleiding was hier niet tijd. Het was geld: de tool die hiervoor in beeld was, zou een ton aan licentiekosten kosten. In twee uur stond er een demo die dat bedrag overbodig maakte.",
                 "De ton aan licentiekosten is wat deze klant zou gaan betalen. De urentabel hierboven is een indicatief rekenvoorbeeld om te laten zien waar het werk zit, geen gemeten klantresultaat. Jouw praktijk heeft andere cijfers, en die rekenen we graag samen door."),
             Shots =
             [
@@ -148,8 +152,8 @@ public static class CaseStudies
                     "Bij elk kengetal staat waaruit het is berekend. Daarmee is het rapport controleerbaar en geen zwarte doos.",
                     "jaarverslag-kengetallen.png"),
             ],
-            Takeaway = "Het verschil zit in de kolom \"toelichting\" naast de kengetallen. Current ratio 2,13, en ernaast staat waaruit dat is berekend. Een accountant tekent niet voor een getal dat hij niet kan navertellen. Daarom is die kolom belangrijker dan de snelheid. Het sjouwwerk gaat naar de machine, de verantwoordelijkheid blijft waar die hoort. En het kostte twee uur om te bouwen, niet twee kwartalen.",
-            MetaDescription = "Case: accountant-agent gekoppeld aan SnelStart die een compleet jaarverslag opstelt met kengetallen en de formule per ratio. Gebouwd in twee uur.",
+            Takeaway = "Het verschil zit in de kolom \"toelichting\" naast de kengetallen. Current ratio 2,13, en ernaast staat waaruit dat is berekend. Een accountant tekent niet voor een getal dat hij niet kan navertellen. Daarom is die kolom belangrijker dan de snelheid. Het sjouwwerk gaat naar de machine, de verantwoordelijkheid blijft waar die hoort. En de demo stond er in twee uur, niet in twee kwartalen.",
+            MetaDescription = "Case: accountant-agent gekoppeld aan SnelStart die een compleet jaarverslag opstelt met kengetallen en de formule per ratio. Werkende demo in twee uur.",
         },
 
         new()
@@ -158,7 +162,7 @@ public static class CaseStudies
             Sector = "Zorg",
             Client = "Zorgpraktijk die declareert bij zorgverzekeraars",
             Title = "Een agent die declaraties nakijkt en zelf voorstelt wat er moet gebeuren",
-            Lede = "Gekoppeld aan SnelStart. Hij matcht declaraties met betalingen, stelt een diagnose bij elke afwijking en draagt een vervolgstap aan. Boven 80 procent zekerheid handelt hij zelf af. Daaronder vraagt hij het jou. Bouwtijd: twee uur.",
+            Lede = "Gekoppeld aan SnelStart. Hij matcht declaraties met betalingen, stelt een diagnose bij elke afwijking en draagt een vervolgstap aan. Boven 80 procent zekerheid handelt hij zelf af. Daaronder vraagt hij het jou. In twee uur stond er een werkende demo.",
             BuildTime = "2 uur",
             // Door de klant teruggekoppeld.
             Result = new("Bespaart de klant", "400 uur per jaar", "minder uitzoekwerk bij de klant"),
@@ -215,8 +219,8 @@ public static class CaseStudies
                     "Per bevinding een voorstel met zekerheidsscore. Onder 80 procent stelt de agent een vraag in plaats van zelf te handelen.",
                     "declaraties-agent.png"),
             ],
-            Takeaway = "Het aardige zit in wat de agent níet doet. Een dubbele declaratie laat hij bij 98 procent zekerheid vervallen. Bij 58 procent stelt hij een vraag in plaats van iets te doen. Die grens maakt het verschil tussen een hulpmiddel dat je vertrouwt en een zwarte doos die je moet nacontroleren. Het vakoordeel blijft bij de praktijk, het uitzoekwerk niet. En het stond er in twee uur.",
-            MetaDescription = "Case: een AI-agent die declaraties matcht met betalingen uit SnelStart, afwijkingen diagnosticeert en per bevinding een vervolgstap voorstelt met zekerheidsscore. Gebouwd in twee uur.",
+            Takeaway = "Het aardige zit in wat de agent níet doet. Een dubbele declaratie laat hij bij 98 procent zekerheid vervallen. Bij 58 procent stelt hij een vraag in plaats van iets te doen. Die grens maakt het verschil tussen een hulpmiddel dat je vertrouwt en een zwarte doos die je moet nacontroleren. Het vakoordeel blijft bij de praktijk, het uitzoekwerk niet. En de demo stond er in twee uur.",
+            MetaDescription = "Case: een AI-agent die declaraties matcht met betalingen uit SnelStart, afwijkingen diagnosticeert en per bevinding een vervolgstap voorstelt met zekerheidsscore. Werkende demo in twee uur.",
         },
     ];
 
