@@ -137,7 +137,7 @@
    verhouding; normaliseer ze met handoff/cases/normaliseer-screenshots.py en
    zet die verhouding hier gelijk. object-fit: contain zodat er niets wegvalt. */
 .case-shots {
-  --shot-ratio: 1400 / 1299;
+  --shot-ratio: 1400 / 1059;
   display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-5);
 }
 .case-shot { margin: 0; }

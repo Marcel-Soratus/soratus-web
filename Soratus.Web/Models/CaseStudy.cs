@@ -156,7 +156,7 @@ public static class CaseStudies
                 new("03", "Diagnose per bevinding",
                     "Niet alleen dát het afwijkt, maar waaróm. Behandeldatum na de indiendatum, dus vermoedelijk dag en maand omgedraaid. Een bedrag dat niet kan, dus vermoedelijk een kommafout. Twee keer hetzelfde declaratienummer, waarvan de eerste al is uitbetaald."),
                 new("04", "Voorstel met zekerheidsscore",
-                    "Opnieuw indienen met de correctie er al bij, laten vervallen, of navragen bij de verzekeraar. Boven 80 procent zekerheid handelt de agent zelf af. Daaronder legt hij het met een concrete vraag bij jou neer."),
+                    "Opnieuw indienen met de correctie er al bij, laten vervallen, navragen bij de verzekeraar, of het niet-vergoede deel bij de patiënt factureren. Boven 80 procent zekerheid handelt de agent zelf af. Daaronder legt hij het met een concrete vraag bij jou neer."),
             ],
             HandsOff =
             [
@@ -190,7 +190,7 @@ public static class CaseStudies
                     "Per bevinding een voorstel met zekerheidsscore. Onder 80 procent stelt de agent een vraag in plaats van zelf te handelen.",
                     "declaraties-agent.png"),
             ],
-            Takeaway = "Het aardige zit in wat de agent níet doet. Bij 99 procent zekerheid laat hij een dubbele declaratie vervallen. Bij 68 procent stelt hij een vraag. Die grens maakt het verschil tussen een hulpmiddel dat je vertrouwt en een zwarte doos die je moet nacontroleren. Het vakoordeel blijft bij de praktijk, het uitzoekwerk niet. En het stond er in twee uur.",
+            Takeaway = "Het aardige zit in wat de agent níet doet. Een dubbele declaratie laat hij bij 98 procent zekerheid vervallen. Bij 58 procent stelt hij een vraag in plaats van iets te doen. Die grens maakt het verschil tussen een hulpmiddel dat je vertrouwt en een zwarte doos die je moet nacontroleren. Het vakoordeel blijft bij de praktijk, het uitzoekwerk niet. En het stond er in twee uur.",
             MetaDescription = "Case: een AI-agent die declaraties matcht met betalingen uit SnelStart, afwijkingen diagnosticeert en per bevinding een vervolgstap voorstelt met zekerheidsscore. Gebouwd in twee uur.",
         },
     ];

@@ -1,39 +1,52 @@
 # Screenshots voor de case-pagina's
 
-Zet de afbeeldingen hier neer met exact de naam uit de tabel. De pagina pikt ze
-vanzelf op: geen code-wijziging nodig, alleen de pagina verversen. Zolang een
-bestand ontbreekt, toont de pagina een placeholder met de verwachte naam erin.
+De zes afbeeldingen staan er. Ze zijn niet met de hand gemaakt maar opgenomen
+door de MBV-demo zelf te doorlopen, zodat ze uniform zijn en herhaalbaar.
 
-## Declaraties — /cases/snelstart-declaraties-matchen
+Alle zes zijn 1400x1059 (verhouding 1.32). Die verhouding staat als
+`--shot-ratio` in `wwwroot/css/cases.css`. Vervang je een afbeelding door een
+met een andere verhouding, normaliseer dan opnieuw en werk dat getal bij.
 
-| Bestandsnaam | Welke afbeelding |
+| Bestandsnaam | Wat erop staat |
 |---|---|
 | `declaraties-betalingen.png` | Beginstand: ontvangen betalingen 2025 |
 | `declaraties-matching.png` | Matchingresultaat met KPI-tegels, filters en bevindingen |
-| `declaraties-agent.png` | "Afhandeling door AI-agent" met voorstellen en zekerheidsscores |
-
-## Jaarverslag — /cases/snelstart-jaarverslag-agent
-
-| Bestandsnaam | Welke afbeelding |
-|---|---|
+| `declaraties-agent.png` | Afhandeling door AI-agent: 6 van 8 automatisch, 2 ter beoordeling |
 | `jaarverslag-start.png` | Startscherm: chat links, leeg rapport-paneel rechts |
 | `jaarverslag-rapport.png` | Opgesteld bestuursverslag naast de samenvatting in de chat |
-| `jaarverslag-kengetallen.png` | Kengetallentabel met de toelichting per ratio |
+| `jaarverslag-kengetallen.png` | Kengetallentabel met de formule per ratio |
 
-## Voor publicatie nog checken
+## Opnieuw maken
 
-- **`jaarverslag-kengetallen.png`** bevat onderaan de tekst "Opgesteld met
-  demo-cijfers · Mijn MBV". Dat verklapt de klant, terwijl de case anoniem is.
-  Wegsnijden of onleesbaar maken.
-- **`declaraties-matching.png`** bevat namen van verzekerden (M. Jansen,
-  P. de Boer en verder). Ze ogen als gegenereerde demonamen en er staat een
-  DEMO-badge bij, maar dit is zorgcontext. Bevestig dat het synthetische namen
-  zijn voordat dit publiek gaat.
+Start eerst beide MBV-projecten, want de web-app heeft de API nodig:
 
-## Praktisch
+```
+dotnet run --project D:/SORATUS/MBV/MBV.Web/MBV.Web.csproj --launch-profile https
+dotnet run --project D:/SORATUS/MBV/MBV.Api/MBV.Api.csproj --launch-profile https
+```
 
-- Formaat: PNG. Breedte rond 1400px is ruim voldoende; de kaders zijn ongeveer
-  700px breed en tonen de afbeelding met `object-fit: cover`.
-- Vervang je later een bestand, dan ververst de browser vanzelf: de pagina hangt
-  de laatste schrijftijd als `?v=` achter de URL.
-- Dit LEESMIJ-bestand mag blijven staan, het wordt niet uitgeleverd als pagina.
+Dan, vanuit de root van deze repo:
+
+```
+node handoff/cases/maak-screenshots.mjs              # jaarverslag + beginstand declaraties
+node handoff/cases/maak-screenshots-declaraties.mjs  # declaraties met upload en agent
+python handoff/cases/normaliseer-screenshots.py --breedte 1400
+```
+
+De scripts sturen een eigen headless Chrome aan via het DevTools-protocol en
+snijden bij tot de app-container, zodat er geen loze marge omheen staat.
+
+## Let op bij herhalen
+
+De agent is niet deterministisch: de zekerheidsscores verschillen per run. Op de
+case-pagina staan nu 98 procent (dubbele declaratie) en 58 procent (laagste
+vraag) genoemd. Wijk je daarvan af, pas dan de tekst in
+`Models/CaseStudy.cs` aan, anders spreken tekst en afbeelding elkaar tegen.
+
+## Privacy
+
+De namen in `declaraties-matching.png` komen uit het voorbeeldbestand van de app
+zelf (`/api/declaraties/voorbeeldbestand`), dus het zijn synthetische demonamen
+en geen echte verzekerden. De klantnaam staat nergens in beeld: de rapportvoet
+met "Mijn MBV" valt buiten de uitsnede. De demo draait op "Demo
+Handelsonderneming B.V." met een zichtbare Demo-cijfers-badge.
