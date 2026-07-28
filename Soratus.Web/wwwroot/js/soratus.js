@@ -183,7 +183,7 @@ function setupTempoPeek() {
         <span class="tp-sep">·</span>
         <span class="tp-status">online</span>
       </div>
-      <div class="tp-msg">Stel me iets. Ik denk graag mee.</div>
+      <div class="tp-msg">Stel een vraag. Ik denk graag mee.</div>
       <div class="tp-cue">klik om te beginnen</div>
     `;
     el.addEventListener('click', (e) => {

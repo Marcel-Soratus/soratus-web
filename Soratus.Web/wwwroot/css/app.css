@@ -488,7 +488,11 @@ section { position: relative; padding: var(--space-9) 0; z-index: var(--z-conten
 }
 .step .stepnum { font-family: "JetBrains Mono", monospace; font-size: var(--text-meta); color: var(--green); margin-top: auto; }
 .step h4 { font-size: var(--text-h4); line-height: 1.1; letter-spacing: -0.02em; font-weight: 500; margin: 20px 0 10px; }
-.step p { color: var(--ink-dim); font-size: 14.5px; line-height: 1.5; margin: 0; }
+/* min-height = 3 regels (14.5px * 1.5). Het tekstblok in een .step wordt door
+   margin-top:auto op .stepnum naar de onderkant geduwd, dus een kortere tekst
+   tilt nummer en titel omhoog en staan de titels tussen kaarten niet op één
+   lijn. Ruimte reserveren houdt ze uitgelijnd, ook als de copy verandert. */
+.step p { color: var(--ink-dim); font-size: 14.5px; line-height: 1.5; margin: 0; min-height: 66px; }
 .step .stepicon {
   width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--line-strong);
   display: grid; place-items: center; font-family: "JetBrains Mono", monospace; color: var(--green);
@@ -1010,7 +1014,7 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .step-partner .stepicon { border-color: rgba(52, 226, 122, .45); }
 .step-partner::after {
   content: "bekijk het partnerplan →";
-  position: absolute; right: 28px; bottom: 28px;
+  position: absolute; right: 28px; top: 38px;
   font-family: "JetBrains Mono", monospace; font-size: var(--text-meta);
   color: var(--green); opacity: 0; transform: translateX(-4px);
   transition: opacity .2s, transform .2s;
@@ -1022,5 +1026,3 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .step-partner:hover::after, .step-partner:focus-visible::after {
   opacity: 1; transform: translateX(0);
 }
-/* de regel maakt onderaan ruimte vrij voor die hint */
-.step-partner p { padding-bottom: 26px; }
