@@ -1,6 +1,7 @@
 @page "/cases/{Slug}"
 @inject IOptions<CompanyOptions> Company
 @inject NavigationManager Nav
+@inject IWebHostEnvironment Env
 
 @if (_case is null)
 {
@@ -100,10 +101,11 @@ else
                 <div class="case-shots reveal">
                     @foreach (var shot in _case.Shots)
                     {
+                        var src = ResolveShot(shot);
                         <figure class="case-shot">
-                            @if (!string.IsNullOrWhiteSpace(shot.Src))
+                            @if (src is not null)
                             {
-                                <img src="@shot.Src" alt="@shot.Alt" loading="lazy" />
+                                <img src="@src" alt="@shot.Alt" loading="lazy" />
                             }
                             else
                             {
@@ -239,5 +241,23 @@ else
         _others = _case is null
             ? []
             : CaseStudies.All.Where(c => c.Slug != _case.Slug).ToArray();
+    }
+
+    /// <summary>
+    /// Bepaalt de src van een screenshot. Een expliciete <see cref="CaseShot.Src"/> wint;
+    /// anders wordt /img/cases/{FileName} gebruikt zodra dat bestand er staat. Zo is een
+    /// afbeelding toevoegen puur een kwestie van het bestand neerzetten, zonder code-wijziging.
+    /// De ?v= is de laatste schrijftijd, zodat een vervangen bestand niet uit cache komt.
+    /// </summary>
+    private string? ResolveShot(CaseShot shot)
+    {
+        if (!string.IsNullOrWhiteSpace(shot.Src)) return shot.Src;
+        if (string.IsNullOrWhiteSpace(Env.WebRootPath)) return null;
+
+        var path = System.IO.Path.Combine(Env.WebRootPath, "img", "cases", shot.FileName);
+        if (!System.IO.File.Exists(path)) return null;
+
+        var stamp = System.IO.File.GetLastWriteTimeUtc(path).Ticks;
+        return $"/img/cases/{shot.FileName}?v={stamp}";
     }
 }
