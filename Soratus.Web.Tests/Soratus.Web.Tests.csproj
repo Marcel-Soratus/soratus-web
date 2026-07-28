@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="bunit" Version="2.7.2" />
+    <!-- 2.8.6+ brengt AngleSharp 1.5.2 mee; 2.7.2 hing nog op 1.4.0 met
+         GHSA-pgww-w46g-26qg (NU1902). -->
+    <PackageReference Include="bunit" Version="2.8.6" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
