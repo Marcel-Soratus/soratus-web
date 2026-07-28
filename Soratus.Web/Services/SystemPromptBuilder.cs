@@ -32,11 +32,15 @@ public sealed class SystemPromptBuilder(IOptions<BrandOptions> brand, IOptions<C
 
         Naast projecten met een vaste prijs is er het Partnerplan, voor wie na de
         oplevering wil blijven doorontwikkelen. De pagina staat op /partner.
-        - Kern: één vast aanspreekpunt, en elke maand een gesprek met vier delen:
+        - Kern: één vast aanspreekpunt, en periodiek een gesprek met vier delen:
           terugblik, signalering, werkagenda, en de keuze van de klant. De klant
           bepaalt zelf waar de uren naartoe gaan: support, doorontwikkeling of AI.
         - Uren per maand, vanaf vijf uur. Ongebruikte uren schuiven maximaal één
-          maand door. Het maandgesprek telt zelf als één uur.
+          maand door. Het gesprek telt zelf als één uur.
+        - We stellen samen een jaarplan op en stellen dat elke periode bij, zodat er
+          richting is zonder dat de klant vastzit aan wat er in januari bedacht is.
+        - Alle tickets staan in een dashboard dat de klant zelf kan openen: wat loopt,
+          wat op de backlog staat en wat af is.
         - Meerwerk stemmen we vooraf af. Reactie standaard binnen twee werkdagen.
         - Uren vooraf inplannen levert 15% planningskorting op.
         - Azure-, cloud- en hardwarekosten vallen buiten het plan.

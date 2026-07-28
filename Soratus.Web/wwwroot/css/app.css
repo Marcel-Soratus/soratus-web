@@ -987,10 +987,40 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
 .end-alt a { color: var(--green); border-bottom: 1px solid rgba(52, 226, 122, .35); }
 .end-alt a:hover { border-bottom-color: var(--green); }
 
-/* Verwijzing onder de vier stappen naar het partnerplan. */
-.flow-next {
-  margin-top: var(--space-5); max-width: 70ch;
-  font-size: 15.5px; line-height: 1.6; color: var(--ink-dim);
+
+/* Stap 04 is de doorstap naar /partner. In de verloopkleuren zodat het opvalt
+   tussen de drie projectstappen: dit is waar het verhaal doorloopt. */
+.step-partner {
+  text-decoration: none; color: inherit;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-2), var(--bg-2)) padding-box,
+    var(--grad) border-box;
+  border: 1px solid transparent;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
 }
-.flow-next a { color: var(--green); border-bottom: 1px solid rgba(52, 226, 122, .35); }
-.flow-next a:hover { border-bottom-color: var(--green); }
+.step-partner h4 {
+  /* horizontaal verloop i.p.v. var(--grad) op 135deg: over een kort woord als
+     "Partnerplan" zie je bij die hoek bijna alleen het blauwe uiteinde. */
+  background: linear-gradient(90deg, #2B5BFF 0%, #34E27A 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  width: fit-content;
+}
+.step-partner .stepicon { border-color: rgba(52, 226, 122, .45); }
+.step-partner::after {
+  content: "bekijk het partnerplan →";
+  position: absolute; right: 28px; bottom: 28px;
+  font-family: "JetBrains Mono", monospace; font-size: var(--text-meta);
+  color: var(--green); opacity: 0; transform: translateX(-4px);
+  transition: opacity .2s, transform .2s;
+}
+.step-partner:hover, .step-partner:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 44px rgba(43, 91, 255, .22);
+}
+.step-partner:hover::after, .step-partner:focus-visible::after {
+  opacity: 1; transform: translateX(0);
+}
+/* de regel maakt onderaan ruimte vrij voor die hint */
+.step-partner p { padding-bottom: 26px; }

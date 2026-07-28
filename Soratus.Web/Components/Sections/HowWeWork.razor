@@ -30,21 +30,15 @@
                 <h4>Bouw live</h4>
                 <p>Wij bouwen in de open. Dagelijkse updates, je ziet het groeien, je stuurt waar het nodig is.</p>
             </div>
-            <div class="step askable"
-                 data-chat-prompt="Wat houdt het partnerplan in? Hoe blijven jullie na de oplevering betrokken?"
-                 role="button" tabindex="0" aria-label="Vraag Tempo over de live-fase en het partnerplan">
+            @* Stap 4 is geen chat-affordance maar de doorstap naar /partner: dit is
+               waar het verhaal na de oplevering verdergaat. Daarom een link en geen
+               askable-kaart, want genest klikgedrag levert alleen verwarring op. *@
+            <a class="step step-partner" href="/partner">
                 <div class="stepicon">✓</div>
                 <div class="stepnum">STAP 04 · DAG 15+</div>
-                <h4>Live + meelopen</h4>
-                <p>We zetten live en trainen je team. Daarna blijven we meelopen: elke maand een gesprek, jij bepaalt de agenda.</p>
-            </div>
+                <h4>Partnerplan</h4>
+                <p>We zetten live en trainen je team. Daarna blijven we meelopen: periodiek een gesprek, jij bepaalt de agenda.</p>
+            </a>
         </div>
-
-        @* Stap 4 belooft continuïteit. Zonder deze verwijzing heeft die belofte
-           geen bestemming en loopt de bezoeker hier dood. *@
-        <p class="flow-next reveal">
-            Dat vierde deel heeft een naam: het <a href="/partner">partnerplan</a>. Eén vast
-            aanspreekpunt, elke maand een tastbare uitkomst.
-        </p>
     </div>
 </section>
