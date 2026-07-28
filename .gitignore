@@ -491,3 +491,6 @@ set-acs-email.ps1
 
 # Originelen van genormaliseerde screenshots (lokaal, niet uitleveren)
 Soratus.Web/wwwroot/img/cases/*.orig.png
+
+# Python-cache van de campagnescripts
+handoff/social/__pycache__/

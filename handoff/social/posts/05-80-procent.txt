@@ -1,0 +1,21 @@
+Onze agent handelde 6 van de 8 bevindingen zelf af. De andere 2 legde hij terug met een vraag.
+
+Dat tweede is waarom een klant hem vertrouwt.
+
+Bij elke afwijking die de agent vindt, zet hij erbij hoe zeker hij is. Boven 80 procent handelt hij het af. Daaronder doet hij niets en stelt hij een vraag.
+
+Een paar echte voorbeelden uit één run.
+
+Dubbele declaratie onder hetzelfde nummer, eerste al uitbetaald. 98 procent zeker. Laten vervallen, zelf afgehandeld.
+
+Bedrag van 8.950 euro voor een verrichting die 89,50 kost. 97 procent zeker. Kommafout, correctie klaargezet.
+
+Polisnummer ongeldig, maar er staat geen correct nummer in de gegevens. 61 procent. Vraag terug: navragen bij de verzekeraar, of laten vervallen?
+
+Die grens is het verschil tussen een hulpmiddel dat je vertrouwt en een zwarte doos die je alsnog helemaal moet nakijken.
+
+Een agent die altijd doorpakt is makkelijk te bouwen. Een agent die weet wanneer hij moet stoppen is het werk waard.
+
+Waar zou jij die grens leggen?
+
+#AIagents #Automatisering #Vertrouwen #MKB

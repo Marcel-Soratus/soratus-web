@@ -1,0 +1,13 @@
+"Onze data gaat niet naar een AI." Terecht. En het hoeft ook niet.
+
+Dit is het bezwaar dat ik het vaakst hoor, en meestal is het het enige dat een project tegenhoudt. Begrijpelijk ook. Je klantgegevens in een chatvenster gooien van een partij die er een model op traint is geen plan, dat is een risico.
+
+Dus zo doen we het niet.
+
+Alles staat EU-hosted. Er wordt niet getraind op jouw data, nooit. Onze hostingpartners zijn ISO 27001-gecertificeerd. Elke actie van een agent staat in een audit-trail, dus je kunt achteraf zien wat er is gebeurd en waarom. En er ligt een verwerkersovereenkomst volgens artikel 28, zoals het hoort.
+
+Wat mij opvalt: bedrijven die dit bezwaar als eerste stellen, hebben vaak de beste processen om te automatiseren. Ze denken al in risico's en controles.
+
+Speelt dit bij jullie ook? Vraag het gewoon door in een call van 45 minuten. Als het antwoord je niet bevalt, weet je dat ook.
+
+#AVG #EUhosted #AIagents #Compliance #MKB

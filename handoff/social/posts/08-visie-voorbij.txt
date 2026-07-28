@@ -1,0 +1,15 @@
+Software laten bouwen is voorbij. Dat klinkt als een marketingregel. Ik bedoel het letterlijk.
+
+Twintig jaar lang was software een ding dat je liet maken. Je schreef op wat het moest doen, iemand bouwde het, en daarna stond het er. Onderhoud betekende bugs oplossen.
+
+Dat model kraakt. Niet omdat AI de programmeurs vervangt, maar omdat wat er mogelijk is nu elk kwartaal verschuift. Wie in januari vastlegt wat het systeem moet doen, bouwt in juni iets wat achterhaald is.
+
+Wat je vandaag maakt, is geen product meer. Het is een startpunt.
+
+Daarom bouwen wij agents in plaats van formulieren. Een agent kijkt naar je gegevens, stelt een diagnose, draagt een vervolgstap aan en zegt hoe zeker hij is. Als de omstandigheden veranderen, verandert zijn gedrag mee. Een formulier doet dat niet.
+
+En daarom stopt ons werk niet bij de oplevering. Software die zichzelf moet blijven aanpassen heeft iemand nodig die meekijkt.
+
+Ik ben nieuwsgierig naar de tegenspraak. Waar zie jij dat dit niet opgaat?
+
+#AI #Softwareontwikkeling #Visie #MKB
