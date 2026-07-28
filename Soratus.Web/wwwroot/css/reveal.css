@@ -1,5 +1,8 @@
 /* IntersectionObserver-driven entrance */
-.reveal { opacity: 0; transform: translateY(20px); transition: opacity .9s var(--ease-out), transform .9s var(--ease-out); }
+/* .45s in plaats van .9s: bij .9s scrollde je op langere pagina's de fade
+   voorbij en keek je tegen halfzichtbare tekst aan. Samen met de rootMargin
+   in reveal.js (start vóór beeld) staat tekst nu op tijd scherp. */
+.reveal { opacity: 0; transform: translateY(16px); transition: opacity .45s var(--ease-out), transform .45s var(--ease-out); }
 .reveal.in { opacity: 1; transform: none; }
 
 @media (prefers-reduced-motion: reduce) {
