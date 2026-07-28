@@ -41,10 +41,6 @@ else
             <h1 class="h1 case-h1 reveal in">@_case.Title</h1>
             <p class="case-lede reveal in">@_case.Lede</p>
             <div class="case-facts reveal in">
-                <div class="case-fact">
-                    <span class="cf-label">Demo gebouwd in</span>
-                    <span class="cf-value grad-text">@_case.BuildTime</span>
-                </div>
                 @if (_case.Result is { } res)
                 {
                     <div class="case-fact">
@@ -61,14 +57,6 @@ else
                     <span class="cf-value-sm">@string.Join(" · ", _case.Integrations)</span>
                 </div>
             </div>
-            @* Eerlijk over wat die uren wel en niet zijn. Zonder deze regel leest
-               "@_case.BuildTime" als de tijd tot een oplossing in productie. *@
-            <p class="case-honest reveal">
-                Die @_case.BuildTime is de tijd tot een <strong>werkende demo</strong> op echte cijfers.
-                Productieklaar maken is meer werk: koppelingen dichtzetten, randgevallen afdekken en
-                meekijken bij de eerste echte maand. Dat traject is bij ons standaard 14 dagen tot live,
-                tegen een vaste prijs.
-            </p>
         </div>
     </section>
 
@@ -207,8 +195,7 @@ else
                         <a class="case-card" href="/cases/@c.Slug" aria-label="Bekijk case: @c.Title">
                             <div class="case-card-top">
                                 <span class="case-sector">@c.Sector</span>
-                                <span class="case-time">demo: @c.BuildTime</span>
-                            </div>
+                                                            </div>
                             <h3>@c.Title</h3>
                             <p>@c.Lede</p>
                             <div class="case-card-foot">

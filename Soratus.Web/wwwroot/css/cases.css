@@ -205,22 +205,9 @@
 }
 .case-saving strong { color: var(--green); font-weight: 600; }
 .case-saving .cs-mark { color: var(--green); flex-shrink: 0; }
-/* Nuance bij de demo-uren. Rustig gezet: het hoort erbij, het schreeuwt niet. */
-.case-honest {
-  margin-top: var(--space-5); max-width: 68ch;
-  font-size: 14.5px; line-height: 1.6; color: var(--ink-mute);
-  border-left: 2px solid var(--line-strong); padding-left: var(--space-4);
-}
-.case-honest strong { color: var(--ink-dim); font-weight: 600; }
-
 /* Een schatting is geen gemeten resultaat, dus ook visueel rustiger. */
 .case-saving.is-estimate strong,
 .case-saving.is-estimate .cs-mark { color: var(--ink-dim); }
-.case-time {
-  color: var(--ink); background: rgba(255, 255, 255, .06);
-  border: 1px solid var(--line); border-radius: var(--radius-pill);
-  padding: 4px 10px; text-transform: none; letter-spacing: .04em;
-}
 .case-card h3 {
   margin: 0; font-size: var(--text-h4); line-height: 1.2;
   letter-spacing: -0.02em; color: var(--ink);

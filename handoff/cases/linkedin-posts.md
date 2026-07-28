@@ -4,12 +4,12 @@ Geschreven in de Soratus-stem: geen em-dash, variatie in zinslengte, één CTA r
 de strategy call. Klant blijft anoniem.
 
 Alleen ware cijfers. Wat klopt: 400 uur per jaar bij de declaraties en een ton aan
-licentiekosten bij het jaarverslag (beide door de klant zelf gemeld), twee uur tot een
-werkende demo, de SnelStart-koppeling, en de verhouding 6 van 8 uit de demo. Die laatste
-is als demo-cijfer benoemd en niet als klantmeting.
+licentiekosten bij het jaarverslag (beide door de klant zelf gemeld), de SnelStart-koppeling,
+en de verhouding 6 van 8 uit de demo. Die laatste is als demo-cijfer benoemd en niet als
+klantmeting.
 
-Let op de formulering rond die twee uur: dat is de demo, niet productieklaar. Beide posts
-zeggen dat expliciet, zodat niemand rekent op een oplossing in een middag.
+Onze bouwtijd staat er bewust niet in. Wie leest dat iets in twee uur stond, verwacht een
+rekening voor twee uur. De post moet over hun opbrengst gaan, niet over onze doorlooptijd.
 
 Plaats ze niet op dezelfde dag. Laat er twee tot vier dagen tussen.
 
@@ -20,9 +20,9 @@ Plaats ze niet op dezelfde dag. Laat er twee tot vier dagen tussen.
 De sterkste hook van de twee, want het is een bedrag en een tegenstelling in één regel.
 Begin hiermee.
 
-> Een accountantskantoor stond op het punt een ton aan licentiekosten te betalen.
+> Een accountantskantoor stond op het punt een ton aan licentiekosten te betalen voor een tool.
 >
-> Wij hadden in twee uur een werkende demo op hun eigen cijfers.
+> Die post is van tafel.
 >
 > Waar het om ging: het jaarverslag. Elk jaar hetzelfde skelet, elke klant andere cijfers. Cijfers exporteren, kengetallen narekenen, de toelichting schrijven, en dan nog een keer omdat de directie een compactere versie wil dan de bank.
 >
@@ -35,8 +35,6 @@ Begin hiermee.
 > Een accountant zet zijn naam onder dat verslag. Niemand tekent voor een getal dat hij niet kan navertellen. Een agent die alleen het juiste antwoord geeft is dus nog niks waard. Hij moet laten zien hoe hij eraan komt.
 >
 > Vraag je om een formelere toon of een compacte versie voor de directie, dan herschrijft hij het en vertelt hij wat hij heeft aangepast. Het vakoordeel en de ondertekening blijven waar ze horen.
->
-> Even eerlijk over die twee uur: dat was de demo. Productieklaar maken is meer werk. Maar het verschil tussen twee uur en een ton blijft nogal groot.
 >
 > Zit er in jouw kantoor ook zo'n stuk werk dat elk jaar terugkomt? Eén call van 45 minuten en we zeggen eerlijk of een agent het aankan.
 >
@@ -59,8 +57,6 @@ Begin hiermee.
 > En bij elk voorstel zet hij hoe zeker hij is. Boven 80 procent handelt hij het af. Daaronder stelt hij een vraag in plaats van iets te doen. In onze demo was dat 6 van de 8 bevindingen zelf, en 2 terug met een vraag.
 >
 > Die grens maakt het verschil tussen een hulpmiddel dat je vertrouwt en een zwarte doos die je alsnog helemaal moet nakijken.
->
-> Werkende demo: twee uur. Productieklaar is meer werk, dat zeggen we er eerlijk bij.
 >
 > Een declaratie die je vergeet is honderd procent verlies. Wat kost dit soort werk jou per maand? Eén call van 45 minuten.
 >
