@@ -45,11 +45,11 @@ else
                     <span class="cf-label">Bouwtijd</span>
                     <span class="cf-value grad-text">@_case.BuildTime</span>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(_case.TimeSaved))
+                @if (_case.Result is { } res)
                 {
                     <div class="case-fact">
-                        <span class="cf-label">Bespaart de klant</span>
-                        <span class="cf-value grad-text">@_case.TimeSaved</span>
+                        <span class="cf-label">@res.Label@(res.IsEstimate ? " (schatting)" : "")</span>
+                        <span class="cf-value grad-text">@res.Value</span>
                     </div>
                 }
                 <div class="case-fact">

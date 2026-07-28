@@ -45,11 +45,13 @@
                     </div>
                     <h3>@c.Title</h3>
                     <p>@c.Lede</p>
-                    @if (!string.IsNullOrWhiteSpace(c.TimeSaved))
+                    @if (c.Result is { } r)
                     {
-                        <div class="case-saving">
-                            <span class="cs-mark">✓</span>
-                            <span>bespaart de klant <strong>@c.TimeSaved</strong></span>
+                        <div class="case-saving @(r.IsEstimate ? "is-estimate" : "")">
+                            <span class="cs-mark">@(r.IsEstimate ? "≈" : "✓")</span>
+                            <span>
+                                @(r.IsEstimate ? "naar schatting " : "")<strong>@r.Value</strong> @r.CardNote
+                            </span>
                         </div>
                     }
                     <div class="case-card-foot">

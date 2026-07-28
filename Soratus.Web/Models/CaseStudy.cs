@@ -25,11 +25,11 @@ public sealed record CaseStudy
     public required string BuildTime { get; init; }
 
     /// <summary>
-    /// Wat de klant er jaarlijks aan tijd op overhoudt, bijv. "400 uur per jaar".
-    /// Alleen vullen met een cijfer dat de klant zelf heeft gemeld; dit staat op de
-    /// pagina als resultaat en niet als rekenvoorbeeld. Leeg laten als het er niet is.
+    /// Wat de klant eraan overhoudt. Bewust niet "tijdwinst": bij de ene case zijn
+    /// het uren, bij de andere uitgespaarde licentiekosten. Leeg laten als er geen
+    /// cijfer is; dan toont de pagina er ook geen.
     /// </summary>
-    public string? TimeSaved { get; init; }
+    public CaseResult? Result { get; init; }
 
     /// <summary>Systemen waarmee gekoppeld is, bijv. ["SnelStart"].</summary>
     public required string[] Integrations { get; init; }
@@ -58,6 +58,19 @@ public sealed record CaseStudy
 
 public sealed record CaseStep(string Number, string Title, string Body);
 
+/// <summary>
+/// De opbrengst voor de klant.
+/// </summary>
+/// <param name="Label">Kop in de feiten-rij, bijv. "Bespaarde licentie".</param>
+/// <param name="Value">Het getal dat groot wordt gezet, bijv. "€ 100.000".</param>
+/// <param name="CardNote">Wat op de overzichtskaart achter het getal komt.</param>
+/// <param name="IsEstimate">
+/// True bij een eigen aanname in plaats van een cijfer dat de klant heeft
+/// teruggekoppeld. De pagina labelt het dan als schatting, zodat een gemeten
+/// resultaat en een rekenvoorbeeld niet door elkaar gaan lopen.
+/// </param>
+public sealed record CaseResult(string Label, string Value, string CardNote, bool IsEstimate = false);
+
 public sealed record CaseShot(string Alt, string Caption, string FileName, string? Src = null);
 
 /// <summary>
@@ -80,7 +93,9 @@ public static class CaseStudies
             Title = "Een accountant-agent die het jaarverslag schrijft en zijn cijfers kan uitleggen",
             Lede = "Gekoppeld aan SnelStart. Hij levert een compleet bestuursverslag met balans en kengetallen, zet bij elk ratio de formule waarmee het is berekend, en herschrijft het op verzoek in het gesprek. Bouwtijd: twee uur.",
             BuildTime = "2 uur",
-            TimeSaved = "400 uur per jaar",
+            // De winst zat hier in geld, niet in uren: de tool die hiervoor in beeld
+            // was zou een ton aan licentiekosten kosten.
+            Result = new("Uitgespaarde licentie", "€ 100.000", "aan licentiekosten die niet meer nodig waren"),
             Integrations = ["SnelStart"],
             Problem =
             [
@@ -119,8 +134,8 @@ public static class CaseStudies
                     new("Tweede versie voor een andere lezer", "circa 1 uur", "een vraag in de chat"),
                     new("Controle, vakoordeel en ondertekening", "circa 2 uur", "circa 2 uur"),
                 ],
-                "Van ongeveer negen uur naar ongeveer drie uur per jaarverslag, waarvan het grootste deel controle blijft. Bij deze klant kwam dat uit op 400 uur per jaar. Dat is ruim tien werkweken die terugvloeien naar het werk waarvoor een accountant echt is ingehuurd.",
-                "De 400 uur per jaar is wat deze klant zelf heeft teruggekoppeld. De urenverdeling per verslag hierboven is een indicatief rekenvoorbeeld dat laat zien waar die tijd zit. Jouw praktijk heeft andere cijfers, en die rekenen we graag samen door."),
+                "Van ongeveer negen uur naar ongeveer drie uur per jaarverslag, waarvan het grootste deel controle blijft. Maar de aanleiding was hier niet tijd. Het was geld: de tool die hiervoor in beeld was, zou een ton aan licentiekosten kosten. Dat bedrag is in twee uur bouwen van tafel gegaan.",
+                "De ton aan licentiekosten is wat deze klant zou gaan betalen. De urentabel hierboven is een indicatief rekenvoorbeeld om te laten zien waar het werk zit, geen gemeten klantresultaat. Jouw praktijk heeft andere cijfers, en die rekenen we graag samen door."),
             Shots =
             [
                 new("Startscherm met de chat links en het lege rapport-paneel rechts",
@@ -145,6 +160,8 @@ public static class CaseStudies
             Title = "Een agent die declaraties nakijkt en zelf voorstelt wat er moet gebeuren",
             Lede = "Gekoppeld aan SnelStart. Hij matcht declaraties met betalingen, stelt een diagnose bij elke afwijking en draagt een vervolgstap aan. Boven 80 procent zekerheid handelt hij zelf af. Daaronder vraagt hij het jou. Bouwtijd: twee uur.",
             BuildTime = "2 uur",
+            // Door de klant teruggekoppeld.
+            Result = new("Bespaart de klant", "400 uur per jaar", "minder uitzoekwerk bij de klant"),
             Integrations = ["SnelStart", "Excel"],
             Problem =
             [
@@ -184,8 +201,8 @@ public static class CaseStudies
                     new("Openstaande declaraties opsporen", "vaak pas als het opvalt", "elke maand compleet"),
                     new("Beoordelen wat de agent aanreikt", "niet van toepassing", "circa 30 min per maand"),
                 ],
-                "Van ongeveer zeven uur per maand naar ongeveer een half uur beoordelen. In de demo handelde de agent 6 van de 8 bevindingen zelf af en legde hij er 2 ter beoordeling neer. De echte opbrengst is niet de tijd. Het is de declaratie die je anders was vergeten, want die is honderd procent verlies.",
-                "De verhouding 6 van 8 komt uit de demo met voorbeeldgegevens, niet uit een klantmeting. De uren zijn een indicatief rekenvoorbeeld om de orde van grootte te laten zien. Bij jouw volume en verzekeraars ziet het er anders uit."),
+                "Van ongeveer zeven uur per maand naar ongeveer een half uur beoordelen. Deze klant zit ruim boven dat voorbeeldvolume en kwam uit op 400 uur per jaar, oftewel tien werkweken. In de demo handelde de agent 6 van de 8 bevindingen zelf af en legde hij er 2 ter beoordeling neer. De echte opbrengst is niet de tijd. Het is de declaratie die je anders was vergeten, want die is honderd procent verlies.",
+                "De 400 uur per jaar is wat deze klant zelf heeft teruggekoppeld; die praktijk verwerkt meer declaraties dan de tweehonderd per maand uit dit voorbeeld. De urentabel is een indicatief rekenvoorbeeld, en de verhouding 6 van 8 komt uit de demo met voorbeeldgegevens en niet uit een klantmeting."),
             Shots =
             [
                 new("Overzicht van ontvangen betalingen per verzekeraar",
