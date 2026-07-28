@@ -1,0 +1,226 @@
+@page "/partner"
+@inject IOptions<CompanyOptions> Company
+
+<PageTitle>Soratus · Partnerplan</PageTitle>
+<HeadContent>
+    <meta name="description" content="Elk bedrijf staat nu op een tweesprong. Het Soratus Partnerplan geeft je een vaste partner en elke maand een gesprek waarin jij bepaalt waar de uren naartoe gaan: support, doorontwikkeling of AI." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta property="og:title" content="Soratus · Partnerplan" />
+    <meta property="og:description" content="Elk bedrijf staat nu op een tweesprong. Wij lopen maandelijks met je mee. Betrokkenheid is het product." />
+    <meta property="og:image" content="@(Company.Value.Url)/brand/og-image.png?v=2" />
+    <meta property="og:url" content="@(Company.Value.Url)/partner" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="nl_NL" />
+    <meta property="og:site_name" content="Soratus" />
+    <meta name="twitter:card" content="summary_large_image" />
+</HeadContent>
+
+@* ── Kop ── *@
+<section class="case-top">
+    <div class="wrap">
+        <Eyebrow Year="2026" Tagline="Partnerplan · voor wie niet wil stilstaan" />
+        <h1 class="h1 case-h1 reveal in">
+            Elk bedrijf staat nu op een <span class="italic">tweesprong</span>.
+        </h1>
+        <p class="case-lede reveal in">
+            Wat vandaag kan met AI, kon vorig kwartaal nog niet. Je wil niet stilstaan, maar je wil
+            ook niet je hele jaarbudget op één groot project zetten. Wij lopen maandelijks met je mee:
+            één vast aanspreekpunt, elke maand een gesprek, en jij bepaalt waar de uren naartoe gaan.
+            Betrokkenheid is het product.
+        </p>
+        <div class="meta-row reveal in">
+            <span><Pip Color="var(--green)" Pulse="true" /> vast aanspreekpunt</span>
+            <span><Pip Color="var(--blue-2)" /> elke maand een tastbare uitkomst</span>
+            <span><Pip Color="var(--warn)" /> jij bepaalt de agenda</span>
+        </div>
+    </div>
+</section>
+
+@* ── 01 Waarom nu ── *@
+<section>
+    <div class="wrap">
+        <SectionHeader Tag="01 · Waarom nu"
+                       Aside="Een project levert op wat je een half jaar eerder bedacht. Dat werkte prima toen er niets zo snel veranderde.">
+            <Title>De wereld beweegt sneller dan een <span class="italic">projectcyclus</span>.</Title>
+        </SectionHeader>
+        <p class="case-scenario-intro reveal">
+            Wij bouwen een eerste werkende versie in veertien dagen. Dat is het makkelijke deel.
+            Op dag vijftien begint het echte werk: bijsturen op wat je in de praktijk ziet, en
+            meebewegen met wat er intussen mogelijk is geworden.
+        </p>
+        <ul class="case-list reveal">
+            <li>Wat er technisch kan schuift elk kwartaal op. Een jaarplan is een gok geworden.</li>
+            <li>Een vaste fee betalen voor beschikbaarheid, ook in een maand waarin er weinig speelt.</li>
+            <li>Geen vast aanspreekpunt dat je systemen kent, dus elke vraag begint weer bij nul.</li>
+            <li>Reactief blijven: pas iets oppakken als het al misgaat.</li>
+            <li>Geen zicht op wat beter kan, of op wat er aan zit te komen.</li>
+        </ul>
+    </div>
+</section>
+
+@* ── 02 Het model ── *@
+<section>
+    <div class="wrap">
+        <SectionHeader Tag="02 · Het partnermodel"
+                       Aside="Geen abonnement op beschikbaarheid. Een afspraak over aandacht.">
+            <Title>Wij worden je <span class="italic">vaste</span> partner.</Title>
+        </SectionHeader>
+        <div class="flow reveal">
+            <div class="step">
+                <div class="stepicon">→</div>
+                <div class="stepnum">01</div>
+                <h4>Vast aanspreekpunt</h4>
+                <p>Iemand die je systemen, processen en wensen door en door kent. Geen ticket in een wachtrij.</p>
+            </div>
+            <div class="step">
+                <div class="stepicon">◊</div>
+                <div class="stepnum">02</div>
+                <h4>Maandelijks gesprek</h4>
+                <p>Elke maand bespreken we wat er speelt, wat beter kan en wat we oppakken. Dat gesprek is de kern.</p>
+            </div>
+            <div class="step">
+                <div class="stepicon">⊕</div>
+                <div class="stepnum">03</div>
+                <h4>Proactieve agenda</h4>
+                <p>Wij signaleren kansen en risico's, ook op basis van wat we bij andere klanten tegenkomen.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+@* ── 03 Het maandgesprek ── *@
+<section>
+    <div class="wrap">
+        <SectionHeader Tag="03 · Het maandgesprek"
+                       Aside="Geen administratief uurtje. Het gesprek telt als één uur, zodat er altijd iets uitkomt.">
+            <Title>Elke maand een <span class="italic">tastbare</span> uitkomst.</Title>
+        </SectionHeader>
+        <div class="flow reveal">
+            <div class="step">
+                <div class="stepicon">↺</div>
+                <div class="stepnum">1 · TERUGBLIK</div>
+                <h4>Wat hebben we gedaan?</h4>
+                <p>Een kort maandrapport: wat er is opgeleverd en wat er beter kon.</p>
+            </div>
+            <div class="step">
+                <div class="stepicon">◊</div>
+                <div class="stepnum">2 · SIGNALERING</div>
+                <h4>Wat komt eraan?</h4>
+                <p>Verbeterkansen, AI-toepassingen en risico's. Ook wat we elders zien werken.</p>
+            </div>
+            <div class="step">
+                <div class="stepicon">⊕</div>
+                <div class="stepnum">3 · WERKAGENDA</div>
+                <h4>Wat pakken we op?</h4>
+                <p>Een concrete werkagenda voor de maand: support, doorontwikkeling of AI.</p>
+            </div>
+            <div class="step">
+                <div class="stepicon">✓</div>
+                <div class="stepnum">4 · JOUW KEUZE</div>
+                <h4>Jij beslist</h4>
+                <p>Jij bepaalt waar de uren naartoe gaan. Fix dit, of bouw dat. Elke maand opnieuw.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+@* ── 04 Wat het oplevert ── *@
+<section>
+    <div class="wrap">
+        <SectionHeader Tag="04 · Wat het oplevert"
+                       Aside="Niet beschikbaarheid. Werk dat je terugziet.">
+            <Title>Wat je er concreet <span class="italic">aan</span> hebt.</Title>
+        </SectionHeader>
+        <div class="case-hands reveal">
+            <div class="case-hand">
+                <span class="ch-mark" aria-hidden="true">◊</span>
+                <span>Je software wordt continu beter: bugfixes, verfijning en nieuwe functies. Geen stilstand tot het volgende project.</span>
+            </div>
+            <div class="case-hand">
+                <span class="ch-mark" aria-hidden="true">⊕</span>
+                <span>Handmatig werk gaat eruit. We automatiseren en stroomlijnen processen, zodat je team tijd terugkrijgt.</span>
+            </div>
+            <div class="case-hand">
+                <span class="ch-mark" aria-hidden="true">↗</span>
+                <span>Bij drukte of onderbezetting nemen wij werk over. Een flexibele schil zonder wervingstraject.</span>
+            </div>
+            <div class="case-hand">
+                <span class="ch-mark" aria-hidden="true">✓</span>
+                <span>Alles gebouwd rond jouw processen in plaats van andersom. Geen dure standaardlicenties die niet passen.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+@* ── 05 Spelregels ── *@
+<section>
+    <div class="wrap">
+        <SectionHeader Tag="05 · Spelregels"
+                       Aside="Het aantal uren stemmen we af op jouw situatie. Vanaf vijf uur per maand.">
+            <Title>Heldere <span class="italic">afspraken</span>.</Title>
+        </SectionHeader>
+        <div class="rules reveal">
+            <div class="rule">
+                <h4>Uren schuiven door</h4>
+                <p>Ongebruikte uren gaan maximaal één maand mee. Je betaalt nooit voor niets.</p>
+            </div>
+            <div class="rule">
+                <h4>Het maandgesprek telt mee</h4>
+                <p>Het gesprek rekent als één uur. Zo is er altijd een tastbare uitkomst en geen los overleg.</p>
+            </div>
+            <div class="rule">
+                <h4>Meerwerk gaat vooraf</h4>
+                <p>Werk boven de afgesproken uren stemmen we eerst af. Nooit een verrassing op de factuur.</p>
+            </div>
+            <div class="rule">
+                <h4>Reactie binnen twee werkdagen</h4>
+                <p>Dat is de standaard. Heb je structureel sneller nodig, dan is dat bespreekbaar.</p>
+            </div>
+            <div class="rule">
+                <h4>Uren vooraf ingepland</h4>
+                <p>Daardoor houden we capaciteit voor je vrij, en dat levert een planningskorting van 15 procent op.</p>
+            </div>
+            <div class="rule">
+                <h4>Continuïteit geborgd</h4>
+                <p>We houden documentatie en systeemkennis bij, dus bij ziekte of uitval neemt een collega het naadloos over.</p>
+            </div>
+        </div>
+        <p class="case-note reveal">
+            Azure-, cloud- en hardwarekosten vallen buiten het plan en rekenen we apart af.
+        </p>
+    </div>
+</section>
+
+@* ── Aanbrengbonus ── *@
+<section style="padding-top:0">
+    <div class="wrap">
+        <div class="case-takeaway reveal">
+            <p>
+                <strong>Aanbrengbonus.</strong> Ken je een organisatie die hier baat bij heeft? Levert dat
+                een nieuwe, betalende klant op, dan krijg je eenmalig één maand van je eigen plan cadeau.
+                Die uren spreid je over de maanden erna.
+            </p>
+        </div>
+    </div>
+</section>
+
+@* ── Slot ── *@
+<section class="end">
+    <div class="wrap reveal">
+        <h2 class="h1">
+            Laten we je <span class="grad">partnerplan</span> inrichten.
+        </h2>
+        <p>
+            We stemmen het aantal uren af op jouw situatie en sturen een overeenkomst op maat.
+            Vraag het plan op met de tarieven en pakketten erin, of stel je vraag meteen aan Tempo.
+        </p>
+        <div class="end-cta">
+            <Button Variant="glow" ShowDot="true"
+                    Attrs="@(new Dictionary<string, object> { ["onclick"] = "window.soratus && soratus.openChatWith('Ik wil het partnerplan opvragen, inclusief tarieven en pakketten.')" })">
+                Vraag het partnerplan op
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+            </Button>
+            <Button Variant="default" Href="@($"mailto:{Company.Value.Email}?subject=Partnerplan")">@Company.Value.Email</Button>
+        </div>
+    </div>
+</section>

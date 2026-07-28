@@ -255,3 +255,17 @@
   .cf-value { font-size: 32px; }
   .case-takeaway { padding: var(--space-5); }
 }
+
+/* ── Spelregels (/partner) ──
+   Tweekoloms lijst met een dunne scheiding, zelfde ritme als .case-hands maar
+   rustiger: dit is kleine letter die vertrouwen moet wekken, geen bewijs. */
+.rules {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4) var(--space-7);
+}
+.rule { padding-top: var(--space-4); border-top: 1px solid var(--line); }
+.rule h4 {
+  margin: 0 0 6px; font-size: var(--text-body); font-weight: 600; color: var(--ink);
+}
+.rule p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-dim); }
+@media (max-width: 780px) { .rules { grid-template-columns: 1fr; } }

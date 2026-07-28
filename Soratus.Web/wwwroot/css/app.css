@@ -66,7 +66,9 @@ nav.top {
   font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
   font-size: var(--text-wordmark); font-weight: 200; letter-spacing: -0.04em; line-height: 1; color: var(--ink);
 }
-.nav-links { display: flex; align-items: center; gap: 36px; }
+/* 30px i.p.v. 36: met zeven items (Partner erbij) had de balk 1030px nodig,
+   terwijl de links pas onder 900px opgaan in het burgermenu. */
+.nav-links { display: flex; align-items: center; gap: 30px; }
 .nav-links a { font-size: 14.5px; color: var(--ink-dim); transition: color .2s; }
 .nav-links a:hover { color: var(--ink); }
 .nav-cta { display: flex; align-items: center; gap: 12px; }
@@ -116,7 +118,7 @@ nav.top {
 .nav-burger.open span:nth-child(2) { opacity: 0; }
 .nav-burger.open span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .nav-links { display: none; }
   .nav-cta { display: none; }
   .nav-burger { display: flex; }
@@ -976,3 +978,19 @@ footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--i
   .clients-tag { font-size: 10px; }
   .clients-tag::before, .clients-tag::after { max-width: 40px; }
 }
+
+/* Tweede route onder de hoofd-CTA: wie al een project heeft lopen zoekt geen
+   nieuwe bouw maar continuïteit. Rustig gezet, de primaire CTA blijft leidend. */
+.end-alt {
+  margin-top: 10px; font-size: 15px; color: var(--ink-mute);
+}
+.end-alt a { color: var(--green); border-bottom: 1px solid rgba(52, 226, 122, .35); }
+.end-alt a:hover { border-bottom-color: var(--green); }
+
+/* Verwijzing onder de vier stappen naar het partnerplan. */
+.flow-next {
+  margin-top: var(--space-5); max-width: 70ch;
+  font-size: 15.5px; line-height: 1.6; color: var(--ink-dim);
+}
+.flow-next a { color: var(--green); border-bottom: 1px solid rgba(52, 226, 122, .35); }
+.flow-next a:hover { border-bottom-color: var(--green); }
