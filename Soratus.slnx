@@ -8,6 +8,8 @@
   <Project Path="Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj" />
   <Project Path="Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj" />
   <Project Path="Soratus.Agents.Telemetry/Soratus.Agents.Telemetry.csproj" />
+  <Project Path="Soratus.Mcp.Uren.Tests/Soratus.Mcp.Uren.Tests.csproj" />
+  <Project Path="Soratus.Mcp.Uren/Soratus.Mcp.Uren.csproj" />
   <Project Path="Soratus.Portal.Tests/Soratus.Portal.Tests.csproj" />
   <Project Path="Soratus.Portal/Soratus.Portal.csproj" />
   <Project Path="Soratus.Web.Tests/Soratus.Web.Tests.csproj" />

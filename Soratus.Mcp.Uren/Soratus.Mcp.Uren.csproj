@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Soratus.Mcp.Uren</RootNamespace>
+    <!--
+      De assemblynaam is de naam waarmee deze server in de MCP-configuratie van Claude Code komt
+      te staan, dus hij is de publieke naam uit §5 van de spec en geen implementatiedetail.
+    -->
+    <AssemblyName>soratus-uren</AssemblyName>
+    <Version>1.0.0</Version>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <!--
+      De XML-documentatie ís hier de uitleg van het endpointcontract en van de vaste regel over
+      fiatteren. Die moet meereizen, en de build moet klagen zodra een publiek lid ongedocumenteerd
+      blijft.
+    -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      Dezelfde reden als in Soratus.Agents.Contracts: een waarschuwing die alleen zichtbaar is als
+      de compiler toevallig loopt, is geen waarschuwing. Een incrementele build meldt
+      "0 Warning(s)" zonder iets te compileren. Als fout is hij niet meer afhankelijk van wie er
+      wanneer bouwt.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Het officiële MCP-SDK voor C#, onderhouden door Microsoft en de MCP-organisatie. Versie 2.2.0
+      is geen preview meer. Het protocol zelf implementeren zou betekenen dat wij de JSON-RPC-kaders,
+      de initialisatie-handshake en de versieonderhandeling onderhouden voor één tool met vijf
+      parameters — en dat elke protocolwijziging aan onze kant landt.
+    -->
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
+    <!-- Zelfde versie als Soratus.Agents.Telemetry; er hoort één Azure.Identity in de repo. -->
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      De validatie en de tekst die de aanroeper terugkrijgt zijn internal: ze horen niet bij de
+      publieke vorm van de server, maar ze zijn precies wat getest moet worden. Het zijn de twee
+      dingen die stil fout kunnen gaan — een boeking die wegglipt zonder validatie, en een melding
+      die suggereert dat er niets meer hoeft te gebeuren.
+    -->
+    <InternalsVisibleTo Include="Soratus.Mcp.Uren.Tests" />
+  </ItemGroup>
+
+</Project>
