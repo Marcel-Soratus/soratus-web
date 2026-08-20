@@ -114,6 +114,46 @@ internal sealed class CustomerScopeResolver(ICustomerDirectory directory) : ICus
     }
 
     /// <inheritdoc />
+    public async Task<PortalWriteScope?> ResolveWriteAsync(
+        ClaimsPrincipal? user,
+        CancellationToken cancellationToken = default)
+    {
+        // Het schrijfrecht volgt uit de operatorrol en uit niets anders. Er is bewust geen tweede
+        // voorwaarde: zou schrijven ook nog van een instelling of een vlag afhangen, dan is de
+        // rolmatrix niet meer de plek waar staat wie wat mag.
+        var operatorScope = await ResolveOperatorAsync(user, cancellationToken).ConfigureAwait(false);
+
+        return operatorScope is null ? null : new PortalWriteScope(operatorScope);
+    }
+
+    /// <inheritdoc />
+    public async Task<CustomerWriteScope?> ResolveWriteAsync(
+        ClaimsPrincipal? user,
+        string? customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var write = await ResolveWriteAsync(user, cancellationToken).ConfigureAwait(false);
+        if (write is null)
+        {
+            return null;
+        }
+
+        // Wel de klant opzoeken, en niet de slug uit de URL vertrouwen: anders legt een getypte
+        // slug een klant aan de partitiesleutel vast die niemand ooit heeft ingericht, en staat er
+        // een contract in een partitie die geen klant is.
+        var record = directory.Find(customerId);
+        if (record is null)
+        {
+            return null;
+        }
+
+        // Let op wat er hier níet staat: een controle op record.Telemetry. Een klant zonder
+        // ingerichte opslag levert geen CustomerScope op — er valt niets te lezen — maar zijn
+        // contract en zijn toegangen zijn er wel. Dat is precies de klant in onboarding.
+        return new CustomerWriteScope(write, record.Id, record.Name);
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<CustomerScope>> ResolveOwnAsync(
         ClaimsPrincipal? user,
         CancellationToken cancellationToken = default)

@@ -69,6 +69,14 @@ builder.Services.AddOptions<PortalTelemetryOptions>()
 builder.Services.AddOptions<PortalCustomerOptions>()
     .Bind(builder.Configuration.GetSection(PortalCustomerOptions.SectionName));
 
+// De portaaleigen opslag: klanten, contracten en toegang. Een andere opslag dan de telemetrie, en
+// dat is geen detail — zie PortalDataLocation. Geen ValidateOnStart op de endpoint: een lege
+// endpoint is een inrichtingsfout die het portaal moet overleven, want anders neemt hij /healthz mee.
+builder.Services.AddOptions<PortalDataOptions>()
+    .Bind(builder.Configuration.GetSection(PortalDataOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // ── Telemetrie en autorisatiebronnen ─────────────────────────────────────────────────────────
 // De klok loopt via TimeProvider en niet via DateTimeOffset.UtcNow, zodat een drempel van twee
 // minuten te testen is zonder twee minuten te wachten. Dezelfde afspraak als in
@@ -89,8 +97,27 @@ builder.Services.AddSingleton<CosmosContainerProvider>();
 // betalen. Faalt de opwarming, dan wordt dat gelogd en draait het portaal gewoon door.
 builder.Services.AddHostedService<TelemetryWarmup>();
 
-builder.Services.AddSingleton<ICustomerDirectory, ConfigurationCustomerDirectory>();
+// De klantenlijst staat als momentopname in het geheugen en wordt door PortalDirectoryRefresh
+// vervangen zodra de opslag is gelezen. Eén registratie voor beide, want de refresh moet bij de
+// internal Replace kunnen en de rest van het portaal ziet alleen de interface. Twee registraties
+// zouden twee lijsten opleveren, en dan ververst de ene wel en de andere niet.
+builder.Services.AddSingleton<CustomerDirectory>();
+builder.Services.AddSingleton<ICustomerDirectory>(services => services.GetRequiredService<CustomerDirectory>());
 builder.Services.AddScoped<ICustomerScopeResolver, CustomerScopeResolver>();
+
+// De portaaleigen store. Singleton en niet scoped, omdat PortalDirectoryRefresh hem nodig heeft en
+// een hosted service geen scoped afhankelijkheid kan krijgen. Hij houdt geen staat vast.
+builder.Services.AddSingleton<CosmosPortalDataStore>();
+builder.Services.AddSingleton<IPortalDataStore>(services => services.GetRequiredService<CosmosPortalDataStore>());
+
+// Migreert de klantenlijst één keer naar de opslag en houdt hem daarna bij.
+//
+// Let op de samenloop met TelemetryWarmup: die warmt de opslagen op die de klantenlijst op dát
+// moment noemt, en dat is bij een koude start nog de configuratielijst. Staat er in de opslag een
+// klant met een ándere telemetrie-endpoint, dan betaalt de eerste lezer van die klant de
+// opstartkost. Vandaag wijst alles naar hetzelfde account, dus het verschil is nul; het staat hier
+// omdat het opvalt zodra dat niet meer zo is.
+builder.Services.AddHostedService<PortalDirectoryRefresh>();
 
 // Precies één implementatie. Geen seed-store, geen in-memory variant, geen tweede registratie:
 // seed-data wordt door een apart consoleproject in dezelfde Cosmos gezet, in dezelfde
@@ -104,6 +131,10 @@ builder.Services.AddScoped<IAgentTelemetryStore, CosmosAgentTelemetryStore>();
 builder.Services.AddScoped<PortalViews>();
 builder.Services.AddScoped<IPortalViews>(services => services.GetRequiredService<PortalViews>());
 builder.Services.AddScoped<IAgentDetailViews>(services => services.GetRequiredService<PortalViews>());
+
+// Het contractscherm heeft zijn eigen bouwer, want het leest een andere opslag. Zie IContractViews:
+// één klasse die twee opslagen bedient wordt de plek waar het ene met het andere wordt gemengd.
+builder.Services.AddScoped<IContractViews, ContractViews>();
 
 // ── Blazor ───────────────────────────────────────────────────────────────────────────────────
 // Static SSR is de standaard. InteractiveServer is alleen beschikbaar als render mode voor de

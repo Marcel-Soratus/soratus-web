@@ -43,6 +43,15 @@ param keyVaultName string = 'kv-soratus-prod'
 param cosmosAccountName string = 'cosmos-soratus-prod'
 param cosmosDatabaseName string = 'telemetry'
 
+// Portaaleigen bedrijfsdata staat in een eigen database op hetzelfde account, en
+// bewust NIET in `telemetry`. `telemetry` is de vorm die zich per klant herhaalt —
+// straks één keer per klantaccount, zie de remarks op Soratus.Portal/Data/
+// TelemetryLocation.cs. Wat daarin staat is klantscoped en verhuist mee met de klant.
+// Klanten, contracten en toegangsregels zijn van Soratus, horen bij precies één
+// omgeving en mogen zich niet vermenigvuldigen. Vandaar een tweede database.
+@description('Database voor portaaleigen data: klanten, contracten, toegang.')
+param platformDatabaseName string = 'platform'
+
 @description('Entra-tenant van het abonnement.')
 param tenantId string = subscription().tenantId
 
@@ -62,6 +71,10 @@ param customDomainVerificationId string = 'B0A04C985681566759FB301CBA01F04F671B6
 param keyVaultRoleAssignmentName string = '10284461-491b-42f1-ba68-6e927eb27c3c'
 param cosmosReaderAssignmentName string = '3ae107a3-d905-4e45-b66c-bf0c53af4717'
 
+// Nieuw, dus uit te rekenen in plaats van letterlijk. Leeg laten is wat je wilt.
+@description('Naam van de schrijfrechtverlening op de platform-database. Leeg = uitrekenen.')
+param cosmosPlatformWriterAssignmentName string = ''
+
 @description('Log Analytics workspace voor het portaal. Eigen workspace, niet de gedeelde defaultworkspace.')
 param workspaceName string = 'log-soratus-prod'
 
@@ -70,6 +83,7 @@ param logRetentionInDays int = 30
 
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var cosmosDataReaderRoleId = '00000000-0000-0000-0000-000000000001'
+var cosmosDataContributorRoleId = '00000000-0000-0000-0000-000000000002'
 
 // ---------------------------------------------------------------------------
 // Bestaand — niet aanmaken, niet wijzigen
@@ -278,6 +292,125 @@ resource cosmosDataReader 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignme
     )
     principalId: portalIdentityPrincipalId
     scope: cosmos.id
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cosmos DB — de platform-database: klanten, contracten, toegang
+//
+// Fase 2 vraagt dat een nieuwe klant zonder database-actie kan worden ingericht.
+// Nu komt de klantenlijst uit `appsettings.json`, dus een klant toevoegen is een
+// deploy. Deze database is waar die lijst naartoe gaat.
+//
+// Eén container en niet drie. De telemetriecontainers zijn per documenttype
+// gesplitst omdat ze verschillende bewaartermijnen hebben; dát is de reden voor
+// die splitsing en die reden geldt hier niet. Klant, contract en toegangsregel
+// verlopen geen van drieën, horen bij dezelfde klant en worden samen gelezen. In
+// één container met de klant-id als partitiesleutel is een klant één punt-lees en
+// is een wijziging aan klant + contract + toegang één transactionele batch. Over
+// drie containers is diezelfde wijziging drie schrijfacties zonder samenhang, en
+// dan bestaat de toestand "contract bijgewerkt, toegang niet".
+// ---------------------------------------------------------------------------
+
+resource platform 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-11-15' = {
+  parent: cosmos
+  name: platformDatabaseName
+  properties: {
+    resource: {
+      id: platformDatabaseName
+    }
+  }
+}
+
+// TTL in seconden, of null voor géén verval. Let op: `null` is hier de instructie
+// aan de template en komt níet als null in de resource terecht — zie de union()
+// hieronder. Contractdata mag niet verlopen; dat is het verschil met `logs`.
+// `customers` en niet `klanten`: de drie bestaande containers heten `agents`, `runs`
+// en `logs`, en de naam staat als constante in de code. Resourcenamen zijn hier
+// Engels, documentatie en tests Nederlands.
+var platformContainers = [
+  { name: 'customers', ttl: null }
+]
+
+resource platformContainerResources 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-11-15' = [
+  for c in platformContainers: {
+    parent: platform
+    name: c.name
+    properties: {
+      // Zelfde valkuil als bij de telemetriecontainers hierboven, en de reden dat
+      // hier een union() staat waar je `defaultTtl: c.ttl` zou verwachten: een
+      // expliciete `defaultTtl: null` levert bij het uitrollen "One of the specified
+      // inputs is invalid" op, en `what-if` ziet dat niet — daar zijn "null" en
+      // "afwezig" niet van elkaar te onderscheiden. Een groene what-if is hier dus
+      // geen bewijs. Het veld moet ontbreken.
+      resource: union(
+        {
+          id: c.name
+          partitionKey: {
+            // Zelfde pad als de telemetriecontainers, zodat er één conventie is:
+            // het document draagt zijn partitiesleutel in het veld `pk`. Hier is
+            // dat de klant-id. Eén klant is daarmee één logische partitie.
+            paths: ['/pk']
+            kind: 'Hash'
+          }
+          conflictResolutionPolicy: {
+            mode: 'LastWriterWins'
+            conflictResolutionPath: '/_ts'
+          }
+          indexingPolicy: {
+            // Alles indexeren. Bij een paar honderd documenten kost dat niets, en
+            // de datalaag moet ook kunnen zoeken op e-mailadres — dat is een
+            // cross-partition query en die heeft een index nodig, geen scan.
+            indexingMode: 'consistent'
+            automatic: true
+            includedPaths: [
+              { path: '/*' }
+            ]
+            excludedPaths: [
+              { path: '/"_etag"/?' }
+            ]
+          }
+        },
+        c.ttl == null ? {} : { defaultTtl: c.ttl }
+      )
+    }
+  }
+]
+
+// Schrijfrecht, en alleen hier. De scope is de platform-DATABASE en niet het
+// account: het portaal moet contracten kunnen bijwerken, maar het mag geen
+// telemetrie kunnen wijzigen of wissen. Telemetrie is het bewijsmateriaal waarop
+// de statusweergave rust — schrijfrecht daarop maakt van "de agent heeft niets
+// gepubliceerd" een uitspraak die het portaal zelf kan hebben veroorzaakt.
+//
+// Het accountbrede Data Reader hierboven blijft staan en wordt hier niet
+// vervangen: dat is wat het portaal telemetrie laat lezen. Deze verlening komt
+// ernaast; Cosmos telt data-plane rechten bij elkaar op.
+//
+// Er bestaat geen ingebouwde rol die alleen schrijft. Data Contributor omvat lezen,
+// en dat is op deze scope precies wat nodig is.
+resource cosmosPlatformWriter 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
+  parent: cosmos
+  name: empty(cosmosPlatformWriterAssignmentName)
+    ? guid(cosmos.id, platformDatabaseName, portalIdentityPrincipalId, cosmosDataContributorRoleId)
+    : cosmosPlatformWriterAssignmentName
+  properties: {
+    roleDefinitionId: resourceId(
+      'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions',
+      cosmosAccountName,
+      cosmosDataContributorRoleId
+    )
+    principalId: portalIdentityPrincipalId
+    // Niet cosmos.id. Dit is de hele grens tussen "mag contracten bijwerken" en
+    // "mag telemetrie overschrijven", en het is één regel.
+    //
+    // En niet platform.id. Een Cosmos data-plane rolverlening wil een dáta-plane
+    // pad en geen ARM-resource-id: '/dbs/{db}' en niet '/sqlDatabases/{db}'. Met de
+    // ARM-vorm faalt de uitrol op "Expected path segment [dbs] at position [0] but
+    // found [sqlDatabases]" — en what-if ziet dat niet, want die valideert de vorm
+    // van deze string niet. Tweede keer in dit werk dat een groene what-if een
+    // falende uitrol opleverde; de eerste was defaultTtl: null.
+    scope: '${cosmos.id}/dbs/${platformDatabaseName}'
   }
 }
 
@@ -497,3 +630,6 @@ output portalIdentityClientId string = portalIdentity.properties.clientId
 output portalDefaultHostName string = portalApp.properties.defaultHostName
 output cosmosEndpoint string = cosmos.properties.documentEndpoint
 output keyVaultUri string = keyVault.properties.vaultUri
+
+@description('Database met de portaaleigen data. Hoort in de configuratiesectie Platform.')
+output platformDatabaseName string = platform.name

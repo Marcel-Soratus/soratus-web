@@ -263,28 +263,36 @@ resource telemetryContainers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases
     parent: telemetry
     name: c.name
     properties: {
-      resource: {
-        id: c.name
-        partitionKey: {
-          paths: ['/pk']
-          kind: 'Hash'
-        }
-        defaultTtl: c.ttl
-        conflictResolutionPolicy: {
-          mode: 'LastWriterWins'
-          conflictResolutionPath: '/_ts'
-        }
-        indexingPolicy: {
-          indexingMode: 'consistent'
-          automatic: true
-          includedPaths: [
-            { path: '/*' }
-          ]
-          excludedPaths: [
-            { path: '/"_etag"/?' }
-          ]
-        }
-      }
+      // `defaultTtl` moet ontbréken als er geen verval is, en niet null zijn. Een
+      // expliciete null levert bij het uitrollen "One of the specified inputs is
+      // invalid" op de container `agents`, en `what-if` ziet dat niet aankomen:
+      // daar zijn "null" en "afwezig" niet van elkaar te onderscheiden. Vandaar
+      // union() met een leeg object in plaats van `defaultTtl: c.ttl`. Dezelfde
+      // constructie staat in infra/portal/portal-rg.bicep, om dezelfde reden.
+      resource: union(
+        {
+          id: c.name
+          partitionKey: {
+            paths: ['/pk']
+            kind: 'Hash'
+          }
+          conflictResolutionPolicy: {
+            mode: 'LastWriterWins'
+            conflictResolutionPath: '/_ts'
+          }
+          indexingPolicy: {
+            indexingMode: 'consistent'
+            automatic: true
+            includedPaths: [
+              { path: '/*' }
+            ]
+            excludedPaths: [
+              { path: '/"_etag"/?' }
+            ]
+          }
+        },
+        c.ttl == null ? {} : { defaultTtl: c.ttl }
+      )
     }
   }
 ]
