@@ -79,6 +79,39 @@ public class ContractInvoerTests
         Assert.Null((Contract() with { BundledHours = 0m, HourlyRate = 0m }).Validate());
     }
 
+    [Fact]
+    public void EenContractZonderEnkelBedragKlopt()
+    {
+        // De klant die is aangemeld en waarvan de bedragen nog niet zijn afgesproken. Er is dan
+        // niets te controleren, en een verplicht getalveld zou hier een verzonnen bedrag opleveren.
+        var leeg = Contract() with
+        {
+            BundledHours = null,
+            HourlyRate = null,
+            AzureSurchargePercentage = null,
+        };
+
+        Assert.Null(leeg.Validate());
+    }
+
+    [Fact]
+    public void NietVastgelegdEnNulZijnTweeVerschillendeAfspraken()
+    {
+        // Het onderscheid dat deze velden nullable maakt, vastgelegd op de plek waar het bestaat.
+        // "Nul" is een afspraak die iemand heeft opgeschreven — geen bundel, niet doorbelast, geen
+        // beheeropslag — en "niet vastgelegd" is het ontbreken van die afspraak. Bij het
+        // opslagpercentage is dat verschil onze marge.
+        //
+        // Deze test compileert niet meer zodra iemand de velden terugbrengt naar decimal, en dat is
+        // de bedoeling: dan is het verschil weg en hoort dat een bouwfout te zijn en niet een
+        // stilzwijgende gedragsverandering.
+        Assert.NotEqual(Contract() with { HourlyRate = null }, Contract() with { HourlyRate = 0m });
+        Assert.NotEqual(Contract() with { BundledHours = null }, Contract() with { BundledHours = 0m });
+        Assert.NotEqual(
+            Contract() with { AzureSurchargePercentage = null },
+            Contract() with { AzureSurchargePercentage = 0m });
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(8)]

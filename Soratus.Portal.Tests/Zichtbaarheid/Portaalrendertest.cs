@@ -4,6 +4,7 @@ using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Soratus.Portal.Data;
 using Soratus.Portal.Security;
 using Soratus.Portal.Tests.Hulpmiddelen;
 using Soratus.Portal.Views;
@@ -74,6 +75,36 @@ public abstract class Portaalrendertest : BunitContext
     private IAgentDetailViews? _tabbladen;
 
     /// <summary>
+    /// De portaaleigen opslag: klanten, contracten en toegangen. Het contractscherm schrijft
+    /// hierin, en na het renderen valt hier af te lezen wat er is weggeschreven.
+    /// </summary>
+    /// <remarks>
+    /// Vervang hem vóór het aanmelden om een bijzondere stand te renderen — een klant zonder
+    /// contract, of een klant die alleen in de configuratie staat. Zie
+    /// <see cref="Vasteportaalopslag"/>.
+    /// </remarks>
+    /// <remarks>
+    /// <c>internal</c> en niet <c>protected</c>: het type is internal, en een protected lid van een
+    /// public klasse zou daarmee toegankelijker zijn dan zijn eigen type (CS0053). De afgeleide
+    /// testklassen staan in dezelfde assembly, dus in de praktijk maakt het niets uit.
+    /// </remarks>
+    internal Vasteportaalopslag Opslag { get; set; } = new();
+
+    /// <summary>
+    /// De weergavelaag van het contractscherm. Standaard de échte projectie op
+    /// <see cref="Opslag"/>; zet hem om een afwijkende stand te renderen.
+    /// </summary>
+    /// <remarks>
+    /// <para>Standaard <see cref="VasteContractweergaven"/>, en dat is geen lege stub met opzet: een
+    /// zichtbaarheidstest op een scherm zonder gegevens bewijst niets. Er staat dus een volledig
+    /// contract achter, met een toegangslijst waarin beide aanduidingen voorkomen.</para>
+    ///
+    /// <para><c>null</c> betekent "bouw de standaard bij het aanmelden", want die heeft de
+    /// klantenlijst nodig die aan <see cref="MeldAan"/> is meegegeven.</para>
+    /// </remarks>
+    protected IContractViews? Contracten { get; set; }
+
+    /// <summary>
     /// Richt de container in met een aangemelde gebruiker en de diensten die een pagina vraagt.
     /// </summary>
     /// <param name="gebruiker">De aangemelde gebruiker.</param>
@@ -111,6 +142,14 @@ public abstract class Portaalrendertest : BunitContext
         Services.AddSingleton(Tabbladen);
         Services.AddSingleton(Autorisatiebron.Resolver(lijst, Autorisatiebron.StandaardEndpoint));
         Services.AddSingleton(Autorisatiebron.Klantenlijst(lijst));
+
+        // Het contractscherm vraagt deze twee: de weergavelaag voor de leeskant en de opslag voor
+        // het eiland dat schrijft. Ze staan hier en niet per test, want elke pagina valt onder het
+        // zichtbaarheidsvangnet en dat rendert ze allemaal — een pagina die op een ontbrekende
+        // dienst omvalt toont geen verboden woorden en laat dat vangnet dus groen staan om de
+        // verkeerde reden.
+        Services.AddSingleton(Contracten ?? new VasteContractweergaven(Opslag, lijst));
+        Services.AddSingleton<IPortalDataStore>(Opslag);
     }
 
     /// <summary>Richt de container in voor een klantgebruiker met precies één omgeving.</summary>

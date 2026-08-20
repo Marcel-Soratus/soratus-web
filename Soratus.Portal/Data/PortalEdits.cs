@@ -125,11 +125,18 @@ public sealed record ContractEdit
     /// <summary>De SLA in één regel.</summary>
     public string? Sla { get; init; }
 
-    /// <summary>Urenbundel per maand.</summary>
-    public decimal BundledHours { get; init; }
+    /// <summary>
+    /// Urenbundel per maand, of <c>null</c> om vast te leggen dat er geen bundel is afgesproken.
+    /// </summary>
+    /// <remarks>
+    /// <c>null</c> is geen "laat staan wat er stond": dit is een volledige bewerking en een leeg veld
+    /// betekent leeg. Zie <see cref="ContractDocument.BundledHours"/> voor waarom nul en <c>null</c>
+    /// niet dezelfde waarde zijn.
+    /// </remarks>
+    public decimal? BundledHours { get; init; }
 
-    /// <summary>Uurtarief buiten de bundel.</summary>
-    public decimal HourlyRate { get; init; }
+    /// <summary>Uurtarief buiten de bundel, of <c>null</c> als er geen tarief is afgesproken.</summary>
+    public decimal? HourlyRate { get; init; }
 
     /// <summary>Indexatie.</summary>
     public string? Indexation { get; init; }
@@ -140,8 +147,11 @@ public sealed record ContractEdit
     /// <summary>Beheerd door.</summary>
     public string? ManagedBy { get; init; }
 
-    /// <summary>Opslagpercentage op de Azure-kosten. Operator-only.</summary>
-    public decimal AzureSurchargePercentage { get; init; }
+    /// <summary>
+    /// Opslagpercentage op de Azure-kosten, of <c>null</c> als er niets is afgesproken.
+    /// Operator-only.
+    /// </summary>
+    public decimal? AzureSurchargePercentage { get; init; }
 
     /// <summary>
     /// De etag waarop deze bewerking is gebaseerd, of <c>null</c> als er nog geen contract was.
@@ -153,11 +163,18 @@ public sealed record ContractEdit
     /// </summary>
     /// <returns><c>null</c> als het klopt, anders de melding voor het formulier.</returns>
     /// <remarks>
-    /// Bewust geen verplichte velden buiten de vorm om. Een klant in onboarding heeft nog geen
+    /// <para>Bewust geen verplichte velden buiten de vorm om. Een klant in onboarding heeft nog geen
     /// contractnummer, en een verplicht veld levert dan een verzonnen nummer op — dat is erger dan
     /// een streepje op de kaart. Wat hier wél wordt tegengehouden is een waarde die niet kán:
     /// een datum in een andere vorm sorteert stil verkeerd, en een negatief tarief gaat de factuur
-    /// in.
+    /// in.</para>
+    ///
+    /// <para><strong><c>null</c> is hier geen nul.</strong> De drie bedragen zijn <c>decimal?</c> en
+    /// <c>null</c> betekent "niet vastgelegd". Er valt aan een niet-vastgelegd getal niets te
+    /// controleren, dus zo'n veld komt langs deze regels heen — het wordt niet stil op nul gezet en
+    /// dan als nul goedgekeurd. Daarom staan de grenzen als patronen (<c>is &lt; 0</c>) en niet als
+    /// vergelijkingen op een uitgepakte waarde: een patroon matcht <c>null</c> niet, en dan is aan de
+    /// code te zien dat het onderscheid bedoeld is.</para>
     /// </remarks>
     public string? Validate()
     {
@@ -166,12 +183,12 @@ public sealed record ContractEdit
             return "De ingangsdatum hoort de vorm jjjj-mm-dd te hebben, bijvoorbeeld 2026-02-01.";
         }
 
-        if (BundledHours < 0)
+        if (BundledHours is < 0)
         {
             return "Een urenbundel kan niet negatief zijn.";
         }
 
-        if (HourlyRate < 0)
+        if (HourlyRate is < 0)
         {
             return "Een uurtarief kan niet negatief zijn.";
         }

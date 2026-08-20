@@ -13,18 +13,28 @@
    glyph, een relatieve tijd, en een balk waarvan de segmenten met flex-grow
    meeschalen op de tellingen (geen percentage, dus ook geen tweede berekening).
 
-   De knop "Nieuwe klant" uit de mockup staat er bewust niet. Een klant
-   vastleggen kan pas in fase 2; een knop die niets doet is erger dan geen knop. *@
+   De knop "Nieuwe klant" uit de mockup stond hier in fase 0 bewust niet: een
+   klant vastleggen kon toen nog niet, en een knop die niets doet is erger dan
+   geen knop. Sinds fase 2 kan hij wél iets — hij opent /klanten/nieuw, dat
+   klant, contract en eerste toegangen in één schrijfactie vastlegt. Hij staat
+   op twee plekken en dat is geen verdubbeling: in de kop van de klantenlijst
+   waar hij hoort, en in de lege staat, want dat is precies het moment waarop
+   je hem nodig hebt en dan is er geen lijst met een kop. *@
 
 @using System.Globalization
 @inject ICustomerScopeResolver Scopes
 @inject IPortalViews Views
 @inject NavigationManager Navigation
 
-<PageTitle>Soratus-overzicht · Agent Portal</PageTitle>
-
 @if (_view is { } view)
 {
+    @* Binnen de voorwaarde en niet erboven. Een titel is de enige inhoud die een pagina naar
+       buiten brengt zonder in zijn eigen markup te staan: hij komt via HeadOutlet in het tabblad,
+       de geschiedenis en de bladwijzer terecht. Stond hij hierboven, dan kreeg een klant de tekst
+       "Soratus-overzicht" te zien terwijl de test die precies díe tekenreeks verbiedt groen
+       blijft, want in de markup van deze pagina staat hij dan niet. *@
+    <PageTitle>Soratus-overzicht · Agent Portal</PageTitle>
+
     <div class="page-head">
         <h1 class="page-title">Soratus-overzicht</h1>
         <span class="page-meta" title="@TimeFormat.Absolute(view.GeneratedAt)">
@@ -110,14 +120,20 @@
         @if (view.Customers.Count == 0)
         {
             <EmptyState Title="Nog geen klanten ingericht"
-                        Text="Er staat nog geen klant in de configuratie van dit portaal. Zodra er een klant is ingericht verschijnt hij hier, ook als hij nog geen agents heeft."
-                        Facts="NoCustomerFacts" />
+                        Facts="NoCustomerFacts">
+                <p>
+                    Er staat nog geen klant in de opslag van dit portaal. Zodra er een klant
+                    is vastgelegd verschijnt hij hier, ook als hij nog geen agents heeft.
+                </p>
+                <p><a href="/klanten/nieuw">Nieuwe klant vastleggen</a></p>
+            </EmptyState>
         }
         else
         {
             <DataCard Grid="CustomerGrid" Title="Klanten">
                 <HeaderContent>
                     <span>gesorteerd op ernst, dan laatste activiteit</span>
+                    <a class="btn btn--small btn--primary" href="/klanten/nieuw">Nieuwe klant</a>
                 </HeaderContent>
                 <ChildContent>
                     <DataRowHeader />

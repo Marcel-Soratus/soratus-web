@@ -8,8 +8,8 @@ namespace Soratus.Portal.Views;
 /// <remarks>
 /// Eén plek, en de viewmodels dragen de tekst mee in plaats van dat het scherm hem verzint. Dezelfde
 /// afspraak als bij <see cref="AgentConfigurationNotice"/>: dit zijn beweringen over wat het portaal
-/// kán en over wat een rol betekent, en die horen te veranderen op het moment dat het portaal
-/// verandert — niet op het moment dat iemand een Razor-bestand herschrijft.
+/// kán en over wat een toegangsaanduiding betekent, en die horen te veranderen op het moment dat het
+/// portaal verandert — niet op het moment dat iemand een Razor-bestand herschrijft.
 /// </remarks>
 public static class ContractNotice
 {
@@ -17,26 +17,38 @@ public static class ContractNotice
     /// Waarom een klant hier niets kan wijzigen.
     /// </summary>
     /// <remarks>
-    /// §2 geeft de klant op contract en toegang lezen, de operator lezen + bewerken. De openstaande
-    /// vraag uit §9 — mag een beheerder van de klant zelf toegang geven — is beantwoord met "alleen
-    /// Soratus". Deze tekst zegt dat, in plaats van dat de klant naar een uitgegrijsde knop kijkt en
-    /// zich afvraagt welk recht hij mist.
+    /// <para>§2 geeft de klant op contract en toegang lezen, de operator lezen + bewerken. De
+    /// openstaande vraag uit §9 — mag een beheerder van de klant zelf toegang geven — is beantwoord
+    /// met "alleen Soratus". Deze tekst zegt dat, in plaats van dat de klant naar een uitgegrijsde
+    /// knop kijkt en zich afvraagt welk recht hij mist.</para>
+    ///
+    /// <para>De tekst begon met "Read-only.". Dat is het enige Engels in een portaal dat verder
+    /// consequent Nederlands is, en het stond als voetregel onder de contractkaart van een
+    /// <em>klant</em> — niet in een operatorscherm waar een technische term thuishoort. De naam van
+    /// de constante blijft <c>ReadOnly</c>: dat is code en geen copy.</para>
     /// </remarks>
     public const string ReadOnly =
-        "Read-only. Contract en portaaltoegang worden door Soratus beheerd; laat het ons weten als " +
-        "er iets moet wijzigen.";
+        "Deze gegevens zijn hier alleen te lezen. Contract en portaaltoegang worden door Soratus " +
+        "beheerd; laat het ons weten als er iets moet wijzigen.";
 
     /// <summary>
-    /// Dat beide klantrollen precies hetzelfde mogen.
+    /// Dat de twee toegangsaanduidingen precies hetzelfde recht geven.
     /// </summary>
     /// <remarks>
-    /// Zonder deze regel is "Beheerder klant" een naam die een bevoegdheid belooft die niet bestaat.
-    /// De rolnamen komen uit §3.5 en blijven staan; wat er niet in de spec staat is dat ze
-    /// gelijkwaardig zijn, en dat is precies wat een lezer hier nodig heeft.
+    /// <para>Zonder deze regel is "Beheerder klant" een naam die een bevoegdheid belooft die niet
+    /// bestaat. De namen komen uit §3.5 en blijven staan; wat er niet in de spec staat is dat ze
+    /// gelijkwaardig zijn, en dat is precies wat een lezer hier nodig heeft.</para>
+    ///
+    /// <para><strong>Het woord "rol" staat er niet in, en dat is de hele reden dat deze tekst is
+    /// herschreven.</strong> "Beheerder klant" en "Lezer" zijn identiek in rechten, want alleen
+    /// Soratus deelt toegang uit. Een rol belooft rechten, en zo'n belofte belandt op een dag als
+    /// aanname in code — een <c>if</c> op de rolnaam die iets toestaat wat er nooit was. Het portaal
+    /// noemt dit daarom nergens een rol: het is een aanduiding van wie we aanspreken. De kolomkop op
+    /// beide contractschermen heet om dezelfde reden "Aanduiding".</para>
     /// </remarks>
-    public const string RolesAreReadOnly =
-        "Beide rollen geven leesrecht op deze omgeving. Er is geen klantrol die iets kan wijzigen: " +
-        "toegang geven en intrekken doet Soratus.";
+    public const string AccessLabelsAreEqual =
+        "Beide aanduidingen geven hetzelfde leesrecht. Ze zeggen wie we aanspreken en niet wat " +
+        "iemand mag; toegang geven en intrekken doet Soratus.";
 
     /// <summary>
     /// Dat "vastgelegd" nog niet "kan inloggen" betekent, en dat het portaal het tweede niet weet.
@@ -158,11 +170,20 @@ public sealed record CustomerContractView
     /// <summary>De SLA in één regel.</summary>
     public string? Sla { get; init; }
 
-    /// <summary>Urenbundel per maand.</summary>
-    public decimal BundledHours { get; init; }
+    /// <summary>
+    /// Urenbundel per maand, of <c>null</c> als er niets is vastgelegd.
+    /// </summary>
+    /// <remarks>
+    /// Zie <see cref="ContractDocument.BundledHours"/>: <c>null</c> is "niet vastgelegd" en nul is
+    /// "geen bundel", en dat zijn twee verschillende mededelingen.
+    /// </remarks>
+    public decimal? BundledHours { get; init; }
 
-    /// <summary>Uurtarief buiten de bundel.</summary>
-    public decimal HourlyRate { get; init; }
+    /// <summary>
+    /// Uurtarief buiten de bundel, of <c>null</c> als er niets is vastgelegd.
+    /// </summary>
+    /// <remarks>Zie <see cref="ContractDocument.HourlyRate"/>.</remarks>
+    public decimal? HourlyRate { get; init; }
 
     /// <summary>Indexatie.</summary>
     public string? Indexation { get; init; }
@@ -197,6 +218,25 @@ public sealed record CustomerContractView
     /// waarop het scherm het antwoord had.
     /// </remarks>
     public required string AccessStateNotice { get; init; }
+
+    /// <summary>
+    /// Dat de twee toegangsaanduidingen hetzelfde recht geven. Zie
+    /// <see cref="ContractNotice.AccessLabelsAreEqual"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Staat op beide typen, want beide rollen zien dezelfde kolom. Zonder deze zin belooft
+    /// "Beheerder klant" aan de klant een recht dat niet bestaat — en de klant is juist de lezer die
+    /// dat woord op zichzelf betrekt.</para>
+    ///
+    /// <para><strong>Waarom als veld en niet als constante uit de markup.</strong> Het scherm haalde
+    /// de constante rechtstreeks uit de Razor. Dat werkt, maar het breekt de afspraak dat het
+    /// viewmodel de tekst draagt, en die afspraak is de reden dat het rolverschil in dit portaal een
+    /// typeverschil is en geen <c>@if</c>: wat een rol te zien krijgt staat op het type van die rol.
+    /// Een constante in de markup zet die grens buiten het bereik van de compiler — dan is een
+    /// melding die op één van de twee schermen ontbreekt niet meer op te merken, en dat is precies
+    /// wat hier was gebeurd.</para>
+    /// </remarks>
+    public required string AccessLabelNotice { get; init; }
 }
 
 /// <summary>
@@ -271,11 +311,13 @@ public sealed record OperatorContractView
     /// <summary>De SLA in één regel.</summary>
     public string? Sla { get; init; }
 
-    /// <summary>Urenbundel per maand.</summary>
-    public decimal BundledHours { get; init; }
+    /// <summary>Urenbundel per maand, of <c>null</c> als er niets is vastgelegd.</summary>
+    /// <remarks>Zie <see cref="ContractDocument.BundledHours"/>.</remarks>
+    public decimal? BundledHours { get; init; }
 
-    /// <summary>Uurtarief buiten de bundel.</summary>
-    public decimal HourlyRate { get; init; }
+    /// <summary>Uurtarief buiten de bundel, of <c>null</c> als er niets is vastgelegd.</summary>
+    /// <remarks>Zie <see cref="ContractDocument.HourlyRate"/>.</remarks>
+    public decimal? HourlyRate { get; init; }
 
     /// <summary>Indexatie.</summary>
     public string? Indexation { get; init; }
@@ -287,9 +329,15 @@ public sealed record OperatorContractView
     public string? ManagedBy { get; init; }
 
     /// <summary>
-    /// Het opslagpercentage op de Azure-kosten. Operator-only (§2).
+    /// Het opslagpercentage op de Azure-kosten, of <c>null</c> als het niet is vastgelegd.
+    /// Operator-only (§2).
     /// </summary>
-    public decimal AzureSurchargePercentage { get; init; }
+    /// <remarks>
+    /// <c>null</c> is hier het gevaarlijkst van de drie: nul opslag en geen afspraak over opslag
+    /// zien er in een berekening hetzelfde uit, en het verschil is onze marge. Zie
+    /// <see cref="ContractDocument.AzureSurchargePercentage"/>.
+    /// </remarks>
+    public decimal? AzureSurchargePercentage { get; init; }
 
     /// <summary>Wanneer het contract voor het laatst is gewijzigd.</summary>
     public DateTimeOffset? ChangedAt { get; init; }
@@ -332,22 +380,24 @@ public sealed record OperatorContractView
     /// <summary>Wie er namens deze klant toegang heeft.</summary>
     public IReadOnlyList<OperatorAccessRow> Access { get; init; } = [];
 
-    /// <summary>De rollen die te kiezen zijn in het toegangsformulier.</summary>
+    /// <summary>De aanduidingen die te kiezen zijn in het toegangsformulier.</summary>
     /// <remarks>
     /// Komt uit <see cref="PortalAccessRoles.All"/> en niet uit een lijst in de Razor, zodat het
-    /// formulier geen rol kan aanbieden die de schrijfkant weigert.
+    /// formulier geen waarde kan aanbieden die de schrijfkant weigert.
     /// </remarks>
     public IReadOnlyList<string> Roles { get; init; } = PortalAccessRoles.All;
 
     /// <summary>
-    /// Dat beide klantrollen hetzelfde mogen: lezen.
+    /// Dat de twee toegangsaanduidingen hetzelfde recht geven. Zie
+    /// <see cref="ContractNotice.AccessLabelsAreEqual"/>.
     /// </summary>
     /// <remarks>
     /// Staat er als tekst omdat het anders een verrassing is. "Beheerder klant" klinkt als een
-    /// bevoegdheid en is er geen — er is geen klantrol die iets mag wijzigen. Zie
-    /// <see cref="PortalAccessRoles"/>.
+    /// bevoegdheid en is er geen. Het veld heette <c>RoleNotice</c>; die naam gaf het woord terug
+    /// dat de tekst zelf niet meer mag bevatten, en een veldnaam is waar de volgende ontwikkelaar
+    /// de betekenis vandaan haalt. Zie <see cref="PortalAccessRoles"/>.
     /// </remarks>
-    public required string RoleNotice { get; init; }
+    public required string AccessLabelNotice { get; init; }
 
     /// <summary>
     /// Dat een vastgelegde toegang pas werkt na de handmatige stap in Entra, en dat het portaal niet

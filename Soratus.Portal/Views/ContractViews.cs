@@ -46,8 +46,11 @@ internal sealed class ContractViews(
             Term = contract?.Term,
             NoticePeriod = contract?.NoticePeriod,
             Sla = contract?.Sla,
-            BundledHours = contract?.BundledHours ?? 0m,
-            HourlyRate = contract?.HourlyRate ?? 0m,
+
+            // Geen "?? 0m" meer. Er is geen contract of het bedrag is niet vastgelegd, en dan hoort
+            // er niets te staan — niet een nul die op de kaart als afspraak leest.
+            BundledHours = contract?.BundledHours,
+            HourlyRate = contract?.HourlyRate,
             Indexation = contract?.Indexation,
             Contact = contract?.Contact,
             ManagedBy = contract?.ManagedBy,
@@ -67,6 +70,10 @@ internal sealed class ContractViews(
             ],
             ReadOnlyNotice = ContractNotice.ReadOnly,
             AccessStateNotice = ContractNotice.EntraStateUnknown,
+
+            // Dezelfde tekst als op het operatorscherm, uit dezelfde constante. De klant ziet
+            // dezelfde kolom; zonder deze zin belooft "Beheerder klant" hem een recht dat er niet is.
+            AccessLabelNotice = ContractNotice.AccessLabelsAreEqual,
         };
     }
 
@@ -98,12 +105,12 @@ internal sealed class ContractViews(
             Term = contract?.Term,
             NoticePeriod = contract?.NoticePeriod,
             Sla = contract?.Sla,
-            BundledHours = contract?.BundledHours ?? 0m,
-            HourlyRate = contract?.HourlyRate ?? 0m,
+            BundledHours = contract?.BundledHours,
+            HourlyRate = contract?.HourlyRate,
             Indexation = contract?.Indexation,
             Contact = contract?.Contact,
             ManagedBy = contract?.ManagedBy,
-            AzureSurchargePercentage = contract?.AzureSurchargePercentage ?? 0m,
+            AzureSurchargePercentage = contract?.AzureSurchargePercentage,
             ChangedAt = contract?.ChangedAt,
             ChangedBy = contract?.ChangedBy,
             ContractETag = contract?.ETag,
@@ -124,7 +131,7 @@ internal sealed class ContractViews(
                     ETag = entry.ETag,
                 }),
             ],
-            RoleNotice = ContractNotice.RolesAreReadOnly,
+            AccessLabelNotice = ContractNotice.AccessLabelsAreEqual,
             AccessStateNotice = ContractNotice.EntraStateUnknown,
         };
     }

@@ -167,12 +167,18 @@ public class ContractZichtbaarheidTests
     [Fact]
     public void DeAanduidingBinnenDeKlantBelooftGeenRechten()
     {
-        // Beide aanduidingen mogen precies hetzelfde: lezen. Er is geen klantrol die iets kan
-        // wijzigen. Dat staat als tekst op het scherm, want anders is "Beheerder klant" een naam
-        // die een bevoegdheid belooft die niet bestaat.
-        Assert.NotNull(typeof(OperatorContractView).GetProperty("RoleNotice"));
-        Assert.Contains("leesrecht", ContractNotice.RolesAreReadOnly, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Soratus", ContractNotice.RolesAreReadOnly, StringComparison.Ordinal);
+        // Beide aanduidingen mogen precies hetzelfde: lezen. Er is geen klantaanduiding waarmee
+        // iemand iets kan wijzigen. Dat staat als tekst op het scherm, want anders is "Beheerder
+        // klant" een naam die een bevoegdheid belooft die niet bestaat.
+        //
+        // De melding staat op béide typen, en dat is geen verdubbeling: de klant is juist de lezer
+        // die het woord op zichzelf betrekt. Het klantscherm haalde de tekst eerder rechtstreeks
+        // uit de constante in de Razor; dan staat de belofte buiten het bereik van de compiler en
+        // is een melding die op één van de twee schermen ontbreekt niet meer op te merken.
+        Assert.NotNull(typeof(OperatorContractView).GetProperty("AccessLabelNotice"));
+        Assert.NotNull(typeof(CustomerContractView).GetProperty("AccessLabelNotice"));
+        Assert.Contains("leesrecht", ContractNotice.AccessLabelsAreEqual, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Soratus", ContractNotice.AccessLabelsAreEqual, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -191,11 +197,16 @@ public class ContractZichtbaarheidTests
     /// De velden waarvan het verschil tussen de twee weergaven geen zichtbaarheidsvraag is.
     /// </summary>
     /// <remarks>
-    /// Alleen de meldingen: de klant krijgt de uitleg waarom hij niets kan wijzigen, de operator de
-    /// uitleg dat de twee aanduidingen hetzelfde betekenen. Twee verschillende lezers, twee
-    /// verschillende zinnen, en geen van beide een gegeven van de klant.
+    /// <para>De melding waarom de klant niets kan wijzigen (die heeft de operator niet nodig), de
+    /// keuzelijst van aanduidingen voor het formulier, en de toegangslijst — die is op beide typen
+    /// een lijst van een ander rijtype, en dat verschil staat in
+    /// <see cref="DeToegangsregelVanDeKlantDraagtGeenEtagEnGeenUitgever"/>.</para>
+    ///
+    /// <para><c>AccessLabelNotice</c> staat hier bewust <em>niet</em> in: die melding staat op beide
+    /// typen en is dus geen verschil. Hem hier zetten zou precies verbergen wat er gegarandeerd moet
+    /// worden.</para>
     /// </remarks>
-    private static readonly string[] BewustAnders = ["ReadOnlyNotice", "RoleNotice", "Roles", "Access"];
+    private static readonly string[] BewustAnders = ["ReadOnlyNotice", "Roles", "Access"];
 
     private static IEnumerable<string> Namen(Type type) =>
         type.GetProperties(BindingFlags.Instance | BindingFlags.Public).Select(p => p.Name);

@@ -38,13 +38,13 @@
 
     private sealed record Screen(string Segment, string Label);
 
-    // Vijf van de zes routes bestaan nog niet en geven een 404. Dat zijn geen
+    // Vier van de zes routes bestaan nog niet en geven een 404. Dat zijn geen
     // vergeten links: elk scherm komt in de fase die erachter staat (spec §7).
     private static readonly Screen[] Screens =
     [
         new("agents", "Agents"),          // fase 0 en 1 — bestaat
         new("sprint", "Sprint"),          // fase 5 — sprint en support
-        new("contract", "Contract"),      // fase 2 — contract en toegang
+        new("contract", "Contract"),      // fase 2 — bestaat
         new("uren", "Uren"),              // fase 3 — uren
         new("facturatie", "Facturatie"),  // fase 4 — kosten en facturatie
         new("support", "Support")         // fase 5 — sprint en support

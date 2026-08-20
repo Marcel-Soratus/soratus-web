@@ -5,14 +5,23 @@
    pagina bepaalt één "nu" voor het hele scherm, zodat alle tijden op dezelfde klok staan.
 
    De tooltip toont Nederlandse tijd, het datetime-attribuut blijft UTC. Het eerste is voor de
-   lezer, het tweede voor de machine. *@
+   lezer, het tweede voor de machine.
+
+   TITLE IS EEN PARAMETER EN GEEN LOSGESLAGEN ATTRIBUUT
+
+   Het component zet zijn eigen title ná @attributes, dus een title uit de splat zou stil
+   verliezen — de aanroeper ziet zijn tekst nergens en krijgt geen melding. Andersom @attributes
+   laatst zetten ruilt dat probleem alleen om: dan verdwijnt de absolute tijd zonder dat iemand
+   daarom vroeg, en kan een splat ook datetime en class overschrijven. Daarom is er nu één
+   afgesproken route: de Title-parameter. Die is zichtbaar in de aanroep, hij kan datetime niet
+   raken, en hij is symmetrisch met EmptyTitle die er al was voor de andere tak. *@
 
 @if (Value is { } value)
 {
     <time @attributes="AdditionalAttributes"
           class="@Class"
           datetime="@TimeFormat.Iso(value)"
-          title="@TimeFormat.Absolute(value, TimeZone)">@TimeFormat.Relative(value, Now)</time>
+          title="@(Title ?? TimeFormat.Absolute(value, TimeZone))">@TimeFormat.Relative(value, Now)</time>
 }
 else
 {
@@ -43,6 +52,22 @@ else
     [Parameter]
     public TimeZoneInfo? TimeZone { get; set; }
 
+    /// <summary>
+    /// De tooltip bij een moment. Standaard de absolute tijd; gezet vervangt hij die.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dit is de enige manier om de tooltip te wijzigen. Een <c>title</c> via
+    /// <see cref="AdditionalAttributes"/> landt niet — zie de toelichting boven de markup.</para>
+    ///
+    /// <para>Let op wat je weggeeft: de absolute tijd is de reden dat de relatieve tekst mag
+    /// bestaan. "11 min geleden" zonder tijdstip is niet na te rekenen en niet te vergelijken met
+    /// een regel in de log. Zet hier dus alleen iets als je iets zegt wat de lezer méér vertelt
+    /// dan het tijdstip, en neem het tijdstip dan zelf mee
+    /// (<c>TimeFormat.Absolute</c>).</para>
+    /// </remarks>
+    [Parameter]
+    public string? Title { get; set; }
+
     /// <summary>Wat er staat als er geen moment is.</summary>
     [Parameter]
     public string EmptyText { get; set; } = "—";
@@ -55,7 +80,15 @@ else
     [Parameter]
     public string? Class { get; set; }
 
-    /// <summary>Overige attributen. Landt op het tijdelement zelf.</summary>
+    /// <summary>
+    /// Overige attributen, zoals <c>data-testid</c>. Landt op het tijdelement zelf.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Drie attributen zijn van het component en niet van de aanroeper:</strong>
+    /// <c>title</c> (gebruik <see cref="Title"/> of <see cref="EmptyTitle"/>), <c>datetime</c> (dat
+    /// is de machineleesbare UTC-vorm en die hoort niet af te wijken van wat er staat) en
+    /// <c>class</c> (gebruik <see cref="Class"/>). Ze worden hier na de splat gezet en winnen dus.
+    /// </remarks>
     [Parameter(CaptureUnmatchedValues = true)]
     public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 }

@@ -1,0 +1,875 @@
+@* Het bewerkbare deel van het contractscherm: de contractkaart en het toegangsblok (§3.5), voor
+   een operator.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM DIT EEN EILAND IS EN GEEN BLOK IN Contract.razor
+   ────────────────────────────────────────────────────────────────────────────────────────
+   De rendermode staat op de aanroep in Contract.razor, niet hier. Dat maakt dít het eiland en
+   laat de pagina eromheen static SSR — dezelfde vorm als LogsPanel op het agentdetail. Drie
+   dingen die dit scherm nodig heeft kunnen alleen in een eiland:
+
+     1. laten zien dát er niets is gewijzigd, vóórdat er iets is ingediend;
+     2. een tweede klik op bewaren tegenhouden binnen dezelfde ronde;
+     3. een toegangsregel intrekken zonder je plek in de lijst en je scrollpositie te verliezen.
+
+   Gevolgen die het ontwerp bepalen, en dat zijn dezelfde twee als bij LogsPanel:
+
+     • Parameters worden geserialiseerd en staan dus in de paginabron. Er komt hier daarom
+       precies één string binnen — de klantslug — en die staat al in de URL. Geen viewmodel,
+       geen scope: het eerste zou de grens niet overkomen, het tweede hoort er niet over.
+     • Die string komt van de client en is niet te vertrouwen. Dit component vraagt zelf een
+       schrijfrecht aan bij de resolver, met de aangemelde gebruiker van dít circuit.
+       Autoriseren gebeurt hier opnieuw; de beslissing van de pagina is een ander renderproces
+       en reist niet mee.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
+   GELIJKTIJDIGHEID: DE ETAG KOMT VAN HET FORMULIER
+   ────────────────────────────────────────────────────────────────────────────────────────
+   _etag is de versie die op het scherm stond toen de operator begon te typen, en die gaat als
+   ContractEdit.BasedOnETag mee. Niet een verse lezing vlak vóór het schrijven: dan zou je de
+   wijziging van de ander binnenhalen en er precies overheen schrijven, en is de controle een
+   ritueel.
+
+   Bij een conflict levert de opslag het huidige document mee. Dat is het verschil tussen
+   "mislukt" en een scherm dat kan tonen wát er veranderde. Wat er dan gebeurt:
+
+     • de verschillen komen als kaart onder het formulier te staan, veld voor veld;
+     • _etag schuift op naar de versie van de ander. Een tweede klik op Bewaren legt daarmee de
+       eigen waarden alsnog vast — maar pas nadat de operator heeft gezien wat hij overschrijft,
+       en dat is precies het omgekeerde van stil overschrijven;
+     • of hij neemt de versie van de ander over, en dan is er niets verloren behalve zijn typen.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
+   WAT DIT SCHERM NIET KAN, EN DAT ZEGT
+   ────────────────────────────────────────────────────────────────────────────────────────
+   Toegang vastleggen is niet uitnodigen. De rol in Entra ID blijft handwerk bij Soratus — er is
+   precies één Graph-permissie waarmee een app app-rollen kan toekennen, die is niet tot één app
+   te beperken, en een gecompromitteerd portaal zou daarmee de tenant kunnen overnemen. Het
+   portaal krijgt hem dus niet, en heeft ook geen leesrecht om te controleren of iemand anders
+   het heeft gedaan. Daarom staat er bij elke regel "onbekend" en geen knop die belooft dat het
+   portaal de uitnodiging verstuurt. Zie ContractNotice.EntraStateUnknown en docs/infra.md. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject IContractViews Contracts
+@inject IPortalDataStore Store
+
+@if (_denied)
+{
+    <EmptyState Title="Geen toegang tot dit contract"
+                Text="De sessie is niet meer geldig of de rechten zijn gewijzigd. Laad de pagina opnieuw." />
+}
+else if (_scope is null || _view is null)
+{
+    <p class="meta">Contract en toegang worden opgehaald…</p>
+}
+else
+{
+    <div class="stack">
+        @if (_view.IsFromConfigurationOnly)
+        {
+            <p class="meta notice">
+                Deze klant staat nog alleen in de configuratie van het portaal: de eenmalige
+                migratie naar de opslag heeft voor hem nog niet gelopen. Daarom is er geen
+                wijzigingsgeschiedenis. Je eerste wijziging hier legt het klantdocument alsnog aan.
+            </p>
+        }
+
+        <FormCard Title="Contract"
+                  Mode="FieldMode.Edit"
+                  Layout="FieldLayout.Row"
+                  Dirty="HasChanges"
+                  State="_contractState"
+                  Error="@_contractError"
+                  FieldErrorCount="FieldErrors"
+                  OnSave="SaveContractAsync"
+                  SaveLabel="@(_hasContract ? "Contract bewaren" : "Contract vastleggen")"
+                  Footnote="De klant leest deze kaart als platte tekst. Het opslagpercentage op de Azure-kosten staat niet in zijn weergave (§2).">
+            <HeaderContent>
+                <span title="@OriginTitle">@Origin</span>
+            </HeaderContent>
+            <Actions>
+                @if (_conflict is not null)
+                {
+                    <ConfirmAction Label="Versie van de ander overnemen"
+                                   Question="Jouw ingevulde waarden vervangen door die van de ander?"
+                                   ConfirmLabel="Ja, overnemen"
+                                   BusyLabel="Overnemen…"
+                                   Destructive="false"
+                                   Small="false"
+                                   Title="zet het formulier op de waarden die nu in de opslag staan; wat je zelf had ingevuld gaat verloren"
+                                   OnConfirm="TakeTheirs" />
+                }
+            </Actions>
+            <ChildContent>
+                <FormField Label="Contractnummer"
+                           @bind-Value="_fields.Number"
+                           Mono="true"
+                           Placeholder="SOR-2026-003"
+                           maxlength="40" />
+
+                <FormField Label="Soort"
+                           @bind-Value="_fields.Type"
+                           Placeholder="Agent-abonnement + doorontwikkeling"
+                           maxlength="120" />
+
+                <FormField Label="Ingangsdatum"
+                           Kind="FieldKind.Date"
+                           @bind-Value="_fields.StartsOn"
+                           Hint="Een contract gaat in op een dag, niet op een tijdstip." />
+
+                @* Looptijd en opzegtermijn zijn tekst en geen aantal maanden: de interne
+                   beheerklant heeft "doorlopend" en "n.v.t.", en die passen in geen getal. *@
+                <FormField Label="Looptijd"
+                           @bind-Value="_fields.Term"
+                           Placeholder="24 maanden"
+                           maxlength="60" />
+
+                <FormField Label="Opzegtermijn"
+                           @bind-Value="_fields.NoticePeriod"
+                           Placeholder="2 maanden"
+                           maxlength="60" />
+
+                @* Number en niet Amount: een urenbundel is een aantal. Een komma of een punt
+                   mag; wat er niet doorheen komt is een scheidingsteken voor duizenden — zie
+                   ContractText.TryNumber voor waarom dat er niet doorheen mág. *@
+                <FormField Label="Urenbundel per maand"
+                           Kind="FieldKind.Number"
+                           @bind-Value="_fields.BundledHours"
+                           Unit="u/mnd"
+                           Error="@_hoursError"
+                           min="0"
+                           step="0.5" />
+
+                @* Amount en niet type="number": een Nederlandse operator typt een komma, en
+                   sommige browsers geven bij type="number" dan een lege waarde terug. Dan
+                   verdwijnt een tarief stil bij het bewaren. Zie FieldKind.Amount. *@
+                <FormField Label="Uurtarief buiten bundel"
+                           Kind="FieldKind.Amount"
+                           @bind-Value="_fields.HourlyRate"
+                           Unit="€ / uur"
+                           Error="@_rateError"
+                           Hint="@RateHint" />
+
+                <FormField Label="Indexatie"
+                           @bind-Value="_fields.Indexation"
+                           Placeholder="CBS-index per 1 januari"
+                           maxlength="120" />
+
+                <FormField Label="SLA"
+                           @bind-Value="_fields.Sla"
+                           Placeholder="Reactie 4 werkuren · herstel 1 werkdag"
+                           maxlength="160" />
+
+                <FormField Label="Contactpersoon"
+                           @bind-Value="_fields.Contact"
+                           maxlength="120" />
+
+                <FormField Label="Beheerd door"
+                           @bind-Value="_fields.ManagedBy"
+                           Placeholder="Soratus — accountteam"
+                           maxlength="120" />
+
+                <FormField Label="Opslag op Azure-kosten"
+                           Kind="FieldKind.Number"
+                           @bind-Value="_fields.Surcharge"
+                           Unit="%"
+                           Error="@_surchargeError"
+                           Hint="Alleen voor Soratus: dit veld staat niet op de weergave van de klant."
+                           min="0"
+                           max="100" />
+            </ChildContent>
+        </FormCard>
+
+        @* Alleen als de opslag een document heeft meegestuurd. Is het contract verwijderd terwijl
+           dit formulier openstond, dan is er niets om tegen af te zetten en zegt de melding boven
+           de knop wat er is gebeurd. *@
+        @if (_conflict is not null)
+        {
+            <FormCard Title="Wat er intussen is gewijzigd"
+                      Mode="FieldMode.ReadOnly"
+                      Layout="FieldLayout.Row"
+                      Footnote="@ConflictHint">
+                @if (_changes.Count == 0)
+                {
+                    <FormField Label="Velden"
+                               ReadOnlyText="Geen enkel veld is van waarde veranderd; alleen de versie is opgeschoven." />
+                }
+                else
+                {
+                    @foreach (var change in _changes)
+                    {
+                        <FormField Label="@change.Label"
+                                   ReadOnlyText="@($"was {change.Before} · nu {change.After}")" />
+                    }
+                }
+            </FormCard>
+        }
+
+        @if (_view.Access.Count == 0)
+        {
+            <EmptyState Title="Nog niemand heeft toegang"
+                        Text="Zolang hier niemand staat, kan alleen Soratus deze omgeving bekijken. Leg hieronder het eerste e-mailadres vast."
+                        Facts="NoAccessFacts"
+                        Glyph="○" />
+        }
+        else
+        {
+            <DataCard Grid="AccessColumns" Title="Toegang tot het portaal">
+                <HeaderContent>
+                    <span>@ContractText.People(_view.Access.Count)</span>
+                </HeaderContent>
+                <ChildContent>
+                    <DataRowHeader />
+                    @foreach (var row in _view.Access)
+                    {
+                        @* Geen Href op de rij: er staat een knop in. Genest interactief is
+                           ongeldige HTML en met het toetsenbord onbereikbaar; RowActions gooit
+                           een fout als de rij toch activeerbaar is. *@
+                        <DataRow>
+                            @* Wie deze toegang heeft uitgedeeld staat in de tooltip en niet in een
+                               eigen kolom: het is zelden de vraag, en een zevende kolom kost meer
+                               dan het antwoord waard is. *@
+                            <DataCell Truncate="true" title="@GrantedTitle(row)">
+                                <span class="mono-meta">@row.Email</span>
+                            </DataCell>
+
+                            <DataCell Truncate="true">@(row.Name ?? "—")</DataCell>
+
+                            <DataCell Truncate="true">@row.Role</DataCell>
+
+                            <DataCell>
+                                <span class="mono-meta" title="@ContractText.AccessStateTitle(row.EntraState)">
+                                    @ContractText.AccessState(row.EntraState)
+                                </span>
+                            </DataCell>
+
+                            <DataCell>
+                                <RelativeTime Value="row.GrantedAt"
+                                              Now="_view.GeneratedAt"
+                                              Class="mono-meta" />
+                            </DataCell>
+
+                            <DataCell>
+                                <RowActions>
+                                    @* Onomkeerbaar: het document wordt verwijderd en er blijft
+                                       geen spoor. Daarom twee klikken, met de vraag op de plek
+                                       van de knop en het e-mailadres erin. *@
+                                    <ConfirmAction Label="Intrekken"
+                                                   Question="@($"Toegang van {row.Email} intrekken?")"
+                                                   ConfirmLabel="Ja, intrekken"
+                                                   Title="verwijdert deze regel uit de portaalgegevens; de toewijzing in Entra ID blijft staan en moet met de hand weg"
+                                                   OnConfirm="@(() => RevokeAccessAsync(row))" />
+                                </RowActions>
+                            </DataCell>
+                        </DataRow>
+                    }
+                </ChildContent>
+            </DataCard>
+        }
+
+        @if (_listError is { } listError)
+        {
+            <p class="meta notice" role="alert"><span aria-hidden="true">✕</span> @listError</p>
+        }
+        else if (_listNotice is { } listNotice)
+        {
+            <p class="meta notice" role="status">@listNotice</p>
+        }
+
+        <p class="meta notice">@_view.AccessStateNotice</p>
+
+        <p class="meta notice">@_view.AccessLabelNotice</p>
+
+        <FormCard Title="Toegang vastleggen"
+                  Mode="FieldMode.Edit"
+                  Layout="FieldLayout.Stacked"
+                  State="_grantState"
+                  Error="@_grantError"
+                  FieldErrorCount="@(_emailError is null ? 0 : 1)"
+                  OnSave="GrantAccessAsync"
+                  SaveLabel="Toegang vastleggen"
+                  Footnote="Dit legt de toegang vast in de portaalgegevens. De uitnodiging in Entra ID is een aparte, handmatige stap bij Soratus; zonder die stap komt deze persoon het portaal niet in.">
+            <FormField Label="E-mailadres"
+                       Kind="FieldKind.Email"
+                       @bind-Value="Email"
+                       Required="true"
+                       Mono="true"
+                       Placeholder="planning@klant.nl"
+                       Error="@_emailError"
+                       Autocomplete="off"
+                       maxlength="254" />
+
+            <FormField Label="Naam"
+                       @bind-Value="_name"
+                       Hint="Voor het overzicht: wie is dit?"
+                       maxlength="120" />
+
+            @* Geen Placeholder, dus geen lege eerste optie: er staat altijd een waarde. De
+               standaard is Lezer en niet de eerste uit de lijst — wie niets kiest hoort niet
+               stil "Beheerder klant" te worden. *@
+            <FormField Label="Aanduiding"
+                       Kind="FieldKind.Select"
+                       Options="_designations"
+                       @bind-Value="_designation"
+                       Hint="Geen bevoegdheid maar een aanduiding van wie je belt: beide geven hetzelfde leesrecht." />
+        </FormCard>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// De kolomsporen van het toegangsoverzicht: adres, naam, aanduiding, of aanmelden werkt,
+    /// wanneer het is vastgelegd, en de actie.
+    /// </summary>
+    /// <remarks>
+    /// De derde kolom heet niet "Rol". Er zijn twee waarden en ze geven hetzelfde recht — lezen —
+    /// want alleen Soratus deelt toegang uit; "Rol" zou een bevoegdheid beloven die niet bestaat.
+    /// De actiekolom staat op <c>Labelled: false</c>: een kolom zonder kop heeft geen label nodig,
+    /// en onder 768px staat "Acties Intrekken" alleen in de weg.
+    /// </remarks>
+    private static readonly RowGrid AccessColumns = new(
+        new GridColumn("E-mailadres", "minmax(180px, 1.5fr)", Labelled: false),
+        new GridColumn("Naam", "minmax(110px, 1fr)"),
+        new GridColumn("Aanduiding", "132px"),
+        new GridColumn("Aanmelden", "88px"),
+        new GridColumn("Vastgelegd", "96px", Align: CellAlign.End),
+        new GridColumn(string.Empty, "108px", Labelled: false, Align: CellAlign.End));
+
+    private static readonly string[] NoAccessFacts = ["toegangen: 0"];
+
+    /// <summary>Wat er in de contractkaart staat, als tekst zoals de velden het leveren.</summary>
+    /// <remarks>
+    /// <para>Een record met settable properties: settable omdat <c>@bind-Value</c> erop schrijft,
+    /// een record omdat de gelijkheid over alle velden dan gegenereerd is. Dat laatste is de hele
+    /// dirty-controle — <c>_fields != _original</c> — en het scheelt twaalf vergelijkingen die
+    /// iemand bij het dertiende veld vergeet aan te vullen.</para>
+    ///
+    /// <para>Alles is tekst en geen <c>decimal</c> of <c>DateOnly</c>. Dat is wat een invoerveld
+    /// oplevert, en het is de enige vorm waarin "de operator heeft het veld leeggemaakt" te
+    /// onderscheiden is van "er staat nul". Omzetten gebeurt bij het bewaren, op één plek.</para>
+    /// </remarks>
+    private sealed record ContractFields
+    {
+        public string? Number { get; set; }
+
+        public string? Type { get; set; }
+
+        public string? StartsOn { get; set; }
+
+        public string? Term { get; set; }
+
+        public string? NoticePeriod { get; set; }
+
+        public string? BundledHours { get; set; }
+
+        public string? HourlyRate { get; set; }
+
+        public string? Indexation { get; set; }
+
+        public string? Sla { get; set; }
+
+        public string? Contact { get; set; }
+
+        public string? ManagedBy { get; set; }
+
+        public string? Surcharge { get; set; }
+    }
+
+    /// <summary>Eén veld dat door iemand anders is veranderd terwijl dit formulier openstond.</summary>
+    private sealed record FieldChange(string Label, string Before, string After);
+
+    private CustomerWriteScope? _scope;
+    private OperatorContractView? _view;
+    private bool _denied;
+
+    private ContractFields _fields = new();
+    private ContractFields _original = new();
+
+    /// <summary>
+    /// De versie waarop dit formulier is gebaseerd, of <c>null</c> als er nog geen contract is.
+    /// </summary>
+    /// <remarks>
+    /// <c>null</c> betekent "dit contract wordt aangemaakt" en niet "sla de controle over": ook
+    /// dan levert een ander die net eerder was een conflict op.
+    /// </remarks>
+    private string? _etag;
+
+    private bool _hasContract;
+    private DateTimeOffset? _changedAt;
+    private string? _changedBy;
+
+    private FormSaveState _contractState = FormSaveState.Idle;
+    private string? _contractError;
+    private string? _hoursError;
+    private string? _rateError;
+    private string? _surchargeError;
+
+    private ContractDocument? _conflict;
+    private IReadOnlyList<FieldChange> _changes = [];
+
+    private string? _email;
+    private string? _name;
+    private string _designation = PortalAccessRoles.Reader;
+    private FieldOption[] _designations = [];
+    private FormSaveState _grantState = FormSaveState.Idle;
+    private string? _grantError;
+    private string? _emailError;
+
+    private string? _listNotice;
+    private string? _listError;
+
+    /// <summary>De slug van de klant. Komt uit de route van de pagina.</summary>
+    [Parameter]
+    [EditorRequired]
+    public string CustomerId { get; set; } = default!;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private bool HasChanges => _fields != _original;
+
+    /// <summary>
+    /// Het e-mailadres van het toegangsformulier.
+    /// </summary>
+    /// <remarks>
+    /// Een eigenschap en geen veld, om één reden: bij het typen van een nieuw adres hoort de
+    /// uitkomst van de vorige poging te verdwijnen. De contractkaart heeft dat niet nodig — die
+    /// draagt <c>Dirty</c>, en FormCard laat "Nog niet bewaard" dan vóór "✓ Bewaard" gaan. Dit
+    /// formulier legt elke keer iets nieuws vast en heeft geen dirty-stand, dus zou "✓ Bewaard"
+    /// naast een half getypt adres blijven staan.
+    /// </remarks>
+    private string? Email
+    {
+        get => _email;
+        set
+        {
+            _email = value;
+
+            if (_grantState is FormSaveState.Saved or FormSaveState.Failed)
+            {
+                _grantState = FormSaveState.Idle;
+                _grantError = null;
+                _emailError = null;
+                _listNotice = null;
+                _listError = null;
+            }
+        }
+    }
+
+    private int FieldErrors =>
+        (_hoursError is null ? 0 : 1) + (_rateError is null ? 0 : 1) + (_surchargeError is null ? 0 : 1);
+
+    /// <summary>De regel rechts in de kaartkop: waar dit contract vandaan komt.</summary>
+    private string Origin
+    {
+        get
+        {
+            if (!_hasContract)
+            {
+                return "nog niet vastgelegd";
+            }
+
+            return _changedAt is { } moment
+                ? $"gewijzigd {TimeFormat.Clock(moment)}{By(_changedBy)}"
+                : "vastgelegd";
+        }
+    }
+
+    private string OriginTitle =>
+        _changedAt is { } moment
+            ? TimeFormat.Absolute(moment)
+            : "er is nog geen contractdocument voor deze klant";
+
+    /// <summary>
+    /// De uitleg onder het tariefveld. Voor de interne beheerklant staat er wat de klantweergave
+    /// van dit bedrag maakt, zodat een operator niet denkt dat het wordt doorbelast.
+    /// </summary>
+    /// <remarks>
+    /// Hier stond "Leeg of nul betekent: geen tarief buiten de bundel." Dat was waar zolang het veld
+    /// een <c>decimal</c> was en leeg als nul werd bewaard, en het is nu onwaar: leeg en nul zijn
+    /// twee waarden en de contractkaart van de klant zegt er twee verschillende dingen over. Een
+    /// uitleg die de oude vorm beschrijft is erger dan geen uitleg, want de operator vult op grond
+    /// van deze regel iets in.
+    /// </remarks>
+    private string RateHint =>
+        _view?.IsInternal == true
+            ? "Interne beheerklant: de contractkaart leest dit als \"intern — niet doorbelast\"."
+            : "Leeg betekent: nog geen tarief afgesproken; de kaart laat het veld dan leeg. Nul "
+              + "betekent: uren buiten de bundel worden niet doorbelast.";
+
+    /// <summary>
+    /// Wat de operator met dit conflict kan doen. Beide uitwegen staan er, want een melding zonder
+    /// uitweg is alleen een mededeling.
+    /// </summary>
+    private const string ConflictHint =
+        "Het formulier staat nu op de versie van de ander. Klik Bewaren om jouw waarden alsnog "
+        + "vast te leggen — dan overschrijf je wat hier onder \"nu\" staat — of neem zijn versie "
+        + "over met de knop bij het formulier.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            _denied = true;
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Opnieuw autoriseren, met de gebruiker van dit circuit. De pagina heeft dit al gedaan,
+        // maar dat was een ander renderproces en die beslissing reist niet mee.
+        _scope = await Scopes.ResolveWriteAsync(user, CustomerId);
+
+        if (_scope is null)
+        {
+            _denied = true;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Haalt het contract en de toegangen op en zet het formulier op wat er staat.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        _view = await Contracts.BuildContractAsync(_scope!);
+
+        _fields = From(_view);
+        _original = _fields with { };
+        _etag = _view.ContractETag;
+        _hasContract = _view.HasContract;
+        _changedAt = _view.ChangedAt;
+        _changedBy = _view.ChangedBy;
+        _designations = [.. _view.Roles.Select(role => new FieldOption(role))];
+    }
+
+    /// <summary>
+    /// Haalt alleen het overzicht opnieuw op, zonder het formulier aan te raken.
+    /// </summary>
+    /// <remarks>
+    /// Na het geven of intrekken van toegang. Bewust niet het formulier meeverversen: een operator
+    /// die net een adres heeft toegevoegd en halverwege het contract was, hoort zijn invoer niet
+    /// kwijt te raken. Zijn etag blijft dus ook staan — verandert het contract intussen, dan
+    /// merkt hij dat bij het bewaren, met het huidige document erbij.
+    /// </remarks>
+    private async Task ReloadAccessAsync()
+    {
+        _view = await Contracts.BuildContractAsync(_scope!);
+        _designations = [.. _view.Roles.Select(role => new FieldOption(role))];
+    }
+
+    private async Task SaveContractAsync()
+    {
+        _contractError = null;
+        _hoursError = null;
+        _rateError = null;
+        _surchargeError = null;
+
+        // Parsen hoort bij het scherm: alleen hier is bekend of "8" acht uur of acht procent is.
+        // Wat níet hier hoort is de vraag of de waarde mag — dat doet ContractEdit.Validate, en
+        // de store roept die aan. Eén definitie van "klopt dit".
+        if (!ContractText.TryNumber(_fields.BundledHours, out var hours))
+        {
+            _hoursError = ContractText.NumberError("8");
+        }
+
+        if (!ContractText.TryNumber(_fields.HourlyRate, out var rate))
+        {
+            _rateError = ContractText.NumberError("125,50");
+        }
+
+        if (!ContractText.TryNumber(_fields.Surcharge, out var surcharge))
+        {
+            _surchargeError = ContractText.NumberError("8");
+        }
+
+        if (FieldErrors > 0)
+        {
+            _contractState = FormSaveState.Failed;
+            return;
+        }
+
+        var edit = new ContractEdit
+        {
+            Number = NullIfBlank(_fields.Number),
+            Type = NullIfBlank(_fields.Type),
+            StartsOn = NullIfBlank(_fields.StartsOn),
+            Term = NullIfBlank(_fields.Term),
+            NoticePeriod = NullIfBlank(_fields.NoticePeriod),
+            Sla = NullIfBlank(_fields.Sla),
+            BundledHours = hours,
+            HourlyRate = rate,
+            Indexation = NullIfBlank(_fields.Indexation),
+            Contact = NullIfBlank(_fields.Contact),
+            ManagedBy = NullIfBlank(_fields.ManagedBy),
+            AzureSurchargePercentage = surcharge,
+            BasedOnETag = _etag,
+        };
+
+        _contractState = FormSaveState.Saving;
+
+        var result = await Store.SaveContractAsync(_scope!, edit);
+
+        switch (result.Status)
+        {
+            case PortalWriteStatus.Saved:
+                var document = result.Value!;
+
+                _etag = document.ETag;
+                _hasContract = true;
+                _changedAt = document.ChangedAt;
+                _changedBy = document.ChangedBy;
+
+                // De opslag is nu de bron: wat daar staat komt terug in het formulier, getrimd en
+                // genormaliseerd. Daarmee is "geen wijzigingen" ook waar.
+                _fields = From(document);
+                _original = _fields with { };
+                _conflict = null;
+                _changes = [];
+                _contractState = FormSaveState.Saved;
+                break;
+
+            case PortalWriteStatus.Conflict:
+                _conflict = result.Current;
+                _changes = _conflict is null ? [] : Changes(_conflict);
+
+                // De etag schuift op naar die van de ander, zodat een tweede klik op Bewaren de
+                // eigen waarden alsnog vastlegt. Dat is geen stil overschrijven: de verschillen
+                // staan er dan onder, veld voor veld.
+                _etag = _conflict?.ETag;
+                _hasContract = _conflict is not null;
+                _changedAt = _conflict?.ChangedAt;
+                _changedBy = _conflict?.ChangedBy;
+                _contractError = result.Message;
+                _contractState = FormSaveState.Failed;
+                break;
+
+            default:
+                _contractError = result.Message;
+                _contractState = FormSaveState.Failed;
+                break;
+        }
+    }
+
+    /// <summary>Zet het formulier op de waarden die nu in de opslag staan.</summary>
+    private void TakeTheirs()
+    {
+        _fields = _conflict is null ? new ContractFields() : From(_conflict);
+        _original = _fields with { };
+        _etag = _conflict?.ETag;
+        _hasContract = _conflict is not null;
+        _conflict = null;
+        _changes = [];
+        _contractError = null;
+        _contractState = FormSaveState.Idle;
+    }
+
+    private async Task GrantAccessAsync()
+    {
+        _grantError = null;
+        _emailError = null;
+        _listNotice = null;
+        _listError = null;
+
+        var email = PortalEmail.Normalize(_email);
+
+        // Eerst de controle die bij één veld hoort, zodat de melding onder dat veld komt en niet
+        // als blok boven de knop. Dezelfde functie die de schrijfkant gebruikt — een tweede
+        // definitie van "geldig adres" zou hier iets doorlaten dat de opslag weigert.
+        if (PortalEmail.Validate(email) is { } emailError)
+        {
+            _emailError = emailError;
+            _grantState = FormSaveState.Failed;
+            return;
+        }
+
+        var grant = new AccessGrant
+        {
+            Email = email,
+            Name = NullIfBlank(_name),
+            Role = _designation,
+        };
+
+        _grantState = FormSaveState.Saving;
+
+        var result = await Store.GrantAccessAsync(_scope!, grant);
+
+        if (result.IsSaved)
+        {
+            _email = null;
+            _name = null;
+            _designation = PortalAccessRoles.Reader;
+            _grantState = FormSaveState.Saved;
+            _listNotice =
+                $"{email} staat in de lijst. Zolang de uitnodiging in Entra ID niet is gedaan, "
+                + "komt deze persoon nog niet binnen.";
+
+            await ReloadAccessAsync();
+            return;
+        }
+
+        _grantError = result.Message;
+        _grantState = FormSaveState.Failed;
+
+        // Bij een conflict — dit adres had al toegang — is de lijst op het scherm niet meer waar.
+        if (result.Status == PortalWriteStatus.Conflict)
+        {
+            await ReloadAccessAsync();
+        }
+    }
+
+    private async Task RevokeAccessAsync(OperatorAccessRow row)
+    {
+        _listNotice = null;
+        _listError = null;
+
+        // De etag van de rij zoals hij op het scherm stond. Zo wordt er niets verwijderd wat
+        // intussen is veranderd.
+        var result = await Store.RevokeAccessAsync(_scope!, row.Email, row.ETag);
+
+        if (result.IsSaved)
+        {
+            _listNotice =
+                $"{row.Email} staat niet meer in de lijst. De toewijzing in Entra ID blijft "
+                + "staan tot iemand hem daar intrekt.";
+        }
+        else
+        {
+            _listError = result.Message;
+        }
+
+        // Ook na een mislukte poging: de lijst hoort te tonen wat er nú staat.
+        await ReloadAccessAsync();
+    }
+
+    /// <summary>De contractvelden zoals ze uit het viewmodel komen.</summary>
+    private static ContractFields From(OperatorContractView view) => Fields(
+        view.Number,
+        view.Type,
+        ContractText.IsoDate(view.StartsOn),
+        view.Term,
+        view.NoticePeriod,
+        view.Sla,
+        view.BundledHours,
+        view.HourlyRate,
+        view.Indexation,
+        view.Contact,
+        view.ManagedBy,
+        view.AzureSurchargePercentage);
+
+    /// <summary>De contractvelden zoals ze uit een document komen.</summary>
+    /// <remarks>
+    /// De ingangsdatum gaat ongewijzigd door: in het document staat hij al als <c>yyyy-MM-dd</c>,
+    /// en dat is precies wat een datumveld wil hebben.
+    /// </remarks>
+    private static ContractFields From(ContractDocument document) => Fields(
+        document.Number,
+        document.Type,
+        document.StartsOn,
+        document.Term,
+        document.NoticePeriod,
+        document.Sla,
+        document.BundledHours,
+        document.HourlyRate,
+        document.Indexation,
+        document.Contact,
+        document.ManagedBy,
+        document.AzureSurchargePercentage);
+
+    /// <summary>
+    /// De enige plek waar waarden in formuliertekst worden omgezet.
+    /// </summary>
+    /// <remarks>
+    /// <para>Twee bronnen — het viewmodel bij het laden, het document na een conflict of een gelukte
+    /// schrijfactie — en één omzetting. Zouden ze elk hun eigen opmaak hebben, dan staat er na een
+    /// conflict "125,50" tegenover "125.5" en meldt het scherm een wijziging die niemand heeft
+    /// gemaakt.</para>
+    ///
+    /// <para>De drie bedragen zijn <c>decimal?</c>. <c>ContractText.Editable</c> maakt van
+    /// <c>null</c> een leeg veld en van nul een "0" — niet allebei leeg, want dan zou het openen en
+    /// meteen bewaren van een contract met een afgesproken nul die nul stil in "niet vastgelegd"
+    /// veranderen, en zou <see cref="Changes"/> daar niets over melden.</para>
+    /// </remarks>
+    private static ContractFields Fields(
+        string? number,
+        string? type,
+        string? startsOn,
+        string? term,
+        string? noticePeriod,
+        string? sla,
+        decimal? bundledHours,
+        decimal? hourlyRate,
+        string? indexation,
+        string? contact,
+        string? managedBy,
+        decimal? surcharge) => new()
+    {
+        Number = number,
+        Type = type,
+        StartsOn = startsOn,
+        Term = term,
+        NoticePeriod = noticePeriod,
+        Sla = sla,
+        BundledHours = ContractText.Editable(bundledHours),
+        HourlyRate = ContractText.Editable(hourlyRate),
+        Indexation = indexation,
+        Contact = contact,
+        ManagedBy = managedBy,
+        Surcharge = ContractText.Editable(surcharge),
+    };
+
+    /// <summary>
+    /// Welke velden er zijn veranderd sinds dit formulier werd opgebouwd.
+    /// </summary>
+    /// <param name="document">Het document dat de opslag bij het conflict meestuurde.</param>
+    /// <returns>Per gewijzigd veld het label, de oude en de nieuwe waarde.</returns>
+    /// <remarks>
+    /// De vergelijking gaat tegen <c>_original</c> en niet tegen wat de operator net heeft
+    /// getypt. "Wat is er intussen veranderd" is een vraag over de ander, niet over jezelf.
+    /// </remarks>
+    private IReadOnlyList<FieldChange> Changes(ContractDocument document)
+    {
+        var current = From(document);
+        var lijst = new List<FieldChange>(12);
+
+        Compare("Contractnummer", _original.Number, current.Number);
+        Compare("Soort", _original.Type, current.Type);
+        Compare("Ingangsdatum", _original.StartsOn, current.StartsOn);
+        Compare("Looptijd", _original.Term, current.Term);
+        Compare("Opzegtermijn", _original.NoticePeriod, current.NoticePeriod);
+        Compare("Urenbundel per maand", _original.BundledHours, current.BundledHours);
+        Compare("Uurtarief buiten bundel", _original.HourlyRate, current.HourlyRate);
+        Compare("Indexatie", _original.Indexation, current.Indexation);
+        Compare("SLA", _original.Sla, current.Sla);
+        Compare("Contactpersoon", _original.Contact, current.Contact);
+        Compare("Beheerd door", _original.ManagedBy, current.ManagedBy);
+        Compare("Opslag op Azure-kosten", _original.Surcharge, current.Surcharge);
+
+        return lijst;
+
+        void Compare(string label, string? before, string? after)
+        {
+            if (!string.Equals(before ?? string.Empty, after ?? string.Empty, StringComparison.Ordinal))
+            {
+                lijst.Add(new FieldChange(label, Readable(before), Readable(after)));
+            }
+        }
+    }
+
+    /// <summary>Een lege waarde als woord, want een streepje in een zin leest als een gedachtestreep.</summary>
+    private static string Readable(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "leeg" : value;
+
+    /// <summary>Witruimte wordt <c>null</c>: een leeg veld is geen lege tekst maar geen waarde.</summary>
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string By(string? actor) =>
+        string.IsNullOrWhiteSpace(actor) ? string.Empty : $" door {actor}";
+
+    /// <summary>De tooltip bij de kolom "Vastgelegd": wanneer, en door welke operator.</summary>
+    private static string GrantedTitle(OperatorAccessRow row) =>
+        $"vastgelegd {TimeFormat.Absolute(row.GrantedAt)}{By(row.GrantedBy)}";
+}

@@ -398,7 +398,15 @@ internal sealed class CosmosAgentTelemetryStore(
     }
 
     /// <summary>Laat de jongste groep regels met dezelfde tijdstempel vallen.</summary>
-    private static void TrimYoungestGroup(List<LogRecord> lines)
+    /// <remarks>
+    /// <c>internal</c> en niet <c>private</c>: dit is de grensregel van de live tail — valt de
+    /// paginagrens midden in een groep regels met dezelfde tijdstempel, dan blijft die groep liggen
+    /// tot hij compleet is — en dat is pure rekenkunde die op de grens fout gaat en dus een test
+    /// hoort te hebben. Zichtbaar voor het testproject via de <c>InternalsVisibleTo</c> in
+    /// <c>Soratus.Portal.csproj</c>, en niet via reflectie: dan wordt een hernoeming een bouwfout in
+    /// plaats van een mislukte test.
+    /// </remarks>
+    internal static void TrimYoungestGroup(List<LogRecord> lines)
     {
         var youngest = lines[^1].Timestamp;
         var keep = lines.Count;

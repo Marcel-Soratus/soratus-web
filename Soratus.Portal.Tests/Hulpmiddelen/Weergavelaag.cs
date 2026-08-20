@@ -96,6 +96,44 @@ internal static class Weergavelaag
                 "in Testprincipals nog klopt.");
     }
 
+    /// <summary>Het schrijfrecht van de operator op <c>acme-logistiek</c>.</summary>
+    /// <param name="klanten">De klantenlijst, of <c>null</c> voor de standaardlijst.</param>
+    /// <returns>De scope.</returns>
+    /// <remarks>
+    /// Dit is het bewijs waarmee het contractscherm zowel leest als schrijft. Let op dat het
+    /// <em>niet</em> aan een ingerichte telemetrie-opslag hangt: de klant zonder opslag is juist de
+    /// klant wiens contract je aan het invullen bent. Zie <see cref="CustomerWriteScope"/>.
+    /// </remarks>
+    public static async Task<CustomerWriteScope> Schrijfscope(
+        IEnumerable<CustomerRecord>? klanten = null)
+    {
+        var resolver = Autorisatiebron.Resolver(
+            klanten ?? Autorisatiebron.Standaard(),
+            Autorisatiebron.StandaardEndpoint);
+
+        return await resolver.ResolveWriteAsync(Testprincipals.Operator(), "acme-logistiek")
+            ?? throw new InvalidOperationException(
+                "De testoperator kreeg geen schrijfrecht op acme-logistiek. Controleer of het " +
+                "rolclaim in Testprincipals nog klopt.");
+    }
+
+    /// <summary>Het schrijfrecht op de portaalgegevens, zonder één klant.</summary>
+    /// <param name="klanten">De klantenlijst, of <c>null</c> voor de standaardlijst.</param>
+    /// <returns>De scope.</returns>
+    /// <remarks>Voor het aanmaken van een klant: die bestaat nog niet.</remarks>
+    public static async Task<PortalWriteScope> Portaalschrijfscope(
+        IEnumerable<CustomerRecord>? klanten = null)
+    {
+        var resolver = Autorisatiebron.Resolver(
+            klanten ?? Autorisatiebron.Standaard(),
+            Autorisatiebron.StandaardEndpoint);
+
+        return await resolver.ResolveWriteAsync(Testprincipals.Operator())
+            ?? throw new InvalidOperationException(
+                "De testoperator kreeg geen schrijfrecht op de portaalgegevens. Controleer of het " +
+                "rolclaim in Testprincipals nog klopt.");
+    }
+
     private static object Bouw(Vastetelemetriestore store, IEnumerable<CustomerRecord>? klanten)
     {
         ArgumentNullException.ThrowIfNull(store);

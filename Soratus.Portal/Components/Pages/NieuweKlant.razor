@@ -1,0 +1,421 @@
+@page "/klanten/nieuw"
+@attribute [Authorize(Policy = PortalPolicies.Operator)]
+
+@* Klantbeheer: een nieuwe klant aanmaken (§3.9).
+
+   Operator-only. Het beleid staat op de pagina en niet in de markup: een klantgebruiker heeft
+   hier niets te zoeken, en dan hoort de hele pagina dicht te zitten in plaats van dat er
+   blokken wegvallen. In fase 0 stond de knop "Nieuwe klant" bewust niet op het overzicht omdat
+   hij niets kon doen; dit is wat hij nu opent.
+
+   STATIC SSR MET EEN ECHTE POST, EN GEEN EILAND
+
+   Eén formulier, één schrijfactie. Dit formulier heeft geen enkele afhankelijkheid tussen
+   velden, wordt per klant precies één keer ingevuld, en een volledige POST met controle aan de
+   serverkant is daar de eenvoudigste en meest robuuste vorm: geen circuit, geen
+   serialisatiegrens, en het werkt zonder JavaScript. EditForm zet zelf de antiforgery-token —
+   zie de toelichting in FormCard.
+
+   Dat is ook de reden dat de drie toegangsregels vast zijn en er geen "+ regel"-knop staat: zo'n
+   knop kan zonder eiland niet bestaan, en een knop die niets doet is verboden. Wat er in plaats
+   daarvan staat is de grens zelf, als voetregel: meer mensen voeg je toe op het contractscherm.
+
+   ÉÉN SCHRIJFACTIE, EN DAAROM ÉÉN KAART
+
+   Klant, contract en toegangen gaan als één transactionele batch naar Cosmos — ze delen de
+   partitiesleutel, en binnen één partitiesleutel schrijft Cosmos alles of niets. Er bestaat dus
+   geen halve klant. Dat is ook waarom dit één kaart met één knop is en niet drie kaarten: drie
+   kaarten zijn drie formulieren en drie POSTs, en dan is de halve klant terug.
+
+   DE PAGETITLE STAAT BINNEN DE ROLCONTROLE
+
+   Bewust, en het is geen stijlkeuze. "Nieuwe klant" is een woord dat een klantgebruiker nergens
+   mag zien (§2), en het zichtbaarheidsvangnet in de tests kijkt naar de gerenderde markup van
+   elke pagina. Rendert deze pagina voor een klant helemaal niets — ook geen titel — dan is er
+   ook niets om per ongeluk te laten lekken. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject IPortalDataStore Store
+@inject NavigationManager Navigation
+
+@if (_write is not null)
+{
+    <PageTitle>Nieuwe klant · Agent Portal</PageTitle>
+
+    <div class="toolbar">
+        <a class="btn btn--small" href="/overzicht"><span class="mono" aria-hidden="true">←</span>Alle klanten</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title">Nieuwe klant</h1>
+        <span class="page-meta">klant · contract · toegang</span>
+    </div>
+
+    <div class="stack">
+        <p class="meta notice">
+            Klant, contract en toegangen worden in één schrijfactie vastgelegd: alles of niets, er
+            bestaat geen halve klant. Wat dit formulier <strong>niet</strong> doet: de Azure-omgeving
+            aanmaken en de mensen hieronder in Entra ID uitnodigen. Die twee stappen blijven
+            handwerk bij Soratus, en zonder de tweede komt er van deze klant nog niemand binnen.
+        </p>
+
+        <FormCard Title="Nieuwe klant"
+                  Mode="FieldMode.Edit"
+                  Layout="FieldLayout.Stacked"
+                  Model="Form"
+                  FormName="nieuwe-klant"
+                  State="_state"
+                  Error="@_error"
+                  FieldErrorCount="_fieldErrors.Count"
+                  OnSave="CreateAsync"
+                  SaveLabel="Klant aanmaken"
+                  SavingLabel="Aanmaken…"
+                  Footnote="Een nieuwe klant begint zonder agents: op zijn agentlijst staat de lege staat tot Soratus de eerste uitrolt. Meer dan drie mensen toegang geven kan daarna op het contractscherm van deze klant.">
+            <HeaderContent>
+                <span>§3.9 · alle velden</span>
+            </HeaderContent>
+            <Actions>
+                @* Alleen bij een botsing op de slug: dan zegt de melding "open de bestaande
+                   klant", en dan hoort dat één klik te zijn in plaats van een zoektocht. *@
+                @if (_existing is { } existing)
+                {
+                    <a class="btn btn--small" href="@ContractPath(existing.CustomerId)">
+                        Open @existing.Name
+                    </a>
+                }
+            </Actions>
+            <ChildContent>
+                <h2 class="colhead">Klant</h2>
+
+                @* De slug is een veld en geen afleiding uit de naam. De agents van deze klant
+                   publiceren hun telemetrie onder deze tekenreeks; leiden we hem af, dan krijgen
+                   we een klant die bestaat en waarvan de agents onvindbaar zijn. Hij is ook niet
+                   te wijzigen na het aanmaken — dat staat in de hint, want het is nu het moment
+                   waarop het uitmaakt. *@
+                <FormField Label="Klant-id"
+                           Name="@FieldName(nameof(Form.CustomerId))"
+                           Value="@Form.CustomerId"
+                           Required="true"
+                           Mono="true"
+                           Placeholder="bakker"
+                           Error="@Error(nameof(Form.CustomerId))"
+                           Hint="Kleine letters, cijfers en koppelstreepjes. Dit is de slug in de URL én de customerId waaronder de agents van deze klant publiceren — hij moet gelijk zijn aan wat in hun configuratie staat, en is naderhand niet meer te wijzigen."
+                           maxlength="40" />
+
+                <FormField Label="Klantnaam"
+                           Name="@FieldName(nameof(Form.Name))"
+                           Value="@Form.Name"
+                           Required="true"
+                           Placeholder="Bakker Logistiek"
+                           Hint="Zoals de naam op het scherm hoort te staan."
+                           maxlength="120" />
+
+                <FormField Label="Soort omgeving"
+                           Kind="FieldKind.Select"
+                           Options="Kinds"
+                           Name="@FieldName(nameof(Form.EnvironmentKind))"
+                           Value="@Form.EnvironmentKind"
+                           Hint="De interne beheeromgeving draait onze eigen agents en wordt niet doorbelast (§4)." />
+
+                <FormField Label="Omgeving"
+                           Name="@FieldName(nameof(Form.Environment))"
+                           Value="@Form.Environment"
+                           Placeholder="West-Europa"
+                           Hint="De korte aanduiding. Dit is het enige omgevingsveld dat de klant zelf te zien krijgt." />
+
+                <FormField Label="Subscription en resource group"
+                           Name="@FieldName(nameof(Form.EnvironmentDetail))"
+                           Value="@Form.EnvironmentDetail"
+                           Mono="true"
+                           Placeholder="sub-77b2e0 · rg-soratus-bakker"
+                           Hint="Alleen voor Soratus: infrastructuurdetails zijn operator-only (§2)." />
+
+                <h2 class="colhead">Telemetrie</h2>
+
+                @* Staat niet in de veldenlijst van §3.9 en hoort er wel: de acceptatie van fase 2
+                   is dat een nieuwe klant volledig zonder database-actie kan worden ingericht. Een
+                   klant met zijn eigen Cosmos-account is anders alleen aan te sluiten door de
+                   configuratie aan te passen en het portaal opnieuw uit te rollen. *@
+                <FormField Label="Cosmos-endpoint"
+                           Name="@FieldName(nameof(Form.TelemetryEndpoint))"
+                           Value="@Form.TelemetryEndpoint"
+                           Mono="true"
+                           Placeholder="https://cosmos-soratus-bakker.documents.azure.com:443/"
+                           Hint="Leeg laten voor het standaardaccount. Vul dit alleen als deze klant zijn eigen Cosmos-account heeft; zolang er niets staat is er geen telemetrie om te lezen en staat de klant op het overzicht als 'status onbekend'." />
+
+                <FormField Label="Databasenaam"
+                           Name="@FieldName(nameof(Form.TelemetryDatabase))"
+                           Value="@Form.TelemetryDatabase"
+                           Mono="true"
+                           Hint="Leeg laten voor de standaardnaam." />
+
+                <h2 class="colhead">Contract</h2>
+
+                @* Niets hieronder is verplicht. Een klant in onboarding heeft nog geen
+                   contractnummer, en een verplicht veld levert dan een verzonnen nummer op — dat
+                   is erger dan een streepje op de kaart. Blijft alles leeg, dan wordt er geen
+                   contractdocument aangemaakt en zegt het contractscherm dat er nog niets is. *@
+                <FormField Label="Contractnummer"
+                           Name="@FieldName(nameof(Form.ContractNumber))"
+                           Value="@Form.ContractNumber"
+                           Mono="true"
+                           Placeholder="SOR-2026-003"
+                           maxlength="40" />
+
+                <FormField Label="Soort contract"
+                           Name="@FieldName(nameof(Form.ContractType))"
+                           Value="@Form.ContractType"
+                           Placeholder="Agent-abonnement + doorontwikkeling"
+                           maxlength="120" />
+
+                <FormField Label="Ingangsdatum"
+                           Kind="FieldKind.Date"
+                           Name="@FieldName(nameof(Form.StartsOn))"
+                           Value="@Form.StartsOn" />
+
+                <FormField Label="Looptijd"
+                           Name="@FieldName(nameof(Form.Term))"
+                           Value="@Form.Term"
+                           Placeholder="24 maanden"
+                           Hint="Tekst en geen aantal maanden: de interne beheeromgeving loopt 'doorlopend'."
+                           maxlength="60" />
+
+                <FormField Label="Opzegtermijn"
+                           Name="@FieldName(nameof(Form.NoticePeriod))"
+                           Value="@Form.NoticePeriod"
+                           Placeholder="2 maanden"
+                           maxlength="60" />
+
+                <FormField Label="Urenbundel per maand"
+                           Kind="FieldKind.Number"
+                           Name="@FieldName(nameof(Form.BundledHours))"
+                           Value="@Form.BundledHours"
+                           Unit="u/mnd"
+                           Error="@Error(nameof(Form.BundledHours))"
+                           min="0"
+                           step="0.5" />
+
+                <FormField Label="Uurtarief buiten bundel"
+                           Kind="FieldKind.Amount"
+                           Name="@FieldName(nameof(Form.HourlyRate))"
+                           Value="@Form.HourlyRate"
+                           Unit="€ / uur"
+                           Error="@Error(nameof(Form.HourlyRate))" />
+
+                <FormField Label="Indexatie"
+                           Name="@FieldName(nameof(Form.Indexation))"
+                           Value="@Form.Indexation"
+                           Placeholder="CBS-index per 1 januari"
+                           maxlength="120" />
+
+                <FormField Label="SLA"
+                           Name="@FieldName(nameof(Form.Sla))"
+                           Value="@Form.Sla"
+                           Placeholder="Reactie 4 werkuren · herstel 1 werkdag"
+                           maxlength="160" />
+
+                <FormField Label="Contactpersoon"
+                           Name="@FieldName(nameof(Form.Contact))"
+                           Value="@Form.Contact"
+                           maxlength="120" />
+
+                <FormField Label="Beheerd door"
+                           Name="@FieldName(nameof(Form.ManagedBy))"
+                           Value="@Form.ManagedBy"
+                           Placeholder="Soratus — accountteam"
+                           maxlength="120" />
+
+                <FormField Label="Opslag op Azure-kosten"
+                           Kind="FieldKind.Number"
+                           Name="@FieldName(nameof(Form.AzureSurcharge))"
+                           Value="@Form.AzureSurcharge"
+                           Unit="%"
+                           Error="@Error(nameof(Form.AzureSurcharge))"
+                           Hint="Alleen voor Soratus: dit percentage staat niet op de contractkaart van de klant (§2)."
+                           min="0"
+                           max="100" />
+
+                <h2 class="colhead">Toegang</h2>
+
+                @* Drie vaste regels. Een lege regel wordt overgeslagen; een naam zonder adres is
+                   een melding en geen stilte, want dat is een vergeten veld en geen keuze. De
+                   labels dragen het regelnummer: drie keer "E-mailadres" onder elkaar is voor een
+                   schermlezer drie keer hetzelfde veld. *@
+                @for (var number = 1; number <= NewCustomerForm.AccessRowCount; number++)
+                {
+                    var row = Form.Row(number);
+
+                    <FormField Label="@($"E-mailadres persoon {number}")"
+                               Kind="FieldKind.Email"
+                               Name="@AccessFieldName(number, nameof(row.Email))"
+                               Value="@row.Email"
+                               Mono="true"
+                               Placeholder="planning@klant.nl"
+                               Error="@Error(NewCustomerForm.EmailField(number))"
+                               Autocomplete="off"
+                               maxlength="254" />
+
+                    <FormField Label="@($"Naam persoon {number}")"
+                               Name="@AccessFieldName(number, nameof(row.Name))"
+                               Value="@row.Name"
+                               maxlength="120" />
+
+                    <FormField Label="@($"Aanduiding persoon {number}")"
+                               Kind="FieldKind.Select"
+                               Options="Designations"
+                               Name="@AccessFieldName(number, nameof(row.Designation))"
+                               Value="@row.Designation"
+                               Hint="@DesignationHint(number)" />
+                }
+            </ChildContent>
+        </FormCard>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// De naam van de eigenschap waarin het formulier wordt gebonden. Elk <c>name</c>-attribuut
+    /// begint hiermee.
+    /// </summary>
+    /// <remarks>
+    /// Model binding op static SSR bindt met de naam van de <c>[SupplyParameterFromForm]</c>-
+    /// eigenschap als voorvoegsel. Staat er een andere naam in een <c>name</c>-attribuut, dan komt
+    /// dat veld nooit aan en verdwijnt de invoer stil. Daarom staat het voorvoegsel hier één keer
+    /// en komen de veldnamen uit <c>nameof</c>.
+    /// </remarks>
+    private const string Prefix = nameof(Invoer);
+
+    /// <summary>De twee soorten omgeving uit §4.</summary>
+    private static readonly FieldOption[] Kinds =
+    [
+        new(NewCustomerForm.CustomerEnvironment, "Klantomgeving"),
+        new(NewCustomerForm.InternalEnvironment, "Interne beheeromgeving van Soratus"),
+    ];
+
+    /// <summary>
+    /// De aanduidingen die een operator kan uitdelen.
+    /// </summary>
+    /// <remarks>
+    /// Uit <see cref="PortalAccessRoles.All"/> en niet uit een lijst hier, zodat het formulier geen
+    /// waarde kan aanbieden die de schrijfkant weigert.
+    /// </remarks>
+    private static readonly FieldOption[] Designations =
+        [.. PortalAccessRoles.All.Select(role => new FieldOption(role))];
+
+    private static readonly IReadOnlyDictionary<string, string> NoErrors =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>Het schrijfrecht op de portaalgegevens. <c>null</c> betekent: niets renderen.</summary>
+    private PortalWriteScope? _write;
+
+    private FormSaveState _state = FormSaveState.Idle;
+    private string? _error;
+    private IReadOnlyDictionary<string, string> _fieldErrors = NoErrors;
+
+    /// <summary>De klant die er al staat, bij een botsing op de slug.</summary>
+    private CustomerDocument? _existing;
+
+    /// <summary>
+    /// Het formulier zoals de POST het oplevert.
+    /// </summary>
+    /// <remarks>
+    /// <para>De naam van deze eigenschap is het voorvoegsel van elk <c>name</c>-attribuut; zie
+    /// <see cref="Prefix"/>. Hij heet dus <c>Invoer</c> en niet <c>Form</c>, want dat is
+    /// wat er in de markup staat.</para>
+    ///
+    /// <para><strong>Nullable, en zonder beginwaarde.</strong> Blazor waarschuwt daar zelf voor
+    /// (BL0008): het model wordt bij een POST volledig vervangen, en een beginwaarde hier kan door
+    /// <c>null</c> worden overschreven zodra er niets te binden viel. Gebruik daarom
+    /// <see cref="Form"/> in de markup; die zorgt dat er altijd een formulier is.</para>
+    /// </remarks>
+    [SupplyParameterFromForm]
+    public NewCustomerForm? Invoer { get; set; }
+
+    /// <summary>Het formulier, gegarandeerd aanwezig: bij een GET een leeg exemplaar.</summary>
+    private NewCustomerForm Form => Invoer ??= new NewCustomerForm();
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Het schrijfrecht op de portaalgegevens, en niet op één klant: deze klant bestaat nog
+        // niet, dus er is niets om een klantscope op te baseren.
+        _write = await Scopes.ResolveWriteAsync(user);
+
+        // Het beleid op deze pagina laat alleen operators door, dus dit hoort niet voor te komen.
+        // Gebeurt het toch — een rol die tussen twee verzoeken is ingetrokken — dan 404 en geen
+        // 403: we bevestigen niets over wat hier staat.
+        if (_write is null)
+        {
+            Navigation.NotFound();
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        _existing = null;
+        _fieldErrors = Form.FieldErrors();
+
+        if (_fieldErrors.Count > 0)
+        {
+            _state = FormSaveState.Failed;
+            return;
+        }
+
+        _state = FormSaveState.Saving;
+
+        var result = await Store.CreateCustomerAsync(_write!, Form.ToRequest());
+
+        if (result.IsSaved)
+        {
+            // Naar het contractscherm van de nieuwe klant: daar staat wat er net is vastgelegd,
+            // en daar voegt de operator de rest van de toegangen toe. Een redirect na een POST,
+            // zodat de terugknop niet hetzelfde formulier opnieuw verstuurt.
+            Navigation.NavigateTo(ContractPath(result.Value!.CustomerId));
+            return;
+        }
+
+        _error = result.Message;
+        _existing = result.Status == PortalWriteStatus.Conflict ? result.Current : null;
+        _state = FormSaveState.Failed;
+    }
+
+    /// <summary>Het <c>name</c>-attribuut van een veld.</summary>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns>Bijvoorbeeld <c>Invoer.CustomerId</c>.</returns>
+    private static string FieldName(string field) => $"{Prefix}.{field}";
+
+    /// <summary>Het <c>name</c>-attribuut van een veld op een toegangsregel.</summary>
+    /// <param name="number">Het regelnummer, vanaf 1.</param>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns>Bijvoorbeeld <c>Invoer.Access1.Email</c>.</returns>
+    private static string AccessFieldName(int number, string field) =>
+        FieldName(NewCustomerForm.AccessField(number, field));
+
+    /// <summary>
+    /// De uitleg onder het eerste aanduidingsveld. Eén keer en niet drie keer: dezelfde zin onder
+    /// drie velden leest als drie mededelingen.
+    /// </summary>
+    private static string? DesignationHint(int number) => number == 1
+        ? "Geen bevoegdheid maar een aanduiding van wie je belt: beide geven hetzelfde leesrecht."
+        : null;
+
+    /// <summary>De melding onder één veld, of <c>null</c> als er niets aan de hand is.</summary>
+    /// <param name="field">De sleutel uit <see cref="NewCustomerForm.FieldErrors"/>.</param>
+    /// <returns>De melding, of <c>null</c>.</returns>
+    private string? Error(string field) =>
+        _fieldErrors.TryGetValue(field, out var message) ? message : null;
+
+    private static string ContractPath(string customerId) =>
+        $"/klant/{Uri.EscapeDataString(customerId)}/contract";
+}

@@ -265,13 +265,35 @@ public sealed record ContractDocument
     [JsonPropertyName("sla")]
     public string? Sla { get; init; }
 
-    /// <summary>Urenbundel per maand.</summary>
+    /// <summary>
+    /// Urenbundel per maand, of <c>null</c> als er geen bundel is vastgelegd.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong><c>decimal?</c> en geen <c>decimal</c>.</strong> Met een niet-nullable
+    /// <c>decimal</c> zijn "nul" en "niet ingevuld" dezelfde waarde, en dan moet de leeskaart kiezen
+    /// welke van de twee hij toont. Een klant in onboarding heeft nog geen bundel vastgelegd, en een
+    /// contract met een bundel van nul uur is een andere mededeling dan een leeg veld — het eerste
+    /// zegt "alle uren gaan per uur", het tweede zegt "we hebben het nog niet afgesproken".</para>
+    ///
+    /// <para>Dat is dezelfde regel die in dit portaal al twee keer is toegepast: bij de statussen
+    /// (geen document betekent <c>Unknown</c> en geen verzonnen groen, punt 2 van de
+    /// fase-0-afwijkingen) en bij <see cref="Views.AccessEntraState"/> (drie waarden en geen
+    /// <c>bool</c>, want "onbekend" en "niet uitgenodigd" zijn verschillende mededelingen).</para>
+    ///
+    /// <para>Documenten van vóór deze wijziging hebben <c>"bundelUren": 0</c> staan en lezen dus als
+    /// nul en niet als <c>null</c>. Dat is de eerlijke uitkomst: van zo'n document is niet te weten
+    /// of de nul een afspraak was of een ontbrekende invoer, en achteraf <c>null</c> van maken zou
+    /// een afspraak weggooien die er misschien wel was.</para>
+    /// </remarks>
     [JsonPropertyName("bundelUren")]
-    public decimal BundledHours { get; init; }
+    public decimal? BundledHours { get; init; }
 
-    /// <summary>Uurtarief buiten de bundel, in euro.</summary>
+    /// <summary>
+    /// Uurtarief buiten de bundel in euro, of <c>null</c> als er geen tarief is vastgelegd.
+    /// </summary>
+    /// <remarks>Zelfde afweging als bij <see cref="BundledHours"/>.</remarks>
     [JsonPropertyName("uurTarief")]
-    public decimal HourlyRate { get; init; }
+    public decimal? HourlyRate { get; init; }
 
     /// <summary>Indexatie, bijvoorbeeld <c>CBS-index per 1 januari</c>.</summary>
     [JsonPropertyName("indexatie")]
@@ -286,19 +308,25 @@ public sealed record ContractDocument
     public string? ManagedBy { get; init; }
 
     /// <summary>
-    /// Het opslagpercentage op de Azure-kosten.
+    /// Het opslagpercentage op de Azure-kosten, of <c>null</c> als er niets is afgesproken.
     /// </summary>
     /// <remarks>
-    /// <strong>Operator-only.</strong> §2 zegt "Facturatie: Azure per dienst + beheeropslag: nee"
-    /// voor de klant, en dit veld is die beheeropslag. Het staat op het contract omdat §3.9 het
+    /// <para><strong>Operator-only.</strong> §2 zegt "Facturatie: Azure per dienst + beheeropslag:
+    /// nee" voor de klant, en dit veld is die beheeropslag. Het staat op het contract omdat §3.9 het
     /// vraagt bij het aanmaken van een klant, terwijl §6 het bij <c>AzureCost</c> per maand zet.
-    /// Beide kunnen: dit is de afspraak, een maand kan er later van afwijken. Zie het rapport.
+    /// Beide kunnen: dit is de afspraak, een maand kan er later van afwijken. Zie het rapport.</para>
     ///
-    /// Dat dit veld hier staat is precies de reden dat de klantweergave van het contract een eigen
-    /// type is dat het veld niet heeft, in plaats van een <c>@if</c> in de Razor.
+    /// <para>Dat dit veld hier staat is precies de reden dat de klantweergave van het contract een
+    /// eigen type is dat het veld niet heeft, in plaats van een <c>@if</c> in de Razor.</para>
+    ///
+    /// <para><strong>Van de drie bedragen is <c>null</c> hier het belangrijkst.</strong> Nul procent
+    /// opslag is een afspraak die we hebben gemaakt; geen opslag ingevuld is een afspraak die nog
+    /// moet komen. Zodra fase 4 de Azure-uitsplitsing gaat rekenen scheelt dat verschil geld, en
+    /// een niet-nullable <c>decimal</c> zou de tweede stil als de eerste laten doorrekenen. Zie
+    /// verder <see cref="BundledHours"/>.</para>
     /// </remarks>
     [JsonPropertyName("opslag")]
-    public decimal AzureSurchargePercentage { get; init; }
+    public decimal? AzureSurchargePercentage { get; init; }
 
     /// <summary>Wanneer dit contract voor het laatst is gewijzigd, in UTC.</summary>
     [JsonPropertyName("changedAt")]

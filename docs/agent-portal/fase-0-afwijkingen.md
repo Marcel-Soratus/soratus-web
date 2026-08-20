@@ -526,13 +526,183 @@ gedicht, maar niet nul.
 
 ---
 
+## 15. Een contractbedrag dat ontbreekt is niet nul
+
+**Niet in de spec, wel een besluit van dezelfde soort als §2 en de Entra-toestand.**
+
+`bundelUren`, `uurTarief` en het Azure-opslagpercentage waren niet-nullable `decimal`. Daarmee
+zijn "nul" en "niet ingevuld" dezelfde waarde, en dat is bij een bedrag geen detail.
+
+**Drie plekken waar dat stil misging, gevonden bij het nullable maken:**
+
+Een klant aanmaken zonder tarief legde `uurTarief: 0` vast. De parser gaf een leeg veld terug
+als `0m` en het formulier schreef dat getal onvoorwaardelijk weg. Een operator die het tarief
+nog niet wist, legde daarmee een bedrag vast dat hij nooit heeft ingetypt en dat als afspraak
+in de opslag staat. Bij onleesbare invoer gebeurde hetzelfde.
+
+En de spiegel daarvan: een contract met een afgesproken nul openen en op Bewaren drukken
+veranderde die nul in "niet vastgelegd" — zonder toetsaanslag, en zonder dat de conflictlijst
+er iets over meldde, want die vergelijkt de formuliertekst en niet de waarde.
+
+De uitleg onder het tariefveld bevestigde de conflatie ook nog: "leeg of nul betekent: geen
+tarief buiten de bundel". Een operator vult op grond van zo'n regel iets in.
+
+**Waarom dit nu goedkoop was:** er wordt in het portaal nergens met deze drie getallen
+gerekend. Uren en facturatie zijn fase 3 en 4 en bestaan nog niet. Het opslagpercentage is
+daarbij het gevaarlijkste veld — nul procent opslag is een afspraak, geen opslag ingevuld is
+een afspraak die nog moet komen, en het verschil is onze marge.
+
+**Bestaande documenten zijn bewust niet gemigreerd.** Daar staat `"bundelUren": 0`, en van zo'n
+document is niet te weten of die nul een afspraak was. Er achteraf `null` van maken gooit
+misschien een echte afspraak weg. Nieuwe documenten schrijven `null` uit.
+
+Dit is dezelfde regel als "geen document betekent geen status" (§2) en als de drie
+Entra-toestanden in plaats van een `bool`: een waarde die "onbekend" moet kunnen uitdrukken,
+kan dat niet met een getal dat ook een geldig antwoord is.
+
+---
+
+## 16. Een handmatige urencorrectie is nóg een urenregel, geen ander getal
+
+**Spec:** §3.6 vraagt twee dingen van hetzelfde getal. "**Eén bron van waarheid**: het maandtotaal
+is de som van de gefiatteerde regels." En in dezelfde alinea: "Een handmatige correctie is
+mogelijk maar wordt als afwijking in de tooltip gemeld." De acceptatie van fase 3 herhaalt de
+eerste helft als eis.
+
+**Waarom dat niet allebei kan.** Van één getal kan het niet. Overschrijft de correctie het
+maandtotaal, dan is het geen som meer — dan staat er een getal boven een tabel die iets anders
+optelt, en is er voor de klant geen manier om te zien welk van de twee klopt. Negeert de som de
+correctie, dan doet de correctie niets. De mockup kiest de eerste variant: `hourEdits` is een
+override op het maandtotaal, en de tooltip zegt dan "Handmatig gecorrigeerd — specificatie telt
+n u". Dat is precies de tegenspraak die regel 7 verbiedt, en hij staat in dezelfde rij.
+
+**Besluit: een correctie wordt opgeslagen als een extra urenregel.** Bron `portaal`, categorie
+`Correctie`, stand `approved`, en het aantal uren mag negatief zijn. Verder een gewoon
+`HourEntry`-document, met `createdAt`, `createdBy` en een verplichte omschrijving.
+
+**Wat dat oplevert:**
+
+1. Het maandtotaal blijft een zuivere som. Er bestaat geen veld waarin een afwijkend totaal
+   past — `HourBalance.Booked` is de som van de gefiatteerde regels en niets anders, en
+   `HourBalanceCalculator.ForMonth` filtert daar zelf op in plaats van het aan de aanroeper te
+   laten.
+2. De correctie is zichtbaar als rij in de specificatie, met wie hem maakte en waarom. §3.6 wil
+   dat hij "gemeld" wordt; een rij is een sterkere melding dan een tooltip.
+3. De tooltip is alsnog te vullen, en met een getal dat betekenis heeft:
+   `HourBalance.CorrectionHours` is hoeveel van het maandtotaal uit correcties komt.
+4. **De openstaande vraag uit §9 vervalt.** Die vraagt of er per correctie een audittrail
+   bijgehouden moet worden — wie, wanneer, waarom. Dat is nu geen aparte voorziening maar het
+   document zelf, en het staat op het scherm in plaats van in een tabel die niemand opvraagt.
+
+**Waarom een eigen type en niet een vlag op de boeking.** `HourCorrection` staat naast
+`HourBooking` om precies één verschil: de uren mogen negatief zijn. Met één type en een vlag
+wordt de controle "groter dan nul" een `if` op die vlag, en dan is een negatieve *boeking* één
+verkeerd geschreven `if` ver weg. Nu weigert de boeking alles wat niet positief is, en weigert de
+correctie alleen nul.
+
+**Wat er tegenover staat, eerlijk.** Een maand corrigeren kost nu twee rijen op het scherm waar
+het er één was, en een klant ziet de correctie. Dat tweede is geen bijzaak maar noodzaak: zou de
+klant de correctierij niet zien, dan telt zijn specificatie niet op tot zijn maandtotaal — en dan
+is de eigenschap waarvoor dit hele besluit bestaat weg op het enige scherm waar hij te
+controleren valt.
+
+---
+
+## 17. Een afgewezen urenregel blijft staan, met de reden erbij
+
+**Spec:** §3.6 geeft de operator de acties Fiatteren en Afwijzen. Wat afwijzen met de regel doet
+staat er niet.
+
+**De twee opties.** Verwijderen houdt de lijst schoon; bewaren houdt het antwoord op "waarom staat
+dit niet op mijn factuur". Dat tweede argument alleen was niet beslissend — een lijst die volloopt
+met regels die niet meetellen is een echt bezwaar.
+
+**Wat het wél beslist: idempotentie tegen een koppeling die herhaalt.** Een MCP- of DevOps-regel
+draagt een id die uit de bron is afgeleid (`HourEntryKeys.ForIntegration`), zodat een herhaalde
+aanroep na een netwerkfout op een 409 loopt in plaats van een tweede uur te factureren. Wordt een
+afgewezen regel verwijderd, dan slaagt die herhaling — en staat de regel bij de volgende run van
+de koppeling opnieuw als te fiatteren in de lijst. Afwijzen zou dan geen besluit zijn maar een
+handeling die je blijft herhalen, en de operator die het door heeft gaat de lijst wegkijken.
+
+**Besluit: de regel blijft staan met `status: rejected`, `rejectedAt`, `rejectedBy` en een
+verplichte `rejectReason`.** Hij telt in geen enkele som mee en is voor de klant onzichtbaar — dat
+laatste dubbel: hij is niet gefiatteerd, en de klantquery vraagt alleen om gefiatteerde regels.
+
+**Het bezwaar is opgelost in de weergave en niet in de opslag.** Afgewezen regels staan niet in de
+specificatie maar in een eigen lijst eronder (`OperatorHoursView.Rejected`), die er niet is als hij
+leeg is. Dat is de gewone toestand.
+
+**Waarom dit anders is dan een ingetrokken portaaltoegang**, waar de afwezigheid van het document
+juist het antwoord is (zie de opmerkingen bij `AccessDocument`): daar *is* het document het recht,
+hier is het een bewering van een koppeling waarover een oordeel is gegeven. Een recht dat je
+intrekt hoort te verdwijnen; een bewering die je afwijst niet.
+
+---
+
+## 18. Gefiatteerd is definitief, en de bundel rolt niet door
+
+Twee kleinere besluiten die uit dezelfde eigenschap volgen: het maandtotaal van een afgesloten
+maand mag niet met terugwerkende kracht veranderen.
+
+**Een gefiatteerde regel kan niet meer worden afgewezen.** Kan een uur later uit de som verdwijnen,
+dan is het totaal van vandaag niet dat van gisteren, en dan wijkt een conceptfactuur af van de
+maand waarover hij gaat zonder dat er iets is toegevoegd. Terugdraaien gebeurt met een correctie
+ertegenover (punt 16) — een tweede rij die zichtbaar is en zichzelf verklaart. De prijs is één
+handeling extra voor een operator die per ongeluk fiatteert; dat is de ruil. De regel staat in
+`HourEntryTransitions`, en de weergave gebruikt diezelfde functie om te bepalen of er een knop
+hoort te staan, zodat er nooit een knop staat die een melding oplevert.
+
+Omgekeerd kan een *afgewezen* regel wél alsnog gefiatteerd worden. Afwijzen is een besluit van een
+mens en mensen klikken mis; was dat onomkeerbaar, dan was de enige uitweg de koppeling opnieuw
+laten inschieten — en dat kan niet, want de idempotentiesleutel botst op het document dat er al
+staat (punt 17).
+
+**De uren boven bundel over een jaar zijn de som van de overschrijdingen per maand**, en niet het
+jaartotaal minus de jaarbundel. De bundel is een afspraak per maand (§3.5) en rolt niet door: een
+maand met vier uur over betaalt niet voor een maand met vier uur te veel. Wordt het jaarbedrag uit
+de jaartotalen berekend, dan salderen die twee maanden elkaar en verdwijnt de overschrijding uit de
+facturatie. De mockup doet dat wel (`max(0, totSpent - totBundel)`); dat is een fout die op
+dummy-data niet opvalt en op een factuur wel.
+
+Om dezelfde reden telt het jaaroverzicht **niet altijd twaalf maanden bundel** maar alleen de
+maanden die binnen de contractperiode vallen en al zijn begonnen. Een bundel voor een maand die nog
+niet is begonnen is geen tegoed. Een maand waarop tóch uren zijn geboekt valt nooit weg, ook niet
+als hij buiten die periode ligt — uren die uit het overzicht verdwijnen omdat een grens ze
+uitsluit, verdwijnen ook uit het jaartotaal, en dat is stil.
+
+---
+
+## 19. Er is een vierde urenstand nodig: "geen bundel vastgelegd"
+
+**Spec:** §3.6 kent drie standen per maand — Binnen bundel, Boven bundel, Niets geboekt.
+
+**Probleem:** sinds punt 15 mag `bundelUren` `null` zijn. Dan bestaat de maand waarin uren staan
+terwijl er geen bundel is afgesproken, en die is geen van de drie. Hem als "Boven bundel" tonen —
+wat er gebeurt zodra iemand `?? 0m` schrijft — zegt dat een klant zijn bundel overschrijdt die er
+nooit een had. Dat is precies het stille misgaan dat punt 15 wilde voorkomen, en het saldo is de
+plek waar het gebeurt.
+
+**Besluit:** `HourMonthStatus.NoBundleAgreed`, met `Balance` en `OverBundleHours` op `null` in
+plaats van een negatief getal. Voor de kleur volgt de stand punt 3: geen nieuwe kleur en geen
+nieuwe rang, maar rang 0 hergebruiken (`#767c94` / `#f6f7fb` / `#e3e5ee`, glyph `–`). Er is niets
+mis; er is alleen niets om aan te toetsen. `StatusVisuals` in `Components/Shared` heeft daar een
+regel voor nodig.
+
+**Dit is geen theoretisch geval.** In `platform/customers` staan vandaag zeven klantdocumenten en
+géén enkel contractdocument. Élke klant valt dus op dit moment in deze vierde stand, en met een
+niet-nullable bundel zou élke klant met geboekte uren "Boven bundel" hebben gestaan.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
-Uren, facturatie, sprint en support. Die komen pas als de statusweergave klopt, zoals de
-opdracht voorschrijft. Twee besluiten uit §9 van de spec staan daarmee ook nog open: de
-Azure-uitsplitsing per dienst (fase 4) en de audittrail op urencorrecties (fase 3).
+Facturatie, sprint en support. Uit §9 van de spec staat daarmee nog één besluit open dat aan uren
+raakt: de Azure-uitsplitsing per dienst (fase 4). De audittrail op urencorrecties is met punt 16
+vervallen als aparte vraag.
 
-Voor dat laatste ligt er al een voorstel dat de vraag laat vervallen: sla een handmatige
-correctie op als nóg een goedgekeurde urenregel met bron `portaal` en categorie `Correctie`.
-Dan blijft het maandtotaal een zuivere som én is de correctie zichtbaar als rij — de spec
-vraagt nu om allebei van één getal, en dat kan niet.
+Binnen uren zelf staat één pad open: het **aannamepad van een koppeling**. De MCP-server
+`soratus-uren` en `devops-sync` schieten regels in die als `pending` landen (§5). De documentvorm
+en de sleutelregel liggen vast, maar er is nog geen bewijstype voor een aanroeper die geen mens is
+— `CustomerWriteScope` betekent "operator die naar deze klant kijkt", en dat is een koppeling niet.
+Zolang dat type niet bestaat, staat er ook geen schrijfmethode voor op `IPortalHoursStore`: een
+leesbaar type met een gat erachter is erger dan geen type.

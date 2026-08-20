@@ -835,7 +835,14 @@ internal sealed class CosmosPortalDataStore(
     private static string? Clean(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static ContractDocument ToDocument(
+    /// <remarks>
+    /// <c>internal</c> en niet <c>private</c>: dit is de enige plek waar een bewerking een document
+    /// wordt, en de testopslag gebruikt hem zodat er geen tweede omzetting bestaat die na een
+    /// conflict een wijziging meldt die niemand heeft gemaakt. Zichtbaar voor het testproject via de
+    /// <c>InternalsVisibleTo</c> in <c>Soratus.Portal.csproj</c>, en niet via reflectie: dan wordt
+    /// een hernoeming een bouwfout in plaats van een mislukte test.
+    /// </remarks>
+    internal static ContractDocument ToDocument(
         ContractEdit edit,
         string customerId,
         string actor,
@@ -860,7 +867,8 @@ internal sealed class CosmosPortalDataStore(
         ChangedBy = actor,
     };
 
-    private static AccessDocument ToDocument(
+    /// <remarks>Zie de overload voor <see cref="ContractEdit"/> voor waarom dit <c>internal</c> is.</remarks>
+    internal static AccessDocument ToDocument(
         AccessGrant grant,
         string customerId,
         string actor,

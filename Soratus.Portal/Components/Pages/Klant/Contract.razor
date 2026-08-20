@@ -1,0 +1,238 @@
+@page "/klant/{Slug}/contract"
+@attribute [Authorize]
+
+@* Contract en toegang (§3.5).
+
+   TWEE ROLLEN, TWEE VORMEN, EN HET VERSCHIL ZIT IN HET TYPE
+
+   §2 geeft de klant op contract en toegang lezen, de operator lezen én bewerken. Dat verschil
+   staat hier niet als @if rond een gevoelig blok, maar in twee takken met twee viewmodellen —
+   dezelfde regel als op de agentlijst en het agentdetail. De klant krijgt
+   CustomerContractView, en die heeft geen opslagpercentage en geen etags: niet als leeg veld,
+   maar helemaal niet. Het opslagpercentage is onze marge (§2: "Azure per dienst +
+   beheeropslag — nee") en de etags zijn schrijfvoorwaarden, en de klant schrijft niet.
+
+   De klantkant is daarmee één FormCard in FieldMode.ReadOnly. Dat is geen uitgegrijsd
+   formulier maar platte tekst — §8 is daar expliciet over, en dat is de reden dat die modus
+   bestaat: een uitgegrijsd veld zegt "je mag dit niet", platte tekst zegt "dit is een feit".
+   Voor een klant is het contract een feit.
+
+   GEEN @rendermode OP DEZE PAGINA
+
+   Static SSR, net als de rest van het portaal. De klantkant heeft niets interactief nodig: het
+   is tekst. De operatorkant heeft dat wel — laten zien dát er niets is gewijzigd vóór er iets
+   is ingediend, een tweede klik tegenhouden, een toegangsregel intrekken zonder je plek in de
+   lijst te verliezen — en die zit daarom in één eiland (ContractPanel). Over die grens gaat
+   precies één string: de klantslug, en die staat al in de URL. Het eiland autoriseert zichzelf
+   opnieuw en bouwt zijn eigen viewmodel; een viewmodel kan die grens niet over en een scope
+   hoort er niet over te gaan.
+
+   Gevolg: de operatorkant van deze pagina leest zelf niets uit de opslag. De kop komt uit de
+   scope (die draagt de canonieke naam en de slug) en al het overige uit het eiland. Dat is één
+   lezing in plaats van twee voor dezelfde drie documenten.
+
+   404 EN GEEN 403
+
+   Geen recht, of een klant die niet bestaat: hetzelfde antwoord. Zie ICustomerScopeResolver —
+   een 403 zou bevestigen dat de klant achter die URL bestaat. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject IContractViews Contracts
+@inject NavigationManager Navigation
+
+<PageTitle>Contract · @_title · Agent Portal</PageTitle>
+
+@if (_write is { } write)
+{
+    <div class="toolbar">
+        <a class="btn btn--small" href="/overzicht"><span class="mono" aria-hidden="true">←</span>Alle klanten</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title">@write.DisplayName</h1>
+        @* Geen tijdstip in deze kopregel: de pagina leest zelf niets, en het moment van
+           ophalen hoort bij de kaart die de gegevens draagt. Dat staat in het eiland. *@
+        <span class="page-meta">contract en toegang</span>
+    </div>
+
+    <CustomerNav Slug="@write.CustomerId" />
+
+    @* Alleen de slug gaat over de grens. Zie de toelichting bovenaan. *@
+    <ContractPanel CustomerId="@write.CustomerId" @rendermode="InteractiveServer" />
+}
+else if (_view is { } view)
+{
+    <div class="page-head">
+        <h1 class="page-title">@view.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(view.GeneratedAt)">
+            contract · bijgewerkt @TimeFormat.Clock(view.GeneratedAt)@Suffix(view.Environment)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@view.CustomerId" />
+
+    <div class="stack">
+        @if (view.HasContract)
+        {
+            @* Elf velden uit §3.5. Layout.Row zet het label links: dat is de vorm van de
+               contractkaart, en het is dezelfde breedte als de bewerkbare variant van de
+               operator, zodat de twee weergaven van hetzelfde contract niet verspringen. *@
+            <FormCard Title="Contract"
+                      Mode="FieldMode.ReadOnly"
+                      Layout="FieldLayout.Row"
+                      Footnote="@view.ReadOnlyNotice">
+                <FormField Label="Contractnummer" Value="@view.Number" Mono="true" />
+                <FormField Label="Soort" Value="@view.Type" />
+                <FormField Label="Ingangsdatum" Value="@ContractText.Date(view.StartsOn)" Mono="true" />
+                <FormField Label="Looptijd" Value="@view.Term" />
+                <FormField Label="Opzegtermijn" Value="@view.NoticePeriod" />
+                <FormField Label="Urenbundel per maand"
+                           Kind="FieldKind.Number"
+                           ReadOnlyText="@ContractText.Hours(view.BundledHours)" />
+                <FormField Label="Uurtarief buiten bundel"
+                           Kind="FieldKind.Amount"
+                           ReadOnlyText="@ContractText.Rate(view.HourlyRate, view.IsInternal)" />
+                <FormField Label="Indexatie" Value="@view.Indexation" />
+                <FormField Label="SLA" Value="@view.Sla" />
+                <FormField Label="Contactpersoon" Value="@view.Contact" />
+                <FormField Label="Beheerd door" Value="@view.ManagedBy" />
+            </FormCard>
+        }
+        else
+        {
+            @* Geen contract is een gewone toestand en geen storing: een omgeving in onboarding
+               heeft er nog geen. Een kaart met elf streepjes zou suggereren dat er gegevens
+               ontbreken, terwijl er nog niets ís. *@
+            <EmptyState Title="Er is nog geen contract vastgelegd"
+                        Text="Zodra Soratus het contract van deze omgeving vastlegt staan hier het contractnummer, de looptijd, de urenbundel, het uurtarief en de SLA."
+                        Facts="NoContractFacts" />
+
+            <p class="meta notice">@view.ReadOnlyNotice</p>
+        }
+
+        @if (view.Access.Count == 0)
+        {
+            <EmptyState Title="Er staat niemand in de toegangslijst"
+                        Text="Dat is vreemd, want je leest dit scherm. Laat het ons weten: dan zetten we de lijst recht."
+                        Glyph="○" />
+        }
+        else
+        {
+            <DataCard Grid="AccessColumns" Title="Toegang tot dit portaal">
+                <HeaderContent>
+                    <span>@ContractText.People(view.Access.Count)</span>
+                </HeaderContent>
+                <ChildContent>
+                    <DataRowHeader />
+                    @foreach (var row in view.Access)
+                    {
+                        <DataRow>
+                            <DataCell Truncate="true">
+                                <span class="mono-meta">@row.Email</span>
+                            </DataCell>
+
+                            @* Een naam die niet is vastgelegd is een streepje en geen lege cel:
+                               een lege cel laat de lezer denken dat het scherm niet klaar is. *@
+                            <DataCell Truncate="true">@(row.Name ?? "—")</DataCell>
+
+                            <DataCell Truncate="true">@row.Role</DataCell>
+
+                            @* Drie toestanden, geen twee. Vandaag altijd "onbekend": het portaal
+                               kan niet in Entra kijken. Er staat dus geen suggestie en geen knop
+                               naast — alleen het woord en de uitleg eronder. *@
+                            <DataCell>
+                                <span class="mono-meta" title="@ContractText.AccessStateTitle(row.EntraState)">
+                                    @ContractText.AccessState(row.EntraState)
+                                </span>
+                            </DataCell>
+                        </DataRow>
+                    }
+                </ChildContent>
+            </DataCard>
+
+            <p class="meta notice">@view.AccessStateNotice</p>
+
+            @* De aanduiding is geen bevoegdheid: "Beheerder klant" en "Lezer" mogen precies
+               hetzelfde. Deze zin staat er omdat de kolom anders een recht belooft dat niet
+               bestaat. Hij komt uit het viewmodel en niet uit de constante: wat een rol te zien
+               krijgt staat op het type van die rol, en dat is de afspraak die dit hele scherm
+               tot twee takken maakt in plaats van tot een reeks @if-blokken. *@
+            <p class="meta notice">@view.AccessLabelNotice</p>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// De kolomsporen van het toegangsoverzicht zoals de klant het ziet: adres, naam, aanduiding,
+    /// en of aanmelden werkt.
+    /// </summary>
+    /// <remarks>
+    /// De derde kolom heet bewust niet "Rol". Er zijn twee waarden en ze geven hetzelfde recht —
+    /// lezen — want alleen Soratus deelt toegang uit. "Rol" zou een bevoegdheid beloven; dit is
+    /// een aanduiding van wie je belt. De vierde kolom is de tweede toestand van een toegang: de
+    /// regel staat vast in het portaal, maar aanmelden hangt aan Entra ID.
+    /// </remarks>
+    private static readonly RowGrid AccessColumns = new(
+        new GridColumn("E-mailadres", "minmax(180px, 1.6fr)", Labelled: false),
+        new GridColumn("Naam", "minmax(120px, 1fr)"),
+        new GridColumn("Aanduiding", "132px"),
+        new GridColumn("Aanmelden", "96px"));
+
+    private static readonly string[] NoContractFacts = ["contract: niet vastgelegd"];
+
+    /// <summary>
+    /// Het schrijfrecht van de operator op deze klant. Gezet betekent: render het eiland.
+    /// </summary>
+    /// <remarks>
+    /// Deze pagina gebruikt de scope alleen voor de kop — de canonieke klantnaam en de slug — en
+    /// geeft hem niet door. Een scope hoort geen render-mode-grens over.
+    /// </remarks>
+    private CustomerWriteScope? _write;
+
+    private CustomerContractView? _view;
+
+    private string _title = "Contract";
+
+    /// <summary>De klantslug uit de route.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Het schrijfrecht eerst. Een operator krijgt ook een gewone klantscope, en dan zou hij
+        // de leesvorm van zijn eigen beheerscherm zien. Let op dat dit ResolveWriteAsync is en
+        // niet ResolveOperatorAsync: dat laatste vraagt een ingerichte telemetrie-opslag, en de
+        // klant zonder opslag is precies de klant wiens contract je zit in te vullen.
+        if (await Scopes.ResolveWriteAsync(user, Slug) is { } write)
+        {
+            _write = write;
+            _title = write.DisplayName;
+            return;
+        }
+
+        if (await Scopes.ResolveAsync(user, Slug) is { } read)
+        {
+            _view = await Contracts.BuildContractAsync(read);
+            _title = _view.DisplayName;
+            return;
+        }
+
+        Navigation.NotFound();
+    }
+
+    /// <summary>De omgeving achter de kopregel, of niets als die niet is vastgelegd.</summary>
+    private static string Suffix(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : $" · {value}";
+}

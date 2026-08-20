@@ -59,6 +59,10 @@
     public bool Warn { get; set; }
 
     /// <summary>Overige attributen, zoals <c>data-testid</c>. Landt op de waarde.</summary>
+    /// <remarks>
+    /// <c>title</c> en <c>class</c> zijn van de tegel: ze worden na de splat gezet en winnen dus.
+    /// Gebruik <see cref="Title"/>. Zelfde grens als bij <c>RelativeTime</c>.
+    /// </remarks>
     [Parameter(CaptureUnmatchedValues = true)]
     public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 

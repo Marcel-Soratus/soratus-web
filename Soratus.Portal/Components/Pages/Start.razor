@@ -30,7 +30,15 @@
 @inject ICustomerScopeResolver Scopes
 @inject NavigationManager Navigation
 
-<PageTitle>@_title · Agent Portal</PageTitle>
+@* Alleen een titel als deze pagina ook werkelijk iets toont. In het normale geval stuurt hij door
+   en is er geen pagina om te benoemen; de onvoorwaardelijke variant leverde daar "Agent Portal ·
+   Agent Portal" op, en op een operatorpagina zou hij een titel zetten voor een scherm dat de
+   gebruiker nooit krijgt. Een titel gaat via HeadOutlet naar het tabblad en staat niet in de
+   markup, dus een vangnet dat naar markup kijkt ziet dat verschil niet. *@
+@if (_choices is not null)
+{
+    <PageTitle>@_title · Agent Portal</PageTitle>
+}
 
 @if (_choices is { Count: > 1 } choices)
 {
