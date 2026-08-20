@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Azure.Identity;
+using Soratus.Agents.Contracts;
 using Soratus.Seed;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +29,11 @@ try
 
     // Bewaakt dat dit gereedschap tijden nog steeds precies zo wegschrijft als de bibliotheek.
     SeedJson.AssertMatchesTelemetryLibrary();
+
+    // En dat de gedeelde knipregel op msg nog doet wat hij belooft. Die staat in het contract en
+    // wordt hier alleen aangeroepen; deze assertie is er zodat een verbouwing daar hier opvalt
+    // vóórdat er documenten met een stacktrace in msg de database in gaan.
+    MessageTruncation.AssertContract();
 
     var now = DateTimeOffset.UtcNow;
 
@@ -222,6 +228,24 @@ static void Report(SeedPlan plan)
         Console.WriteLine(customer.Agents == 0 ? line + "   ← lege staat" : line);
     }
 
+    Console.WriteLine();
+
+    var (length, agentName, name) = plan.LongestMessage;
+    Console.WriteLine(
+        $"Berichten: {plan.CutMessages} van de {plan.Logs.Count} geknipt op de eerste regelovergang " +
+        $"(overloop naar extra.{MessageTruncation.OverflowKey}).");
+    Console.WriteLine($"  langste msg: {length} tekens — {agentName} / {name}");
+
+    if (plan.MultiLineMessages > 0)
+    {
+        // Kan alleen als de knip zelf stuk is. Dan liever nu stoppen dan een stacktrace in een
+        // veld wegschrijven dat een klant ziet.
+        throw new SeedManifestException(
+            $"{plan.MultiLineMessages} berichten bevatten na de knip nog een regelovergang. " +
+            "Er wordt niets weggeschreven; controleer MessageTruncation in Soratus.Agents.Contracts.");
+    }
+
+    Console.WriteLine("  geen enkel bericht bevat nog een regelovergang.");
     Console.WriteLine();
 }
 

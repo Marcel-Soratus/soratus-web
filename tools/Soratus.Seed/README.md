@@ -80,6 +80,41 @@ documentsleutel en de partitiesleutel, en het portaal leest een agent met een po
 naam. Klantagents dragen daarom de klant-slug als voorvoegsel (`vandijk-mail-triage`); de vijf
 beheeragents van Soratus houden hun naam uit §4 van de spec.
 
+**`msg` is één regel.** Het contract wil in `msg` één Nederlandse zin, leesbaar voor wie de code
+niet kent — en een zin bevat geen regelovergang. De seeder handhaaft dat bij het wegschrijven: hij
+knipt op de eerste regelovergang (`\n`, `\r\n` of een losse `\r`), zet ` … (ingekort)` achter wat
+overblijft en schuift de rest naar `extra.msgOverflow`. Een *afsluitende* regelovergang is geen
+overloop, dus die levert geen markering op.
+
+**Die regel staat niet in dit project.** Hij staat in `MessageTruncation.Cut` in
+`Soratus.Agents.Contracts` en wordt hier alleen aangeroepen; `ExtraOverflow.cs` doet niets anders
+dan de overloop onder de gereserveerde sleutel opbergen. Dat is geen netheid maar ervaring: deze
+seeder had de regel korte tijd zelf staan — nagebouwd op een met de telemetriebibliotheek
+afgestemde vorm, met dezelfde constanten en dezelfde newline-regel — en toch week hij af. Bij een
+dubbele knip plakte de kopie twee helften met een `\n` aan elkaar terwijl het contract één
+aaneengesloten slice neemt, dus stond er in het origineel al een regelovergang op die plek, dan
+kwam er één te veel. Drie schrijvers met dezelfde regel (bibliotheek, portaal, seeder) blijven niet
+gelijk. Er staan hier daarom ook geen eigen constanten voor de markering, de sleutel of de
+lengtegrens: twee namen met dezelfde waarde is hoe ze gaan verschillen.
+
+Dat is nodig omdat dit gereedschap niet door die bibliotheek heen gaat. Zonder de knip zou de seed
+het enige document in de database zijn met een .NET-stacktrace en onze `/src/`-paden in een veld
+dat een klant wél ziet — `extra` is operator-only, `msg` niet. Bronpaden, endpoints en scopes
+horen dus in `extra`. Bij elke run meldt de uitvoer hoeveel berichten er zijn geknipt en hoe lang
+het langste bericht is; blijft er na de knip toch een regelovergang staan, dan stopt hij en schrijft
+niets weg.
+
+**Er zijn twee fixtures voor de logtabel, en ze hebben elk een eigen rol.** Bij
+`bakker-voorraad-sync`:
+
+| Gebeurtenis | Wat het bewijst |
+|---|---|
+| `validation.summary` | Lang (~1600 tekens) maar op **één** regel, met een lange ononderbroken reeks artikelnummers zonder spaties, en zonder bronpaden. Moet de knip **ongeschonden overleven** en moet in de tabel netjes afbreken in plaats van de kolom breder te maken dan het venster. |
+| `payload.dump` | **Meerregelig**, met stacktrace en bronpaden na de eerste regelovergang. Moet **geknipt** worden: in `msg` blijft één zin met de markering, de rest staat in `extra.msgOverflow`. |
+
+Eén fixture kan die twee rollen niet spelen: zodra de knip bestaat, bewijst een meerregelige regel
+niets meer over lange teksten die intact moeten blijven.
+
 **Er zit één lopende run in.** `meijer-contractcheck` heeft een run met `result: running`, zonder
 `durationMs` en dus zonder `finishedAt`. Dat is een echt geval dat het scherm moet aankunnen: de
 kolommen duur en resultaat horen dan leeg te blijven en niet op "0 ms" te staan. `itemsProcessed`

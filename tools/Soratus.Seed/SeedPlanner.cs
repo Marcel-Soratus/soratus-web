@@ -187,6 +187,18 @@ internal static class SeedPlanner
                 throw new SeedManifestException($"{where}: event en msg zijn allebei verplicht.");
             }
 
+            if (log.Message.AsSpan().IndexOfAny('\n', '\r') == 0)
+            {
+                throw new SeedManifestException(
+                    $"{where}: msg begint met een regelovergang, dus er blijft geen zin over om te tonen.");
+            }
+
+            // Het contract wil één zin in msg. Alles vanaf de eerste regelovergang gaat naar extra.
+            // De regel zelf staat in Soratus.Agents.Contracts en wordt door de telemetriebibliotheek
+            // en door het portaal ook gebruikt — één definitie, want de seed hoort in de database
+            // niet van een echt document te verschillen.
+            var (message, overflow) = MessageTruncation.Cut(log.Message);
+
             yield return new LogRecord
             {
                 Id = SeedUlid.Create(timestamp, $"{agent.AgentName}|{index}|{log.Event}"),
@@ -194,9 +206,9 @@ internal static class SeedPlanner
                 Timestamp = timestamp,
                 Level = log.Level,
                 Event = log.Event,
-                Message = log.Message,
+                Message = message,
                 RunId = string.IsNullOrWhiteSpace(log.RunId) ? null : log.RunId,
-                Extra = log.Extra,
+                Extra = overflow is null ? log.Extra : ExtraOverflow.Merge(log.Extra, overflow, where),
                 CustomerId = customer.Id,
                 AgentName = agent.AgentName,
             };
@@ -222,6 +234,32 @@ internal sealed record SeedPlan(
     /// <c>--clean</c> zich baseert; zie <see cref="CosmosSeeder"/>.
     /// </summary>
     public IReadOnlyList<string> AgentNames { get; } = [.. Agents.Select(agent => agent.AgentName)];
+
+    /// <summary>Hoeveel berichten op hun eerste regelovergang zijn geknipt.</summary>
+    public int CutMessages { get; } =
+        Logs.Count(log => log.Message.EndsWith(MessageTruncation.Marker, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Het langste bericht dat weggeschreven wordt, met de agent en de gebeurtenis erbij.
+    /// </summary>
+    /// <remarks>
+    /// Staat in de uitvoer omdat de lengte van <c>msg</c> een meetbaar feit hoort te zijn en geen
+    /// aanname. Een lang bericht is toegestaan zolang het één regel is; wat niet mag is een
+    /// regelovergang, en dat is wat <see cref="MultiLineMessages"/> bewaakt.
+    /// </remarks>
+    public (int Length, string AgentName, string Event) LongestMessage { get; } = Logs.Count == 0
+        ? (0, "—", "—")
+        : Logs
+            .Select(log => (Length: log.Message.Length, log.AgentName, log.Event))
+            .OrderByDescending(entry => entry.Length)
+            .First();
+
+    /// <summary>
+    /// Hoeveel berichten er ná de knip nog een regelovergang bevatten. Hoort nul te zijn; is dat
+    /// niet zo, dan klopt <see cref="MessageTruncation"/> niet meer.
+    /// </summary>
+    public int MultiLineMessages { get; } =
+        Logs.Count(log => log.Message.AsSpan().IndexOfAny('\n', '\r') >= 0);
 }
 
 /// <summary>Wat er voor één klant in het bestand staat.</summary>
