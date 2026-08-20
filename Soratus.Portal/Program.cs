@@ -96,7 +96,14 @@ builder.Services.AddScoped<ICustomerScopeResolver, CustomerScopeResolver>();
 // seed-data wordt door een apart consoleproject in dezelfde Cosmos gezet, in dezelfde
 // documentvorm, en het portaal kan het verschil niet zien.
 builder.Services.AddScoped<IAgentTelemetryStore, CosmosAgentTelemetryStore>();
-builder.Services.AddScoped<IPortalViews, PortalViews>();
+
+// Eén PortalViews achter twee interfaces, en dus ook één registratie waar beide naar wijzen. Met
+// twee AddScoped-regels zou een pagina die IPortalViews en IAgentDetailViews beide injecteert twee
+// instanties krijgen — onschuldig zolang de klasse geen staat heeft, maar precies het soort
+// stilzwijgende verdubbeling dat later een tweede moment oplevert.
+builder.Services.AddScoped<PortalViews>();
+builder.Services.AddScoped<IPortalViews>(services => services.GetRequiredService<PortalViews>());
+builder.Services.AddScoped<IAgentDetailViews>(services => services.GetRequiredService<PortalViews>());
 
 // ── Blazor ───────────────────────────────────────────────────────────────────────────────────
 // Static SSR is de standaard. InteractiveServer is alleen beschikbaar als render mode voor de

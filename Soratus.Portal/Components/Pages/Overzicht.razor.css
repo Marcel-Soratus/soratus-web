@@ -7,18 +7,6 @@
 
    Alle kleuren komen uit tokens.css. Er staat hier geen enkele hexwaarde. */
 
-/* Verticale ritmiek tussen KPI-rij, melding, kaart en legenda. */
-.stack {
-  display: grid;
-  gap: var(--gap-card);
-}
-
-/* Melding boven de lijst wanneer een klantopslag niet antwoordde. */
-.notice {
-  margin: 0;
-  max-width: 78ch;
-}
-
 /* --- klantnaam met statusstip ---------------------------------------- */
 .row-name {
   display: flex;

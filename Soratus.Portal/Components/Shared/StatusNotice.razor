@@ -1,0 +1,64 @@
+@* De statusspecifieke melding onder de agentkop (§3.3): waarom staat deze agent zo, en wat
+   betekent dat voor het werk.
+
+   Vorm: 2px linkerrand in de statuskleur, het statusvlak als achtergrond, tekst in gewoon
+   formaat. Uit de mockup; §8 geeft voor dit patroon niets.
+
+   De tekst komt van buiten. Dat is geen luiheid maar een grens: de melding bij een gefaalde run
+   noemt hoeveel regels zijn afgekeurd en of de transactie is teruggedraaid, en die twee dingen
+   weet alleen de laag die de run heeft gelezen. Een component die zulke tekst zelf verzint,
+   verzint hem op een dag verkeerd — en dan staat er "de transactie is teruggedraaid" terwijl dat
+   niet zo is.
+
+   De kleur is niet de enige drager. Voor een ziende lezer staat de statusbadge met glyph en
+   woordlabel er twaalf pixels boven, in dezelfde kaart. Voor een schermlezer staat het
+   woordlabel hier als verborgen voorvoegsel, zodat de melding ook los van die badge te plaatsen
+   is. Een glyph in de melding zelf hebben we bewust niet: de mockup heeft hem niet, en hij zou
+   de eerste regel van de tekst laten verspringen. *@
+
+@using Soratus.Agents.Contracts
+
+@if (!string.IsNullOrWhiteSpace(Text))
+{
+    <p @attributes="AdditionalAttributes" class="@CssClass">
+        <span class="sr-only">@StatusVisuals.Label(Status, UnknownLabel) — </span>@Text
+    </p>
+}
+
+@code {
+    /// <summary>De status die de kleur van de linkerrand en het vlak bepaalt.</summary>
+    [Parameter]
+    [EditorRequired]
+    public AgentStatus Status { get; set; }
+
+    /// <summary>
+    /// De melding zelf. Leeg of afwezig rendert niets — een lege gekleurde balk is erger dan
+    /// geen balk.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string? Text { get; set; }
+
+    /// <summary>
+    /// Het woordlabel voor <see cref="AgentStatus.Unknown"/> in het verborgen voorvoegsel. Laat
+    /// leeg op een agentdetail: dan staat er "Geen telemetrie".
+    /// </summary>
+    [Parameter]
+    public string? UnknownLabel { get; set; }
+
+    /// <summary>Extra classnamen op de melding.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de melding zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            "status-notice",
+            StatusVisuals.Modifier(Status) is { } modifier ? $"status-notice--{modifier}" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+}

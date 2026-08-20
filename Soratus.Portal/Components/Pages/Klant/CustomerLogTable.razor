@@ -1,0 +1,129 @@
+@* De logtabel zoals de klant hem ziet: tijd, niveau, event, bericht, runId — en niets meer.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM DIT NAAST Components/Shared/LogTable.razor STAAT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   `extra` is operator-only. `LogTable` neemt `IReadOnlyList<LogRecord>` en zet elke regel in
+   een `LogRow`, en die is altijd een `<button type="button">` met een chevron die uitklapt naar
+   `LogJson.Format(Record)` — de volledige onderliggende JSON. Op het operatorpad is dat precies
+   goed en blijft het zoals het is.
+
+   Deze tabel neemt `IReadOnlyList<CustomerLogLine>`, en dat type héért `Extra` niet te hebben:
+   het hééft het niet. Daarmee is de zichtbaarheid geen kwestie van een vlag of een `@if` die
+   iemand over een half jaar vergeet — er is in dit pad geen veld om te tonen en `LogJson` wordt
+   nergens aangeroepen. Zet iemand hier een kolom bij, dan kan hij nog steeds niets lekken.
+
+   De rij is daarom een `<div>` en geen `<button>`, en er is geen zesde kolom met een chevron.
+   Er valt niets uit te klappen, dus er hoort geen knop te staan: een chevron die
+   uitklapbaarheid belooft die er niet is, is dezelfde fout als een dode knop.
+
+   De classnamen zijn letterlijk die van `LogRow`, zodat de klantregel en de operatorregel
+   identiek ogen — dezelfde rijhoogte, dezelfde niveaukleuren, dezelfde rijtint bij warn en
+   error. Alleen de uitklap ontbreekt. *@
+
+@using Soratus.Agents.Contracts
+
+<DataCard Grid="Columns">
+    <DataRowHeader />
+
+    @if (Rows.Count == 0)
+    {
+        <p class="table-empty">@EmptyText</p>
+    }
+    else
+    {
+        @foreach (var line in Rows)
+        {
+            @* @key op het id en niet op de index: de live tail voegt regels vóóraan toe, dus
+               met een index als sleutel zou Blazor bij elke nieuwe regel alle rijen als
+               gewijzigd zien en de hele tabel opnieuw opbouwen. *@
+            <div class="log-row" @key="line.Id">
+                <DataRow Class="@RowClass(line.Level)">
+                    <DataCell Class="log-cell__time">
+                        <time datetime="@TimeFormat.Iso(line.Timestamp)"
+                              title="@TimeFormat.Absolute(line.Timestamp, TimeZone)">@TimeFormat.Clock(line.Timestamp, TimeZone)</time>
+                    </DataCell>
+                    <DataCell Class="@LevelClass(line.Level)">@LevelText(line.Level)</DataCell>
+                    <DataCell Class="log-cell__event" Truncate="true" title="@line.Event">@line.Event</DataCell>
+                    @* Geen hint achter het beletselteken: deze rij klapt niet uit, dus er is
+                       geen vervolg om naar te verwijzen. Zie LogText.Title. *@
+                    <DataCell Class="log-cell__message" Truncate="true" title="@LogText.Title(line.Message)">@line.Message</DataCell>
+                    <DataCell Class="log-cell__run">@(line.RunId ?? "—")</DataCell>
+                </DataRow>
+            </div>
+        }
+    }
+</DataCard>
+
+<div class="table-foot">
+    <span class="table-foot__count">@Footer</span>
+    @if (CanLoadMore && OnLoadMore.HasDelegate)
+    {
+        <button type="button" class="btn btn--small" @onclick="OnLoadMore">@LoadMoreLabel</button>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Dezelfde sporen als <c>LogTable.Columns</c>, zonder de zesde kolom voor de chevron.
+    /// De berichtkolom is <c>minmax(0, 1fr)</c> en niet <c>1fr</c>, om dezelfde reden als
+    /// daar: een logregel van duizenden tekens zonder spaties zou met een kale <c>1fr</c>
+    /// de hele tabel oprekken.
+    /// </summary>
+    private static readonly RowGrid Columns = new(
+        "12px",
+        new GridColumn("Tijd", "78px"),
+        new GridColumn("Level", "52px"),
+        new GridColumn("Event", "168px"),
+        new GridColumn("Bericht", "minmax(0, 1fr)"),
+        new GridColumn("RunId", "74px"));
+
+    /// <summary>
+    /// De regels die in beeld komen: al gefilterd en al begrensd. De tabel filtert niet en
+    /// sorteert niet — nieuwste eerst is een besluit van de laag die ze ophaalt.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<CustomerLogLine> Rows { get; set; } = [];
+
+    /// <summary>De voetregel: hoeveel je ziet van hoeveel er is.</summary>
+    [Parameter]
+    public string? Footer { get; set; }
+
+    /// <summary>Of er nog meer te laden is.</summary>
+    [Parameter]
+    public bool CanLoadMore { get; set; }
+
+    /// <summary>Wordt aangeroepen als er op "meer laden" wordt geklikt.</summary>
+    [Parameter]
+    public EventCallback OnLoadMore { get; set; }
+
+    /// <summary>Het label op de laadknop.</summary>
+    [Parameter]
+    public string LoadMoreLabel { get; set; } = "Meer laden";
+
+    /// <summary>De zone waarin de tijden in beeld komen. Standaard Europe/Amsterdam.</summary>
+    [Parameter]
+    public TimeZoneInfo? TimeZone { get; set; }
+
+    /// <summary>Wat er staat als er geen regels aan het filter voldoen.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "Geen logregels die aan het filter voldoen.";
+
+    private static string LevelText(LogLevel level) => level switch
+    {
+        LogLevel.Warn => "warn",
+        LogLevel.Error => "error",
+        _ => "info",
+    };
+
+    private static string LevelClass(LogLevel level) =>
+        $"log-cell__level log-cell__level--{LevelText(level)}";
+
+    private static string RowClass(LogLevel level) => level switch
+    {
+        LogLevel.Warn => "data-row--log log-tint--warn",
+        LogLevel.Error => "data-row--log log-tint--error",
+        _ => "data-row--log",
+    };
+}

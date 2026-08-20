@@ -93,15 +93,35 @@ internal static class Paginaverzameling
                 continue;
             }
 
-            waarden[property.Name] = property.Name switch
-            {
-                "Slug" or "CustomerId" or "CustomerSlug" or "KlantId" => Klantslug,
-                "AgentName" or "AgentNaam" => "factuur-intake",
-                "RunId" => "r-8f3c",
-                _ => "test",
-            };
+            waarden[property.Name] = Waarde(property.Name);
         }
 
         return waarden;
     }
+
+    /// <summary>De naam van de agent waarmee de pagina's worden gerenderd.</summary>
+    public const string Agentnaam = "factuur-intake";
+
+    /// <summary>
+    /// De waarde die bij een parameternaam hoort.
+    /// </summary>
+    /// <param name="naam">De naam van de componentparameter.</param>
+    /// <returns>Een bestaande waarde, of <c>"test"</c> voor een naam die hier niet bekend is.</returns>
+    /// <remarks>
+    /// De vergelijking is hoofdletterongevoelig, en dat is geen kosmetiek. De route van het
+    /// agentdetail heet <c>{Agentnaam}</c> met een kleine n; een ordinale vergelijking met
+    /// <c>AgentNaam</c> gaat daar langs en de pagina rendert dan de agent <c>"test"</c>. Dat is
+    /// precies het soort stille afwijking waar een zichtbaarheidstest niets van merkt — hij
+    /// rendert iets, en de fixture antwoordt braaf op elke naam.
+    /// </remarks>
+    private static string Waarde(string naam) => naam switch
+    {
+        _ when Is(naam, "Slug", "CustomerId", "CustomerSlug", "KlantId") => Klantslug,
+        _ when Is(naam, "AgentName", "AgentNaam", "Agent") => Agentnaam,
+        _ when Is(naam, "RunId") => "r-8f3c",
+        _ => "test",
+    };
+
+    private static bool Is(string naam, params string[] namen) =>
+        namen.Contains(naam, StringComparer.OrdinalIgnoreCase);
 }

@@ -1,0 +1,67 @@
+@* Eén feit uit de feitenrij: mono label in kapitalen, mono waarde met tabulaire cijfers.
+
+   Zet ze in een <FactRow>; die levert het grid en de scheidingslijn. Los werkt de tegel ook,
+   maar dan staat er een dt/dd buiten een dl en dat is ongeldige HTML.
+
+   De waarde is al opgemaakte tekst. De tegel rekent niet en formatteert niet: "1 d 6 u",
+   "09:26 (elke 15 min)" en "v3.2.0" zijn beslissingen van de pagina, niet van een component.
+   Voor een relatieve tijd geef je <RelativeTime> als inhoud mee — dan komt de absolute tijd
+   automatisch in de tooltip te staan. *@
+
+<div class="fact-tile">
+    <dt class="fact-tile__label">@Label</dt>
+    <dd @attributes="AdditionalAttributes" class="@ValueClass" title="@Title">
+        @if (ChildContent is not null)
+        {
+            @ChildContent
+        }
+        else
+        {
+            @Value
+        }
+    </dd>
+</div>
+
+@code {
+    /// <summary>Het label, bijvoorbeeld "Laatste heartbeat". Komt in kapitalen in beeld.</summary>
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>De waarde als tekst. Gebruik "—" als er niets te melden is, nooit "0".</summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// De tooltip bij de waarde. Zeg wat de waarde is en niet wat er staat: "cron: */15 * * * *"
+    /// bij een volgende run, "liveness-probe" bij een heartbeat.
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Rijkere inhoud dan een tekst, bijvoorbeeld een <c>RelativeTime</c>. Vervangt
+    /// <see cref="Value"/>.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Kleurt de waarde amber. Alleen gebruiken als de waarde zelf de oorzaak van een degraded
+    /// status is — een hartslag die ouder is dan de drempel.
+    /// </summary>
+    /// <remarks>
+    /// Nooit als enige drager: gebruik dit uitsluitend op een detail waar de statusbadge en de
+    /// <c>StatusNotice</c> hetzelfde in woorden zeggen. Een amber getal zonder die twee is kleur
+    /// zonder betekenis (§8).
+    /// </remarks>
+    [Parameter]
+    public bool Warn { get; set; }
+
+    /// <summary>Overige attributen, zoals <c>data-testid</c>. Landt op de waarde.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string ValueClass =>
+        Warn ? "fact-tile__value fact-tile__value--warn" : "fact-tile__value";
+}

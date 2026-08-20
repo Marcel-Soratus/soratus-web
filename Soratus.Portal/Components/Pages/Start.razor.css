@@ -1,19 +1,12 @@
-/* Landingsroute — de keuzelijst en de "nog geen omgeving"-pagina.
-   Alles uit tokens.css; geen hexwaarden. */
+/* Landingsroute — de keuzelijst.
 
-.stack {
-  display: grid;
-  gap: var(--gap-card);
-}
-
-.notice {
-  margin: 0;
-  max-width: 78ch;
-}
+   Alleen het gewicht van de omgevingsnaam. Het afkappen deed deze regel eerst zelf, met
+   dezelfde drie declaraties als .row-name__text op het overzicht — en dat was dus opnieuw
+   twee namen voor één regel. Het is hier ook overbodig: de cel eromheen staat op
+   Truncate="true" en .data-cell--truncate in patterns.css kapt al af. Op het overzicht kan
+   dat niet, want daar zit de naam in een flexrij naast de statusstip en raakt de
+   white-space van de cel de tekst niet meer. */
 
 .choice-name {
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

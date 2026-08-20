@@ -575,4 +575,492 @@
     background: var(--status-live-ink);
     animation: pulse var(--pulse-duration) ease-in-out infinite;
   }
+
+  /* ====================================================================
+     Agentdetail (§3.3) — feitenrij, melding, logwerkbalk, logtabel, runs
+
+     Alles hieronder hoort bij het agentdetail. §8 geeft voor deze patronen
+     niets; de maten komen uit de mockup en staan per blok genoemd. Wat §8
+     wél geeft (kleuren, radii, tokens) wordt hier alleen aangeroepen, nooit
+     opnieuw opgeschreven.
+
+     Let op de bronvolgorde: de tint- en padding-regels van de logrij hebben
+     dezelfde specificiteit als .data-row hierboven en winnen dus op positie.
+     Verplaats dit blok niet naar boven.
+     ==================================================================== */
+
+  /* --- feitenrij onder de agentkop ----------------------------------- */
+  /* Mockup: auto-fit minmax(150px, 1fr), 10px/20px gap, lijn erboven. */
+  .fact-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px 20px;
+    margin: 12px 0 0;
+    padding-top: 11px;
+    border-top: 1px solid var(--line-row);
+  }
+
+  .fact-row--flush {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  /* Zonder de nul rekt een lange waarde ("09:26 (elke 15 min)") zijn kolom
+     op en verschuift de hele rij. */
+  .fact-tile {
+    min-width: 0;
+  }
+
+  .fact-tile__label {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .fact-tile__value {
+    margin: 3px 0 0;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-cell);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  /* Alleen naast een badge en een melding die hetzelfde in woorden zeggen. */
+  .fact-tile__value--warn {
+    color: var(--status-degraded-ink);
+  }
+
+  /* --- statusspecifieke melding -------------------------------------- */
+  /* Mockup: 2px linkerrand in de statuskleur, het statusvlak erachter. */
+  .status-notice {
+    margin: 12px 0 0;
+    border-left: 2px solid var(--status-none-ink);
+    background: var(--status-none-fill);
+    padding: 8px 12px;
+    font-size: var(--text-meta);
+    color: var(--ink);
+  }
+
+  .status-notice--live {
+    border-left-color: var(--status-live-ink);
+    background: var(--status-live-fill);
+  }
+
+  .status-notice--degraded {
+    border-left-color: var(--status-degraded-ink);
+    background: var(--status-degraded-fill);
+  }
+
+  .status-notice--failed {
+    border-left-color: var(--status-failed-ink);
+    background: var(--status-failed-fill);
+  }
+
+  .status-notice--idle {
+    border-left-color: var(--status-idle-ink);
+    background: var(--status-idle-fill);
+  }
+
+  /* --- werkbalk boven de logtabel ------------------------------------ */
+  .log-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-col);
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  /* Duwt de live-tail-schakelaar naar rechts, zoals in de mockup. */
+  .log-toolbar__spacer {
+    flex: 1 1 auto;
+  }
+
+  /* --- niveaufilters ------------------------------------------------- */
+  .level-chips {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+
+    /* De uit-toestand van een chip staat niet in §8. Deze tekstkleur komt uit
+       de mockup en staat daarom hier en niet in tokens.css: daar horen
+       uitsluitend §8-waarden. */
+    --level-chip-off-ink: #a4aabd;
+  }
+
+  /* Radius 6px en niet 999px: §8 reserveert de pil voor suggestiechips en
+     geeft filters en knoppen 6px. Dit is een filter. */
+  .level-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--line-field);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink-dim);
+    padding: 5px 9px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .level-chip:hover {
+    border-color: var(--blue);
+  }
+
+  .level-chip__count {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-mute);
+  }
+
+  .level-chip--info {
+    color: var(--log-info);
+  }
+
+  .level-chip--warn {
+    color: var(--log-warn);
+  }
+
+  .level-chip--error {
+    color: var(--log-error);
+  }
+
+  .level-chip--off {
+    background: var(--fill-neutral);
+    border-color: var(--line);
+    color: var(--level-chip-off-ink);
+  }
+
+  .level-chip--off .level-chip__count {
+    color: var(--level-chip-off-ink);
+  }
+
+  /* --- zoekveld ------------------------------------------------------ */
+  .search-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--line-field);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    padding: 0 9px;
+    height: 29px;
+    flex: 1 1 220px;
+    min-width: 0;
+    max-width: 320px;
+  }
+
+  /* De focusring staat om het hele veld en niet om de <input>: het veld is
+     één zichtbaar geheel met een prefix en een wisknop. Dezelfde 2px in
+     merkblauw als overal (§8 Focus), dus er verdwijnt geen indicator. */
+  .search-box:focus-within {
+    border-color: var(--blue);
+    outline: var(--focus-width) solid var(--blue);
+    outline-offset: var(--focus-offset);
+  }
+
+  .search-box__prefix {
+    flex: none;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    color: var(--ink-mute);
+  }
+
+  .search-box__input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: none;
+    padding: 0;
+    font-size: var(--text-cell);
+    color: var(--ink);
+  }
+
+  .search-box__clear {
+    flex: none;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-meta);
+    line-height: 1;
+    color: var(--ink-mute);
+  }
+
+  .search-box__clear:hover {
+    color: var(--ink);
+  }
+
+  /* --- live-tail-schakelaar ------------------------------------------ */
+  .live-tail {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  .live-tail__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--line-field);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink-dim);
+    padding: 5px 10px;
+    font-size: var(--text-meta);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .live-tail__button:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  /* De aan-stand draagt vlak, rand, tekstkleur en een gevulde stip. Dat is
+     opzet: onder prefers-reduced-motion staat de puls stil, en dan moet de
+     stand nog te zien zijn zonder beweging. */
+  .live-tail__button--on {
+    border-color: var(--status-live-line);
+    background: var(--status-live-fill);
+    color: var(--status-live-ink);
+  }
+
+  .live-tail__button--on:hover {
+    border-color: var(--status-live-ink);
+    color: var(--status-live-ink);
+  }
+
+  /* Dezelfde vorm als .pulse-dot, maar leeg en stil. */
+  .live-tail__dot {
+    display: block;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+    flex: none;
+    background: var(--status-none-dot);
+  }
+
+  .live-tail__note {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: 0.04em;
+    color: var(--ink-mute);
+  }
+
+  /* --- logtabel ------------------------------------------------------ */
+  /* LET OP: deze logklassen hebben twee gebruikers, geen één. LogRow zet ze
+     op de operatorrij (met uitklap), en de klantvariant op CustomerLogLine
+     zet dezelfde klassen op een rij zonder uitklap — bewust, zodat een
+     klantregel en een operatorregel identiek ogen en alleen de uitklap
+     verschilt. Wijzig je hier iets aan .log-row, .data-row--log, .log-tint--*
+     of .log-cell__*, kijk dan naar beide tabellen.
+
+     De omhulling per regel draagt de scheidingslijn, want de rij zelf heeft
+     de uitklap als broer en die hoort binnen dezelfde lijn te vallen. */
+  .log-row {
+    border-bottom: 1px solid var(--line-row);
+  }
+
+  .log-row:last-child {
+    border-bottom: none;
+  }
+
+  /* Compactere rij dan de standaard datarij: een logtabel is een leeslijst.
+     7px is de ondergrens uit §8 (rijhoogte 7–11px verticaal); 12px
+     horizontaal komt uit de mockup en past binnen de 12–14px van §8.
+     align-items: baseline zet de vier verschillende tekstgroottes op één lijn. */
+  .data-row--log {
+    padding: var(--pad-row-y-tight) 12px;
+    border-bottom: none;
+    align-items: baseline;
+  }
+
+  /* Rijtint per niveau (§8: warn #fefcf6, error #fefaf9). Info blijft wit.
+     Staat ná .data-row, dat hier van wint op bronvolgorde; de hover-regel
+     van button.data-row heeft meer specificiteit en blijft dus werken. */
+  .log-tint--warn {
+    background: var(--log-warn-row);
+  }
+
+  .log-tint--error {
+    background: var(--log-error-row);
+  }
+
+  .log-cell__time,
+  .log-cell__event,
+  .log-cell__run,
+  .log-cell__caret {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .log-cell__time {
+    color: var(--ink-dim);
+  }
+
+  .log-cell__event {
+    color: var(--ink);
+  }
+
+  .log-cell__run,
+  .log-cell__caret {
+    color: var(--ink-mute);
+  }
+
+  /* De berichtkolom is de flexibele. min-width: 0 staat al op .data-cell;
+     Truncate zet overflow, ellipsis en nowrap erbij. Samen met het spoor
+     minmax(0, 1fr) in LogTable.Columns houdt dat een regel van 3400 tekens
+     binnen zijn kolom. */
+  .log-cell__message {
+    font-size: var(--text-meta);
+    color: var(--ink-dim);
+  }
+
+  .log-cell__level {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .log-cell__level--info {
+    color: var(--log-info);
+  }
+
+  .log-cell__level--warn {
+    color: var(--log-warn);
+  }
+
+  .log-cell__level--error {
+    color: var(--log-error);
+  }
+
+  /* --- uitgeklapte JSON --------------------------------------------- */
+  /* pre-wrap houdt de regelovergangen van de JSON, anywhere breekt een
+     tekenreeks zonder spaties af, max-height houdt een stacktrace binnen
+     één schermhoogte. Alle drie zijn nodig. */
+  .json-disclosure {
+    margin: 0;
+    padding: 10px 12px 12px;
+    background: var(--surface-subtle);
+    border-top: 1px dashed var(--line);
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    line-height: 1.55;
+    color: var(--ink-dim);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 260px;
+    overflow: auto;
+  }
+
+  /* --- lege tabel en voetregel -------------------------------------- */
+  .table-empty {
+    margin: 0;
+    padding: 26px 14px;
+    text-align: center;
+    font-size: var(--text-cell);
+    color: var(--ink-mute);
+  }
+
+  .table-foot {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-col);
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .table-foot__count {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: 0.04em;
+    color: var(--ink-mute);
+  }
+
+  /* --- runtabel ----------------------------------------------------- */
+  .runs-cell__time,
+  .runs-cell__duration,
+  .runs-cell__items,
+  .runs-cell__run {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .runs-cell__time,
+  .runs-cell__duration {
+    color: var(--ink-dim);
+  }
+
+  .runs-cell__items {
+    color: var(--ink);
+  }
+
+  .runs-cell__run {
+    color: var(--ink-mute);
+  }
+
+  /* ====================================================================
+     Paginahelpers — verhuisd uit scoped CSS
+
+     Deze vier stonden als kopie in de CSS-isolatie van losse pagina's. Dat
+     ging precies zoals het misgaat: een classnaam reist mee naar een andere
+     pagina, de scoped regel niet. `.toolbar` stond alleen in
+     Klant/Agents.razor.css en werd op het agentdetail óók gebruikt — daar
+     dus zonder flexrij en zonder marge. `.notice` stond op drie plekken
+     gedefinieerd en op vijf gebruikt.
+
+     Alle kopieën waren letterlijk identiek, dus deze verhuizing verandert
+     niets aan wat er al goed stond; ze repareert wat er ontbrak. Vier
+     regels op één plek is bovendien de hele reden dat dit bestand bestaat.
+     ==================================================================== */
+
+  /* Verticale stapel kaarten. De afstand tussen kaarten is dezelfde als
+     die van .card + .card, zodat een stapel en losse kaarten hetzelfde
+     ritme houden. */
+  .stack {
+    display: grid;
+    gap: var(--gap-card);
+  }
+
+  /* Rij boven de paginakop, meestal met de terugknop erin. */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-col);
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  /* Een uitlegregel boven een lijst of tabel. 78ch is een leesbare
+     regellengte; zonder die grens loopt de tekst over de volle 1280px en
+     verliest het oog de volgende regel.
+
+     Combineer met .meta voor de kleur en de grootte: class="meta notice".
+     De naam is generiek en lijkt op .status-notice, wat iets anders is (de
+     statusmelding met gekleurde linkerrand). Wil iemand dat ooit
+     ondubbelzinnig maken, dan is dat een hernoeming in vijf componenten en
+     dus een gecoördineerde wijziging, geen opruiming onderweg. */
+  .notice {
+    margin: 0;
+    max-width: 78ch;
+  }
+
+  /* Een waarde die achterloopt: een agent op een oudere contractvorm, een
+     meting ouder dan de drempel. Alleen de kleur staat hier; de plaatsing
+     (blok onder de waarde, of inline erachter) is paginastijl en hoort in
+     de scoped CSS van het scherm dat hem gebruikt.
+
+     Amber en niet rood: achterlopen is een aandachtspunt en geen storing.
+     Nooit als enige drager — er hoort tekst bij die zegt wat er oud is. */
+  .stale {
+    color: var(--status-degraded-ink);
+  }
 }

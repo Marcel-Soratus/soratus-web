@@ -1,0 +1,80 @@
+@* De tabbalk van het agentdetail: Logs · Runs · Configuratie (§3.3).
+
+   De tabs zijn links en geen knoppen. Drie redenen, in volgorde van gewicht:
+
+     1. Ze werken zonder interactiviteit. Het agentdetail is grotendeels static SSR; een knop zou
+        daar niets doen tot er een interactief eiland om heen staat.
+     2. Ze zijn deelbaar. "Kijk even naar de runs van deze agent" is één URL, niet een URL plus
+        een instructie om op een tab te klikken.
+     3. Terug in de browser doet wat je verwacht.
+
+   Daarom ook geen role="tab"/role="tablist": dat ARIA-patroon belooft pijltjesnavigatie en één
+   tabstop voor de hele rij, en dat is er bij links niet. Wat er wél is — een groep links waarvan
+   er één de huidige weergave is — zeggen we met <nav> en aria-current="page". Beloof geen gedrag
+   dat je niet hebt.
+
+   De actieve tab draagt een 2px onderlijn in merkblauw (§8). Die vorm is voorbehouden aan deze
+   balk: de header gebruikt een vlak en de klantnavigatie alleen kleur en gewicht, zodat de drie
+   navigatieniveaus aflopend in sterkte zijn. Zie de opmerking bij .customer-nav in patterns.css. *@
+
+<nav @attributes="AdditionalAttributes" class="@CssClass" aria-label="@Label">
+    @foreach (var tab in Tabs)
+    {
+        var active = IsActive(tab);
+
+        <a class="@(active ? "tab active" : "tab")"
+           href="@HrefFor(tab)"
+           aria-current="@(active ? "page" : null)">@tab.Label</a>
+    }
+</nav>
+
+@code {
+    /// <summary>De tabs, in schermvolgorde.</summary>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<TabItem> Tabs { get; set; } = [];
+
+    /// <summary>
+    /// De <see cref="TabItem.Id"/> van de tab die nu open staat. Vergelijking is
+    /// case-insensitive, want dit komt uit een querystring die een mens kan hebben getypt.
+    /// </summary>
+    /// <remarks>
+    /// Een waarde die geen enkele tab kent laat de balk zonder actieve tab staan. Dat is bewust:
+    /// de pagina bepaalt wat er bij een onbekende tab gebeurt (meestal: de eerste tonen), en de
+    /// balk verzint dat niet voor hem.
+    /// </remarks>
+    [Parameter]
+    public string? ActiveId { get; set; }
+
+    /// <summary>
+    /// De naam van de queryparameter in de standaard-href. Alleen zetten als een pagina de tab
+    /// onder een andere naam in de URL houdt.
+    /// </summary>
+    [Parameter]
+    public string QueryName { get; set; } = "tab";
+
+    /// <summary>
+    /// De toegankelijke naam van de balk. Nodig zodra er meer dan één navigatie op de pagina
+    /// staat, en dat is hier het geval: de header, de klantnavigatie en deze balk.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Agentweergave";
+
+    /// <summary>Extra classnamen op de balk.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de balk zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => string.IsNullOrWhiteSpace(Class) ? "tabs" : $"tabs {Class}";
+
+    private bool IsActive(TabItem tab) =>
+        ActiveId is not null && string.Equals(tab.Id, ActiveId, StringComparison.OrdinalIgnoreCase);
+
+    private string HrefFor(TabItem tab) =>
+        string.IsNullOrWhiteSpace(tab.Href)
+            ? $"?{Uri.EscapeDataString(QueryName)}={Uri.EscapeDataString(tab.Id)}"
+            : tab.Href;
+}

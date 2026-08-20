@@ -1,0 +1,546 @@
+@* Het logtabblad van het agentdetail — het enige interactieve eiland van het portaal.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM DIT EEN APART COMPONENT IS EN GEEN BLOK IN AgentDetail.razor
+   ────────────────────────────────────────────────────────────────────────────────────────
+   De rendermode staat op de aanroep in AgentDetail.razor, niet hier. Daarmee is dít het
+   eiland en blijft de pagina eromheen static SSR. Twee gevolgen die het ontwerp bepalen:
+
+     1. Parameters gaan over de circuitgrens en worden geserialiseerd — ze staan dus in de
+        paginabron. Daarom komen hier alleen twee strings binnen, de klant-slug en de
+        agentnaam, en die staan al in de URL. Geen viewmodel, geen scope, geen
+        RenderFragment: een objectgraaf zou hier niet aankomen, en een scope zou er niet
+        eens hóren aan te komen.
+     2. Die twee strings komen van de client en zijn dus niet te vertrouwen. Dit component
+        vraagt zelf een scope aan bij de resolver, met de aangemelde gebruiker van dit
+        circuit. Autoriseren gebeurt hier opnieuw en niet één keer op de pagina: de pagina
+        is een ander renderproces en zijn beslissing reist niet mee.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
+   TWEE ROLLEN, TWEE TYPEN, TWEE TABELLEN
+   ────────────────────────────────────────────────────────────────────────────────────────
+   `extra` — de onderliggende JSON van een logregel, met koppelingdetails en bronpaden erin —
+   is operator-only. Dat is hier geen @if maar een typeverschil: de operator krijgt
+   `LogRecord` (met `Extra`), de klant krijgt `CustomerLogLine`, en dat type héért `Extra`
+   niet te hebben — het hééft het niet. Daarom zijn er ook twee tabellen: `LogTable` klapt
+   een regel uit naar `LogJson.Format`, `CustomerLogTable` kan dat niet, want hij krijgt een
+   type waar niets uit te klappen valt.
+
+   De werkbalk erboven is voor beide rollen dezelfde en staat daarom één keer.
+
+   Krijgt de resolver niets, dan rendert dit component een nette melding en géén logregels.
+   Het roept geen NotFound() aan — de pagina eromheen heeft dat al gedaan voordat dit eiland
+   bestond; kwam er tóch iemand langs deze grens, dan is zwijgen het juiste antwoord. *@
+
+@using System.Collections.Generic
+@using System.Linq
+@implements IAsyncDisposable
+
+@inject ICustomerScopeResolver Scopes
+@inject IAgentDetailViews Details
+@inject IJSRuntime Js
+
+@if (_denied)
+{
+    <EmptyState Title="Geen toegang tot deze logregels"
+                Text="De sessie is niet meer geldig of de rechten zijn gewijzigd. Laad de pagina opnieuw." />
+}
+else if (!_loaded)
+{
+    <p class="meta">Logregels worden opgehaald…</p>
+}
+else
+{
+    <div class="log-toolbar">
+        <LevelFilterChips Counts="_counts" Enabled="_levels" OnToggle="ToggleLevelAsync" />
+        <LogSearchBox Value="_search" OnSearch="SearchAsync" />
+        <div class="log-toolbar__spacer"></div>
+        @* Lag komt uit de weergavelaag en niet uit een getal hier: agents schrijven in
+           batches, dus er zit tijd tussen "het gebeurde" en "het staat er". Eén bron voor
+           dat getal, anders staat er straks een minuut op het ene scherm en drie op het
+           andere. *@
+        <LiveTailToggle Active="_tail"
+                        Interval="TailInterval"
+                        Lag="AgentLogs.HistoricalLag"
+                        OnToggle="SetTailAsync" />
+    </div>
+
+    @if (_tailNotice is { } notice)
+    {
+        <p class="meta notice" role="status">@notice</p>
+    }
+
+    @if (_levels is { Count: 0 })
+    {
+        @* Alle niveaus uit. Er wordt dan niet gequeryd: "geen niveaus" en "alle niveaus"
+           zijn twee verschillende vragen, en ik ga niet gokken hoe de opslaglaag een leeg
+           filter uitlegt. Wat er staat is waar en de uitweg is één klik. *@
+        <EmptyState Title="Alle logniveaus staan uit"
+                    Text="Er is niets te tonen zolang alle niveaus uit staan. Zet er minstens één aan met de chips hierboven."
+                    Glyph="○" />
+    }
+    else if (IsEmptyAndUnfiltered)
+    {
+        <EmptyState Title="Deze agent heeft nog niets gelogd"
+                    Text="Er staan geen logregels in de opslag. Dat hoort zo bij een agent die nog niet heeft gedraaid; vanaf de eerste run verschijnen ze hier."
+                    Facts="EmptyFacts" />
+    }
+    else if (_operatorScope is not null)
+    {
+        <LogTable Rows="_operatorLines"
+                  TotalCount="Total"
+                  ExpandedIds="_expanded"
+                  OnToggle="ToggleRow"
+                  OnLoadMore="LoadMoreAsync"
+                  CanLoadMore="_continuation is not null"
+                  LiveTail="_tail" />
+    }
+    else
+    {
+        <CustomerLogTable Rows="_customerLines"
+                          Footer="@Footer"
+                          OnLoadMore="LoadMoreAsync"
+                          CanLoadMore="_continuation is not null" />
+    }
+}
+
+@code {
+    /// <summary>
+    /// Hoe vaak live tail nieuwe regels ophaalt. Hetzelfde getal gaat naar
+    /// <c>LiveTailToggle</c>, want dat component zet het in de zichtbare tekst.
+    /// </summary>
+    private static readonly TimeSpan TailInterval = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Hoe lang live tail maximaal blijft lopen zonder dat iemand hem opnieuw aanzet.
+    /// </summary>
+    /// <remarks>
+    /// Een tabblad dat een uur openstaat pollt anders 720 keer, met een Cosmos-query per
+    /// keer. Een kwartier is de orde van grootte van "ik kijk even mee terwijl het draait";
+    /// wie langer meekijkt is er nog en kan hem hervatten. De melding zegt precies dat.
+    /// </remarks>
+    private static readonly TimeSpan TailMaxDuration = TimeSpan.FromMinutes(15);
+
+    private static readonly string[] EmptyFacts = ["logregels: 0"];
+
+    private static readonly LogLevel[] AllLevels = Enum.GetValues<LogLevel>();
+
+    private static readonly IReadOnlyDictionary<LogLevel, int> NoCounts =
+        new Dictionary<LogLevel, int>();
+
+    /// <summary>De regels van de operator: <c>LogRecord</c>, met <c>Extra</c>.</summary>
+    private readonly List<LogRecord> _operatorLines = [];
+
+    /// <summary>
+    /// De regels van de klant: <c>CustomerLogLine</c>, zonder <c>Extra</c>. Er is geen pad
+    /// waarlangs deze lijst de onderliggende JSON kan bevatten, want het type heeft hem niet.
+    /// </summary>
+    private readonly List<CustomerLogLine> _customerLines = [];
+
+    /// <summary>
+    /// Welke regels uitgeklapt staan. Alleen de operatortabel klapt uit; de klanttabel kent
+    /// het begrip niet.
+    /// </summary>
+    private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
+
+    private CustomerScope? _customerScope;
+    private OperatorCustomerScope? _operatorScope;
+    private bool _denied;
+    private bool _loaded;
+    private bool _isFiltered;
+
+    private IReadOnlyDictionary<LogLevel, int> _counts = NoCounts;
+    private HashSet<LogLevel>? _levels;
+    private string? _search;
+    private string? _continuation;
+    private LogCursor _tailFrom;
+
+    private bool _tail;
+    private string? _tailNotice;
+    private bool _visible = true;
+    private CancellationTokenSource? _tailCts;
+
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<LogsPanel>? _self;
+    private readonly string _watchId = Guid.NewGuid().ToString("n");
+
+    /// <summary>De slug van de klant. Komt uit de route van de pagina.</summary>
+    [Parameter]
+    [EditorRequired]
+    public string CustomerId { get; set; } = default!;
+
+    /// <summary>De technische naam van de agent. Komt uit de route van de pagina.</summary>
+    [Parameter]
+    [EditorRequired]
+    public string AgentName { get; set; } = default!;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private int LineCount => _operatorScope is not null ? _operatorLines.Count : _customerLines.Count;
+
+    private bool IsEmptyAndUnfiltered => LineCount == 0 && !_isFiltered;
+
+    /// <summary>
+    /// Hoeveel regels er in totaal aan het huidige filter voldoen, voor de eerlijke voetregel
+    /// onder de tabel.
+    /// </summary>
+    /// <remarks>
+    /// <c>Counts</c> is de telling vóór het niveaufilter maar mét de zoekterm. De som over de
+    /// niveaus die aan staan is dus precies het aantal regels dat aan het hele filter
+    /// voldoet. Dat is geen tweede berekening van hetzelfde getal: het is dezelfde telling,
+    /// opgeteld.
+    /// </remarks>
+    private int Total => _counts
+        .Where(entry => _levels is null || _levels.Contains(entry.Key))
+        .Sum(entry => entry.Value);
+
+    private string Footer => $"{LineCount} van {Total} regels";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            _denied = true;
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Operatorrecht eerst, net als op de pagina: een operator krijgt ook een gewone
+        // klantscope, en dan zou hij de smalle klantvariant van de logregels te zien krijgen.
+        _operatorScope = await Scopes.ResolveOperatorAsync(user, CustomerId);
+
+        if (_operatorScope is null)
+        {
+            _customerScope = await Scopes.ResolveAsync(user, CustomerId);
+        }
+
+        if (_operatorScope is null && _customerScope is null)
+        {
+            _denied = true;
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _denied)
+        {
+            return;
+        }
+
+        // Collocated JS-module. Hij doet één ding: melden of dit tabblad op de voorgrond
+        // staat, zodat live tail niet doorpollt in een tabblad dat niemand ziet.
+        _self = DotNetObjectReference.Create(this);
+        _module = await Js.InvokeAsync<IJSObjectReference>(
+            "import",
+            "./Components/Pages/Klant/LogsPanel.razor.js");
+
+        await _module.InvokeVoidAsync("watch", _watchId, _self);
+    }
+
+    /// <summary>
+    /// Wordt door de JS-module aangeroepen bij elke wisseling van tabbladzichtbaarheid.
+    /// </summary>
+    /// <param name="visible">Of dit tabblad op de voorgrond staat.</param>
+    [JSInvokable]
+    public Task SetVisible(bool visible)
+    {
+        _visible = visible;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Haalt de eerste pagina logregels op met het huidige filter.</summary>
+    private async Task ReloadAsync()
+    {
+        _continuation = null;
+        _operatorLines.Clear();
+        _customerLines.Clear();
+
+        // De uitklapstaat gaat mee leeg. Een id dat na het filteren niet meer in beeld staat
+        // zou onzichtbaar open blijven staan en bij het wissen van het filter ineens
+        // opengeklapt terugkomen — een scherm dat iets onthoudt wat de lezer niet meer weet.
+        _expanded.Clear();
+
+        if (_levels is { Count: 0 })
+        {
+            // Niets te vragen. De telling blijft staan, want die gaat over de niveaus vóór
+            // het filter en verandert dus niet door dit filter.
+            _loaded = true;
+            return;
+        }
+
+        if (!await FetchAsync(BuildQuery(null), append: false))
+        {
+            return;
+        }
+
+        _loaded = true;
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_continuation is null)
+        {
+            return;
+        }
+
+        await FetchAsync(BuildQuery(_continuation), append: true);
+    }
+
+    /// <summary>
+    /// Haalt één pagina op en zet hem in de lijst die bij de rol hoort.
+    /// </summary>
+    /// <returns><c>false</c> als de scope onderweg is vervallen.</returns>
+    private async Task<bool> FetchAsync(LogQuery query, bool append)
+    {
+        if (_operatorScope is { } operatorScope)
+        {
+            var view = await Details.BuildLogsAsync(operatorScope, AgentName, query);
+
+            if (view is null)
+            {
+                _denied = true;
+                return false;
+            }
+
+            if (!append)
+            {
+                _operatorLines.Clear();
+            }
+
+            _operatorLines.AddRange(view.Lines);
+            Absorb(view.Counts, view.ContinuationToken, view.TailFrom, view.IsFiltered);
+            return true;
+        }
+
+        var customerView = await Details.BuildLogsAsync(_customerScope!, AgentName, query);
+
+        if (customerView is null)
+        {
+            _denied = true;
+            return false;
+        }
+
+        if (!append)
+        {
+            _customerLines.Clear();
+        }
+
+        _customerLines.AddRange(customerView.Lines);
+        Absorb(customerView.Counts, customerView.ContinuationToken, customerView.TailFrom, customerView.IsFiltered);
+        return true;
+    }
+
+    private void Absorb(
+        IReadOnlyDictionary<LogLevel, int> counts,
+        string? continuation,
+        LogCursor tailFrom,
+        bool isFiltered)
+    {
+        _counts = counts;
+        _continuation = continuation;
+        _tailFrom = tailFrom;
+        _isFiltered = isFiltered;
+    }
+
+    private async Task ToggleLevelAsync(LogLevel level)
+    {
+        // null betekent "alle niveaus". Zodra er één uit gaat wordt het een expliciete set.
+        _levels ??= [.. AllLevels];
+
+        if (!_levels.Remove(level))
+        {
+            _levels.Add(level);
+        }
+
+        // Alles weer aan is hetzelfde als geen filter. Terug naar null houdt de LogQuery
+        // leeg en scheelt de opslaglaag een clausule.
+        if (_levels.Count == AllLevels.Length)
+        {
+            _levels = null;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task SearchAsync(string text)
+    {
+        _search = string.IsNullOrWhiteSpace(text) ? null : text;
+        await ReloadAsync();
+    }
+
+    private void ToggleRow(string id)
+    {
+        if (!_expanded.Remove(id))
+        {
+            _expanded.Add(id);
+        }
+    }
+
+    private async Task SetTailAsync(bool active)
+    {
+        _tailNotice = null;
+
+        if (!active)
+        {
+            await StopTailAsync();
+            return;
+        }
+
+        _tail = true;
+        _tailCts = new CancellationTokenSource();
+
+        // Bewust niet awaiten: deze lus loopt tot hij wordt afgebroken.
+        _ = TailLoopAsync(_tailCts.Token);
+    }
+
+    private async Task StopTailAsync()
+    {
+        _tail = false;
+
+        if (_tailCts is { } cts)
+        {
+            _tailCts = null;
+            await cts.CancelAsync();
+            cts.Dispose();
+        }
+    }
+
+    private async Task TailLoopAsync(CancellationToken token)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+
+        try
+        {
+            using var timer = new PeriodicTimer(TailInterval);
+
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                if (DateTimeOffset.UtcNow - startedAt >= TailMaxDuration)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await StopTailAsync();
+                        _tailNotice =
+                            "Live tail is na een kwartier automatisch gestopt, zodat dit tabblad "
+                            + "niet blijft ophalen als er niemand kijkt. Klik Live tail om hem te "
+                            + "hervatten; de regels die er nu staan blijven gewoon staan.";
+                        StateHasChanged();
+                    });
+
+                    return;
+                }
+
+                // Achtergrondtabblad: de klok loopt door, het ophalen niet. Zo stopt hij
+                // alsnog na een kwartier in plaats van eeuwig te blijven wachten.
+                if (!_visible)
+                {
+                    continue;
+                }
+
+                await TickAsync(token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normale afloop: iemand zette live tail uit of navigeerde weg.
+        }
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        var query = BuildQuery(null);
+        bool hasMore;
+
+        if (_operatorScope is { } operatorScope)
+        {
+            var tail = await Details.TailLogsAsync(operatorScope, AgentName, query, _tailFrom, token);
+
+            if (tail is null || token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                // De cursor schuift altijd op, ook als er niets bij kwam. Anders vraagt de
+                // volgende tik hetzelfde venster opnieuw op.
+                _tailFrom = tail.Cursor;
+                _counts = tail.Counts;
+
+                if (!tail.IsEmpty)
+                {
+                    // De tail levert oudste eerst; de tabel toont nieuwste eerst. Omgedraaid
+                    // vooraan invoegen houdt die volgorde heel.
+                    _operatorLines.InsertRange(0, tail.Lines.Reverse());
+                }
+
+                StateHasChanged();
+            });
+
+            hasMore = tail.HasMore;
+        }
+        else
+        {
+            var tail = await Details.TailLogsAsync(_customerScope!, AgentName, query, _tailFrom, token);
+
+            if (tail is null || token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                _tailFrom = tail.Cursor;
+                _counts = tail.Counts;
+
+                if (!tail.IsEmpty)
+                {
+                    _customerLines.InsertRange(0, tail.Lines.Reverse());
+                }
+
+                StateHasChanged();
+            });
+
+            hasMore = tail.HasMore;
+        }
+
+        // Er stond meer klaar dan er in deze tik paste: direct nog eens in plaats van het
+        // interval afwachten, anders loopt de tail structureel achter.
+        if (hasMore && !token.IsCancellationRequested)
+        {
+            await TickAsync(token);
+        }
+    }
+
+    private LogQuery BuildQuery(string? continuation) => new()
+    {
+        Levels = _levels is { Count: > 0 } ? _levels.ToArray() : null,
+        Search = _search,
+        ContinuationToken = continuation,
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopTailAsync();
+
+        if (_module is { } module)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("unwatch", _watchId);
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Het circuit is al weg; er valt niets meer op te ruimen aan de clientkant.
+            }
+        }
+
+        _self?.Dispose();
+    }
+}

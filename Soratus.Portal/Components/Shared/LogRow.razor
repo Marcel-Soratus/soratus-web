@@ -1,0 +1,230 @@
+@* Eén logregel, met de uitklap eronder.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Drie besluiten die hier zijn afgewogen; ze horen bij elkaar.
+   ────────────────────────────────────────────────────────────────────────────────────────────
+
+   1. DE LANGE REGEL. In de data zit een logregel van ruim 3400 tekens: een JSON-payload met een
+      stacktrace, zonder spaties op de plekken waar het uitkomt. Zo'n regel mag de tabel niet
+      verbreden, want dan schuift élke rij mee en is de kolomindeling weg. Drie dingen zijn
+      daarvoor allemaal nodig, en het zijn er echt drie:
+
+        a. de berichtkolom is minmax(0, 1fr) en niet 1fr. Een kale 1fr heeft min-width: auto en
+           groeit dus mee met het langste ononderbroken stuk tekst. Met minmax(0, …) is de
+           ondergrens nul en blijft de track binnen zijn deel van de breedte. (Dat spoor staat in
+           LogTable.Columns, niet hier.)
+        b. de cel heeft min-width: 0 met ellipsis. Zonder de nul zou de cel zelf zijn inhoud niet
+           kleiner willen maken dan de tekst; dat staat op .data-cell in patterns.css, en
+           Truncate zet de ellipsis erbij.
+        c. de uitklap staat búiten de grid-rij, als broer. Stond hij erin, dan werd het <pre> een
+           grid-item en telde het mee in de kolombreedte — dan hebben a en b geen zin meer.
+
+      Vandaar de omhulling: <div class="log-row"> met daarin de rij en daarnaast de uitklap.
+
+   2. UITKLAPPEN MET EEN ECHTE KNOP. De rij is een <button type="button"> met aria-expanded, geen
+      role="button". Dat besluit ligt vast in fase-0-afwijkingen §5: in Blazor is preventDefault
+      op de spatiebalk niet per toetsaanslag te regelen, dus scrolt een role="button" bij elke
+      Space die de rij activeert. Uit datzelfde besluit volgt de harde regel dat een activeerbare
+      rij geen knop of link mag bevatten. Daarom staat er in een logregel geen enkele actie — geen
+      kopieerknop, geen "filter op deze runId". Zou die er komen, dan is de rij niet meer zelf
+      activeerbaar en verhuist het uitklappen naar een knop in de laatste cel.
+
+   3. DE UITKLAPSTAAT KOMT VAN BUITEN. IsExpanded en OnToggle in plaats van een eigen bool. Dat is
+      meer werk voor de pagina en toch de juiste kant: moet de tabel ooit gevirtualiseerd worden,
+      dan verhuist de uitklap naar een detailpaneel naast de tabel, en dat is dan een wijziging in
+      één component in plaats van in elke rij. Bijkomend: de pagina kan alles inklappen als het
+      filter verandert, en dat kan een rij die zijn eigen staat bijhoudt niet.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+
+   ShouldRender staat aan, want de ouder biedt bij elke wijziging alle rijen opnieuw aan. Het
+   vergelijk gaat op LogRecord.Id en niet op de instantie: elke keer dat de live tail Cosmos
+   leest, komen er nieuwe objecten terug met dezelfde inhoud, dus op referentie vergelijken zou
+   elke vijf seconden de hele tabel opnieuw opbouwen. Een logregel is onveranderlijk — hetzelfde
+   id betekent dezelfde tekst. *@
+
+@using Soratus.Agents.Contracts
+
+<div class="log-row">
+    <DataRow Class="@InnerClass"
+             OnActivate="Toggle"
+             Expanded="IsExpanded"
+             Controls="@(IsExpanded ? PanelId : null)">
+        <DataCell Class="log-cell__time">
+            <time datetime="@TimeFormat.Iso(Record.Timestamp)"
+                  title="@TimeFormat.Absolute(Record.Timestamp, TimeZone)">@TimeFormat.Clock(Record.Timestamp, TimeZone)</time>
+        </DataCell>
+        <DataCell Class="@LevelClass">@LevelText</DataCell>
+        <DataCell Class="log-cell__event" Truncate="true" title="@Record.Event">@Record.Event</DataCell>
+        <DataCell Class="log-cell__message" Truncate="true" title="@MessageTitle">@Record.Message</DataCell>
+        <DataCell Class="log-cell__run">@(Record.RunId ?? "—")</DataCell>
+        <DataCell Class="log-cell__caret">
+            <span aria-hidden="true">@(IsExpanded ? "▾" : "▸")</span>
+        </DataCell>
+    </DataRow>
+
+    @if (IsExpanded)
+    {
+        <JsonDisclosure Id="@PanelId"
+                        Json="@LogJson.Format(Record)"
+                        Label="@($"Onderliggende JSON van {Record.Event} om {TimeFormat.Clock(Record.Timestamp, TimeZone)}")" />
+    }
+</div>
+
+@code {
+    private bool _dirty = true;
+    private bool _first = true;
+
+    /// <summary>De logregel.</summary>
+    [Parameter]
+    [EditorRequired]
+    public LogRecord Record { get; set; } = default!;
+
+    /// <summary>
+    /// Of de uitklap open staat. Komt van de pagina; de rij houdt dit niet zelf bij.
+    /// </summary>
+    [Parameter]
+    public bool IsExpanded { get; set; }
+
+    /// <summary>
+    /// Wordt aangeroepen met <see cref="LogRecord.Id"/> als er op de rij wordt geklikt. De pagina
+    /// bepaalt wat dat betekent: alleen deze openen, of ook de andere sluiten.
+    /// </summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland: op static SSR is de rij een knop die niets doet. Dat is
+    /// bewust geen link — er is geen URL voor "deze regel uitgeklapt".
+    /// </remarks>
+    [Parameter]
+    public EventCallback<string> OnToggle { get; set; }
+
+    /// <summary>De zone waarin de tijd in beeld komt. Standaard Europe/Amsterdam.</summary>
+    [Parameter]
+    public TimeZoneInfo? TimeZone { get; set; }
+
+    /// <summary>
+    /// Het id van het uitklappaneel. Uit <see cref="LogRecord.Id"/>, met alles wat geen letter of
+    /// cijfer is vervangen — een ULID is dat wel, maar een id uit een andere bron misschien niet.
+    /// </summary>
+    private string PanelId => $"log-json-{Sanitised(Record.Id)}";
+
+    /// <summary>
+    /// De classlijst van de rij zelf. De tint hoort hier en niet op de omhulling: <c>.data-row</c>
+    /// zet een witte achtergrond op de rij, en die zou een tint op de omhulling gewoon
+    /// overdekken.
+    /// </summary>
+    /// <summary>
+    /// De tooltip bij het bericht: het hele bericht, of het begin ervan.
+    /// </summary>
+    /// <remarks>
+    /// De lengte en de reden staan in <see cref="LogText"/>, samen met de waarschuwing die er hoort
+    /// bij te staan: <strong>afkappen is geen weglaten</strong>. Ze staan daar en niet hier omdat de
+    /// klantvariant van de logtabel dezelfde grens aanhoudt, en één getal op twee plekken loopt uit
+    /// elkaar.
+    ///
+    /// De hint mag hier wél verwijzen naar het uitklappen, want deze rij klapt uit. De klantrij doet
+    /// dat niet en geeft er dus geen mee.
+    /// </remarks>
+    private string MessageTitle =>
+        LogText.Title(Record.Message, "klik de regel open voor de volledige tekst");
+
+    private string InnerClass =>
+        Tint() is { } modifier ? $"data-row--log log-tint--{modifier}" : "data-row--log";
+
+    private string LevelClass => $"log-cell__level log-cell__level--{LevelText}";
+
+    private string LevelText => Record.Level switch
+    {
+        LogLevel.Warn => "warn",
+        LogLevel.Error => "error",
+        _ => "info",
+    };
+
+    /// <summary>
+    /// De rijtint. Alleen warn en error krijgen er een (§8: warn <c>#fefcf6</c>, error
+    /// <c>#fefaf9</c>); info blijft wit, anders is de hele tabel een kleurenveld en valt de fout
+    /// juist minder op. De tint is een herhaling van het woordlabel in de niveaukolom, nooit de
+    /// enige drager.
+    /// </summary>
+    private string? Tint() => Record.Level switch
+    {
+        LogLevel.Warn => "warn",
+        LogLevel.Error => "error",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Alleen opnieuw renderen als er voor déze rij iets is veranderd.
+    /// </summary>
+    /// <remarks>
+    /// <para>OnToggle doet niet mee in het vergelijk, en dat is de kern van de truc: de ouder
+    /// maakt die callback als lambda, dus hij is bij elke render een ander object. Zou hij
+    /// meetellen, dan was elke rij altijd "gewijzigd" en had ShouldRender geen effect. De nieuwe
+    /// callback wordt wél toegekend — we slaan alleen het hertekenen over.</para>
+    ///
+    /// <para>Een onbekende parameternaam maakt de rij altijd vuil. Komt er later een parameter
+    /// bij en vergeet iemand hem hier, dan rendert de rij te vaak in plaats van te weinig; dat is
+    /// een prestatieprobleem en geen fout op het scherm.</para>
+    /// </remarks>
+    public override Task SetParametersAsync(ParameterView parameters)
+    {
+        // De eerste ronde is altijd vuil: er staat nog niets.
+        _dirty = _first;
+        _first = false;
+
+        foreach (var parameter in parameters)
+        {
+            switch (parameter.Name)
+            {
+                case nameof(Record):
+                    if (parameter.Value is not LogRecord incoming
+                        || Record is null
+                        || !string.Equals(Record.Id, incoming.Id, StringComparison.Ordinal))
+                    {
+                        _dirty = true;
+                    }
+
+                    break;
+
+                case nameof(IsExpanded):
+                    if (parameter.Value is bool expanded && expanded != IsExpanded)
+                    {
+                        _dirty = true;
+                    }
+
+                    break;
+
+                case nameof(TimeZone):
+                    if (!Equals(parameter.Value, TimeZone))
+                    {
+                        _dirty = true;
+                    }
+
+                    break;
+
+                case nameof(OnToggle):
+                    break;
+
+                default:
+                    _dirty = true;
+                    break;
+            }
+        }
+
+        return base.SetParametersAsync(parameters);
+    }
+
+    protected override bool ShouldRender() => _dirty;
+
+    private Task Toggle() =>
+        OnToggle.HasDelegate ? OnToggle.InvokeAsync(Record.Id) : Task.CompletedTask;
+
+    private static string Sanitised(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "onbekend";
+        }
+
+        return string.Concat(value.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-'));
+    }
+}

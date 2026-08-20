@@ -53,6 +53,27 @@ public abstract class Portaalrendertest : BunitContext
     protected IPortalViews Weergaven { get; set; } = new VastePortaalweergaven();
 
     /// <summary>
+    /// De weergavelaag van de tabbladen op het agentdetail: logs, runs en configuratie.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dit is standaard dezelfde instantie als <see cref="Weergaven"/> — één fixture die
+    /// beide interfaces implementeert. Dat is geen gemakzucht: op een echt scherm komen de kop en
+    /// de tabbladen uit dezelfde gegevens, en twee losse fixtures zouden elkaar kunnen
+    /// tegenspreken zonder dat een test dat merkt.</para>
+    ///
+    /// <para>Zet <see cref="Weergaven"/> op een eigen instantie en deze blijft daaraan gekoppeld
+    /// zolang die instantie ook <see cref="IAgentDetailViews"/> is; anders valt hij terug op de
+    /// standaardfixture.</para>
+    /// </remarks>
+    protected IAgentDetailViews Tabbladen
+    {
+        get => _tabbladen ?? Weergaven as IAgentDetailViews ?? new VastePortaalweergaven();
+        set => _tabbladen = value;
+    }
+
+    private IAgentDetailViews? _tabbladen;
+
+    /// <summary>
     /// Richt de container in met een aangemelde gebruiker en de diensten die een pagina vraagt.
     /// </summary>
     /// <param name="gebruiker">De aangemelde gebruiker.</param>
@@ -78,7 +99,16 @@ public abstract class Portaalrendertest : BunitContext
         // regel levert IsInRole false en slaagt elke autorisatietest om de verkeerde reden.
         Services.AddSingleton<AuthenticationStateProvider>(new VasteAanmelding(gebruiker));
 
+        // Het logtabblad is een interactief eiland en laadt bij de eerste render zijn
+        // collocated JS-module. Die module doet één ding — melden of het tabblad op de voorgrond
+        // staat — en er is in een test geen browser om dat te vragen. Loose in plaats van een
+        // SetupModule per test: er valt aan die module niets te asserteren, en een strikte
+        // JS-laag zou elke pagina met een eiland laten omvallen op een detail dat niets met
+        // zichtbaarheid te maken heeft.
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
         Services.AddSingleton(Weergaven);
+        Services.AddSingleton(Tabbladen);
         Services.AddSingleton(Autorisatiebron.Resolver(lijst, Autorisatiebron.StandaardEndpoint));
         Services.AddSingleton(Autorisatiebron.Klantenlijst(lijst));
     }

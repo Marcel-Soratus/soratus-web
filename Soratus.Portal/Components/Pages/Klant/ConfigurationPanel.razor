@@ -1,0 +1,107 @@
+@* Het configuratietabblad van het agentdetail (§3.3): read-only.
+
+   Twee viewmodels, twee blokken. De klantvariant heeft geen omgeving, geen contractversie en
+   geen telemetrielocatie — niet leeg, maar afwezig.
+
+   §3.3 vraagt ook resource-limieten, image, resource group en identity. Wat daarmee gebeurt
+   staat in fase-0-afwijkingen.md §11; kort:
+
+     limieten en image  — bestaan niet op App Service. Er staat dus geen rij, ook geen lege.
+     resource group     — staat er wél voor de operator, uit EnvironmentDetail.
+     identity           — een echt gat. Eén regel eronder zegt dat, in plaats van te zwijgen.
+
+   Béide meldingen komen van het viewmodel en worden hier niet verzonnen. Dat de
+   identity-melding alleen op het operatortype staat is geen toeval: een klant hoort niets over
+   managed identities te lezen, dus er is geen veld waar die tekst voor hem uit kan komen. *@
+
+@if (Operator is { } config)
+{
+    <div class="card">
+        <div class="card__body">
+            <FactRow NoDivider="true">
+                <FactTile Label="Versie" Value="@config.Version" />
+                <FactTile Label="Omgeving" Value="@AgentText.Environment(config.AgentEnvironment)" />
+                <FactTile Label="Levenscyclus" Value="@AgentText.Lifecycle(config.Lifecycle)" />
+                <FactTile Label="Planning" Value="@Schedule(config.Schedule)" Title="@config.Schedule" />
+                <FactTile Label="Trigger"
+                          Value="@AgentText.Trigger(config.TriggerKind)"
+                          Title="@config.TriggerDetail" />
+                <FactTile Label="Volgende run"
+                          Value="@NextRun(config.NextRunAt, config.TriggerKind)"
+                          Title="@(config.NextRunAt is { } n ? TimeFormat.Absolute(n) : config.TriggerDetail)" />
+                <FactTile Label="Draait sinds"
+                          Value="@TimeFormat.Relative(config.StartedAt, config.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(config.StartedAt)" />
+                <FactTile Label="Laatste heartbeat"
+                          Value="@TimeFormat.Relative(config.LastHeartbeatAt, config.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(config.LastHeartbeatAt)" />
+                <FactTile Label="Heartbeat-interval" Value="@Interval(config.HeartbeatInterval)" />
+                <FactTile Label="Logretentie" Value="@Days(config.LogRetention)" />
+                <FactTile Label="Runretentie" Value="@Days(config.RunRetention)" />
+                <FactTile Label="Contractversie"
+                          Value="@($"v{config.ContractVersion}")"
+                          Warn="config.IsContractOutdated"
+                          Title="@(config.IsContractOutdated ? $"De huidige contractversie is v{config.ExpectedContractVersion}; deze agent mist een uitrol van de telemetriebibliotheek." : null)" />
+                <FactTile Label="Azure-omgeving" Value="@(config.EnvironmentDetail ?? "—")" />
+                <FactTile Label="Telemetrie-opslag" Value="@config.TelemetryLocation" />
+            </FactRow>
+        </div>
+    </div>
+
+    <p class="meta notice">@config.ReadOnlyNotice</p>
+    <p class="meta notice">@config.IdentityNotice</p>
+}
+else if (Customer is { } customerConfig)
+{
+    <div class="card">
+        <div class="card__body">
+            <FactRow NoDivider="true">
+                <FactTile Label="Versie" Value="@customerConfig.Version" />
+                <FactTile Label="Planning"
+                          Value="@Schedule(customerConfig.Schedule)"
+                          Title="@customerConfig.Schedule" />
+                <FactTile Label="Trigger"
+                          Value="@AgentText.Trigger(customerConfig.TriggerKind)"
+                          Title="@customerConfig.TriggerDetail" />
+                <FactTile Label="Volgende run"
+                          Value="@NextRun(customerConfig.NextRunAt, customerConfig.TriggerKind)"
+                          Title="@(customerConfig.NextRunAt is { } n ? TimeFormat.Absolute(n) : customerConfig.TriggerDetail)" />
+                <FactTile Label="Draait sinds"
+                          Value="@TimeFormat.Relative(customerConfig.StartedAt, customerConfig.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(customerConfig.StartedAt)" />
+                <FactTile Label="Laatste heartbeat"
+                          Value="@TimeFormat.Relative(customerConfig.LastHeartbeatAt, customerConfig.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(customerConfig.LastHeartbeatAt)" />
+                <FactTile Label="Heartbeat-interval" Value="@Interval(customerConfig.HeartbeatInterval)" />
+                <FactTile Label="Logretentie" Value="@Days(customerConfig.LogRetention)" />
+                <FactTile Label="Runretentie" Value="@Days(customerConfig.RunRetention)" />
+            </FactRow>
+        </div>
+    </div>
+
+    <p class="meta notice">@customerConfig.ReadOnlyNotice</p>
+}
+
+@code {
+    /// <summary>De operatorvariant, of <c>null</c>.</summary>
+    [Parameter]
+    public OperatorAgentConfigurationView? Operator { get; set; }
+
+    /// <summary>De klantvariant, of <c>null</c>.</summary>
+    [Parameter]
+    public CustomerAgentConfigurationView? Customer { get; set; }
+
+    private static string Schedule(string? schedule) =>
+        string.IsNullOrWhiteSpace(schedule) ? "geen planning · alleen op trigger" : schedule;
+
+    private static string NextRun(DateTimeOffset? nextRunAt, TriggerKind kind) =>
+        nextRunAt is { } next
+            ? TimeFormat.Clock(next)
+            : $"op trigger · {AgentText.Trigger(kind)}";
+
+    private static string Interval(TimeSpan interval) =>
+        $"elke {(int)interval.TotalSeconds} sec";
+
+    private static string Days(TimeSpan retention) =>
+        $"{(int)retention.TotalDays} dagen";
+}

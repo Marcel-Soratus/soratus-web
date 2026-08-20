@@ -20,7 +20,7 @@ namespace Soratus.Portal.Views;
 /// ander moment beoordeeld zijn dan de agent onderaan — meestal onzichtbaar, en precies op de
 /// drempel van twee minuten zichtbaar op de verkeerde manier.
 /// </remarks>
-internal sealed class PortalViews(
+internal sealed partial class PortalViews(
     IAgentTelemetryStore store,
     ICustomerDirectory directory,
     TimeProvider timeProvider) : IPortalViews

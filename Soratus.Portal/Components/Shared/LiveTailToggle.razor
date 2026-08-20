@@ -1,0 +1,158 @@
+@* De live-tail-schakelaar boven de logtabel (§3.3), met de eerlijke tekst over de vertraging.
+
+   De tekst wijkt af van de spec, en dat is opzet. §3.3 schrijft "historische logs lopen ~1 min
+   achter" voor. Dat getal kwam uit de aanname dat de bron Log Analytics zou zijn, met zijn één
+   tot drie minuten ingestievertraging. Wij lezen Cosmos (zie fase-0-afwijkingen §1), en daar is
+   een regel leesbaar zodra hij geschreven is. Wat er bij ons tussen zit is ons eigen
+   pollinterval. De tekst noemt dus dat interval, want dat is wat er waar is. Een vertraging van
+   een minuut opschrijven die we niet hebben, is net zo goed onwaar als er geen noemen.
+
+   Er is wél een tweede vertraging, en die staat er als je hem meegeeft: de telemetriebibliotheek
+   schrijft in batches, dus een regel kan al bestaan voordat hij in Cosmos staat. Dat is een feit
+   over de schrijfkant en niet over ons interval, en het is dus een apart getal — geef er
+   AgentLogsView.HistoricalLag aan mee. Zonder Lag staat er alleen het pollinterval, wat waar is
+   voor een bron die direct wegschrijft.
+
+   De aan-stand is niet alleen de animatie. Onder prefers-reduced-motion zet base.css elke
+   animatie stil, en dan zou een pulserende stip niets meer onderscheiden. De knop draagt daarom
+   ook het groene vlak, de groene rand, groene tekst, een gevulde stip en aria-pressed. Zet het
+   scherm in grijstinten en houd de animatie tegen: de stand is nog te zien.
+
+   aria-live staat hier en nergens anders. De logtabel zelf krijgt hem nooit: die vult zich elke
+   paar seconden met nieuwe regels, en een schermlezer die dat allemaal voorleest maakt het
+   scherm onbruikbaar. Wat een lezer wél moet weten is of hij aan staat, en dat is deze ene regel. *@
+
+<div @attributes="AdditionalAttributes" class="@CssClass">
+    <button type="button"
+            class="@ButtonClass"
+            aria-pressed="@(Active ? "true" : "false")"
+            title="@Tooltip"
+            @onclick="Toggle">
+        <span class="@DotClass" aria-hidden="true"></span>@ButtonLabel
+    </button>
+    <span class="live-tail__note">@Note</span>
+    <span class="sr-only" aria-live="polite">@Announcement</span>
+</div>
+
+@code {
+    /// <summary>Of live tail aan staat.</summary>
+    [Parameter]
+    public bool Active { get; set; }
+
+    /// <summary>
+    /// Wordt aangeroepen met de gevraagde nieuwe stand. De pagina houdt de staat bij en start of
+    /// stopt het verversen.
+    /// </summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland: op static SSR staat de knop er wel, maar doet hij niets.
+    /// </remarks>
+    [Parameter]
+    public EventCallback<bool> OnToggle { get; set; }
+
+    /// <summary>
+    /// Hoe vaak de pagina nieuwe logregels ophaalt. Dit getal komt in de zichtbare tekst terecht,
+    /// dus het hoort hetzelfde te zijn als het interval dat de pagina echt aanhoudt.
+    /// </summary>
+    [Parameter]
+    public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Hoeveel de opslag zelf achterloopt, doordat agents hun logregels in batches wegschrijven.
+    /// Laat leeg om er niets over te zeggen.
+    /// </summary>
+    /// <remarks>
+    /// Dit is een ander getal dan <see cref="Interval"/> en hoort er dus naast te staan, niet in
+    /// plaats van. Het pollinterval is wat wij doen; deze vertraging is wat de schrijfkant doet.
+    /// Geef hier <c>AgentLogsView.HistoricalLag</c> door, zodat er één bron voor dat getal is.
+    /// </remarks>
+    [Parameter]
+    public TimeSpan? Lag { get; set; }
+
+    /// <summary>Het label op de knop.</summary>
+    [Parameter]
+    public string ButtonLabel { get; set; } = "Live tail";
+
+    /// <summary>Extra classnamen op de omhulling.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de omhulling.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "live-tail" : $"live-tail {Class}";
+
+    private string ButtonClass =>
+        Active ? "live-tail__button live-tail__button--on" : "live-tail__button";
+
+    /// <summary>
+    /// De pulserende stip is het bestaande <c>pulse-dot</c>-patroon uit patterns.css — de enige
+    /// animatie in het portaal (§8 Motion). Uit is dezelfde stip zonder vulling en zonder puls.
+    /// </summary>
+    private string DotClass => Active ? "pulse-dot" : "live-tail__dot";
+
+    /// <summary>
+    /// Het interval in woorden. Onder een minuut in seconden, daarboven in minuten: "elke 90 sec"
+    /// leest niemand als anderhalve minuut.
+    /// </summary>
+    private string IntervalText
+    {
+        get
+        {
+            var seconds = (long)Math.Round(Interval.TotalSeconds);
+
+            if (seconds <= 0)
+            {
+                return "continu";
+            }
+
+            return seconds < 60
+                ? $"elke {seconds} sec"
+                : $"elke {(long)Math.Round(Interval.TotalMinutes)} min";
+        }
+    }
+
+    /// <summary>
+    /// De vertraging van de opslag in woorden, of leeg als er geen is meegegeven.
+    /// </summary>
+    private string? LagText
+    {
+        get
+        {
+            if (Lag is not { } lag || lag <= TimeSpan.Zero)
+            {
+                return null;
+            }
+
+            var seconds = (long)Math.Round(lag.TotalSeconds);
+
+            return seconds < 60
+                ? $"agents schrijven in batches, dus tot ~{seconds} sec vertraging"
+                : $"agents schrijven in batches, dus tot ~{(long)Math.Round(lag.TotalMinutes)} min vertraging";
+        }
+    }
+
+    private string Note
+    {
+        get
+        {
+            var text = Active
+                ? $"ververst {IntervalText} · nieuwe regels komen bovenaan"
+                : "staat uit · de tabel toont de regels van het laatste ophalen";
+
+            return LagText is { } lag ? $"{text} · {lag}" : text;
+        }
+    }
+
+    private string Tooltip => Active
+        ? $"Live tail staat aan: het portaal haalt {IntervalText} nieuwe logregels op. Klik om te stoppen."
+        : "Live tail staat uit. Klik om nieuwe logregels te laten ophalen.";
+
+    private string Announcement => Active
+        ? $"Live tail staat aan. De logtabel ververst {IntervalText}."
+        : "Live tail staat uit. De logtabel ververst niet automatisch.";
+
+    private Task Toggle() =>
+        OnToggle.HasDelegate ? OnToggle.InvokeAsync(!Active) : Task.CompletedTask;
+}

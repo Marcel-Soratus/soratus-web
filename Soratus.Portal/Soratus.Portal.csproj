@@ -27,6 +27,19 @@
 
   <ItemGroup>
     <!--
+      Een webproject haalt Microsoft.Extensions.Logging via de impliciete usings binnen, en
+      daar zit ook een LogLevel. Zonder deze alias is elke verwijzing naar LogLevel ambigu, en
+      dat wringt in elk bestand dat met logregels werkt — dat is in dit portaal de kern van het
+      werk. Eén alias op projectniveau in plaats van een using-regel per bestand.
+
+      LogLevel betekent hier dus het niveau van een agent-logregel. Wil je dat van het
+      logframework, schrijf dan Microsoft.Extensions.Logging.LogLevel voluit.
+    -->
+    <Using Include="Soratus.Agents.Contracts.LogLevel" Alias="LogLevel" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
       De store, de scope-resolver en de viewmodelbouwer zijn internal, en dat blijven ze: buiten het
       portaal hoort niemand een scope te kunnen maken. Het testproject moet ze wel kunnen aanroepen,
       anders zijn juist de klassen waar de autorisatie in zit de enige die niet getest worden.

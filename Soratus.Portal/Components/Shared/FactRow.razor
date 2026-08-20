@@ -1,0 +1,45 @@
+@* De feitenrij onder de agentkop: VERSIE · DRAAIT SINDS · LAATSTE HEARTBEAT · LAATSTE RUN ·
+   VOLGENDE RUN (§3.3).
+
+   Een definitielijst en geen reeks divs. Een feit is een term met een waarde, en dat is precies
+   wat <dl>/<dt>/<dd> betekent: een schermlezer kondigt de lijst aan met het aantal feiten en
+   koppelt elk label aan zijn waarde. Bij losse divs zou "versie v3.2.0 draait sinds 1 d 6 u"
+   één lange woordenbrij zijn.
+
+   De dt/dd-paren zitten per feit in een <div>. Dat mag in een <dl> en het is hier nodig: elk
+   feit moet één grid-item zijn, anders lopen labels en waarden door elkaar over de kolommen.
+
+   §8 geeft geen patroon voor deze rij. Maten komen uit de mockup: auto-fit met minmax(150px,
+   1fr), 10px rijafstand en 20px kolomafstand, een scheidingslijn boven de rij. *@
+
+<dl @attributes="AdditionalAttributes" class="@CssClass">
+    @ChildContent
+</dl>
+
+@code {
+    /// <summary>De feiten: <c>FactTile</c>'s.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Laat de scheidingslijn boven de rij weg. Voor een feitenrij die niet onder een kop staat.
+    /// </summary>
+    [Parameter]
+    public bool NoDivider { get; set; }
+
+    /// <summary>Extra classnamen op de rij.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de lijst zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            "fact-row",
+            NoDivider ? "fact-row--flush" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+}

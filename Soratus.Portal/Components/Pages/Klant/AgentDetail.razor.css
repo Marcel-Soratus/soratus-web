@@ -1,0 +1,27 @@
+/* Agentdetail — alleen de kop van de kaart.
+
+   De tabbalk, de feitenrij, de statusmelding, de logtabel en de runtabel brengen hun eigen
+   stijl mee uit patterns.css. Wat hier staat is de regel met de statusbadge en de versie,
+   waar §8 en de mockup niets voor geven. Geen hexwaarden; alles uit tokens.css. */
+
+.agent-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-col);
+  flex-wrap: wrap;
+  /* De statusmelding komt hier direct onder en heeft zijn eigen ruimte; anders staan de
+     badge en die melding tegen elkaar aan. */
+  padding-bottom: 10px;
+}
+
+/* De contractwaarschuwing naast de versie. Dezelfde mededeling als in de versiekolom op de
+   agentlijst, dus dezelfde classnaam: de amberkleur komt uit .stale in patterns.css en staat
+   niet twee keer. Hier alleen de plaatsing — inline achter de versie in plaats van als eigen
+   regel eronder.
+
+   Amber zonder vlak of rand is opzet: het is een achterstand die aandacht vraagt en geen
+   status van de agent, dus het mag niet als badge lezen. Het woordlabel draagt de betekenis,
+   de kleur is de herhaling. */
+.stale {
+  margin-left: 8px;
+}

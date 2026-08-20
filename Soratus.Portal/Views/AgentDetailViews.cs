@@ -1,4 +1,5 @@
 using Soratus.Agents.Contracts;
+using Soratus.Portal.Data;
 
 namespace Soratus.Portal.Views;
 
@@ -69,14 +70,14 @@ public sealed record OperatorAgentDetailView
     /// Hoe lang logregels bewaard blijven, voor op de configuratiekaart.
     /// </summary>
     /// <remarks>
-    /// Retentie is een eigenschap van de container (<c>DefaultTimeToLive</c>) en wordt centraal
-    /// ingericht; deze waarde is de afspraak uit het contract, niet iets dat het portaal uitleest.
-    /// Loopt de container daarvan af, dan is dat een inrichtingsfout die hier niet zichtbaar wordt.
+    /// Doorverwijzing naar <see cref="TelemetryRetention"/> en geen tweede getal: het
+    /// configuratietabblad leest dezelfde waarde, en twee plekken met een bewaartermijn zijn twee
+    /// plekken die uit de pas kunnen gaan lopen.
     /// </remarks>
-    public static TimeSpan LogRetention => TimeSpan.FromDays(30);
+    public static TimeSpan LogRetention => TelemetryRetention.Logs;
 
     /// <summary>Hoe lang runs bewaard blijven.</summary>
-    public static TimeSpan RunRetention => TimeSpan.FromDays(400);
+    public static TimeSpan RunRetention => TelemetryRetention.Runs;
 
     /// <summary>
     /// De drempel waarboven stilte als <see cref="AgentStatus.Degraded"/> geldt, voor de

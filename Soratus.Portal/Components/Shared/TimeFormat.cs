@@ -34,6 +34,15 @@ public static class TimeFormat
     /// </remarks>
     public static TimeZoneInfo DefaultZone { get; } = Resolve(DefaultZoneId);
 
+    /// <summary>
+    /// De cultuur voor getallen in beeld: Nederlands, dus een komma als decimaalteken.
+    /// </summary>
+    /// <remarks>
+    /// Alleen voor getallen. Datums en tijden gaan bewust door <see cref="CultureInfo.InvariantCulture"/>
+    /// met een expliciet patroon, zodat de vorm niet met de servercultuur meebeweegt.
+    /// </remarks>
+    private static readonly CultureInfo Dutch = CultureInfo.GetCultureInfo("nl-NL");
+
     /// <summary>Relatieve tijd in gewone taal, zoals "11 min geleden".</summary>
     /// <param name="value">Het moment.</param>
     /// <param name="now">Het referentiemoment.</param>
@@ -74,6 +83,44 @@ public static class TimeFormat
     /// <returns>De tijd in de doelzone, zonder datum.</returns>
     public static string Clock(DateTimeOffset value, TimeZoneInfo? zone = null) =>
         In(value, zone).ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// De duur van een run, zoals "1840 ms", "21,40 s" of "2 m 14 s".
+    /// </summary>
+    /// <param name="duration">De duur, of <c>null</c> als er niets is gemeten.</param>
+    /// <param name="culture">De cultuur voor het decimaalteken. Standaard <c>nl-NL</c>.</param>
+    /// <returns>De duur in de grofste eenheid die nog precisie houdt, of "—".</returns>
+    /// <remarks>
+    /// Geen duur is een streepje en geen nul. Nul milliseconden zou beweren dat er iets is gemeten
+    /// en dat het onmeetbaar snel ging; bij een lopende run is er simpelweg nog niets te melden.
+    ///
+    /// Deze methode staat hier en niet op een pagina, omdat er twee schermen zijn die een duur
+    /// tonen — de agentlijst en de runtabel — en een duur die op het ene scherm "21,40 s" en op het
+    /// andere "21.4s" heet, is een fout die niemand meldt maar iedereen ziet.
+    /// </remarks>
+    public static string Duration(TimeSpan? duration, CultureInfo? culture = null)
+    {
+        if (duration is not { } value)
+        {
+            return "—";
+        }
+
+        var format = culture ?? Dutch;
+
+        if (value.TotalSeconds < 1)
+        {
+            return $"{value.TotalMilliseconds.ToString("0", format)} ms";
+        }
+
+        if (value.TotalSeconds < 60)
+        {
+            return $"{value.TotalSeconds.ToString("0.00", format)} s";
+        }
+
+        return value.TotalMinutes < 60
+            ? $"{(int)value.TotalMinutes} m {value.Seconds} s"
+            : $"{(int)value.TotalHours} u {value.Minutes} m";
+    }
 
     /// <summary>De machineleesbare vorm voor het <c>datetime</c>-attribuut van <c>&lt;time&gt;</c>.</summary>
     /// <param name="value">Het moment.</param>

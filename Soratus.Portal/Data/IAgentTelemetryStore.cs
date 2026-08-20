@@ -1,3 +1,4 @@
+using Soratus.Agents.Contracts;
 using Soratus.Portal.Security;
 
 namespace Soratus.Portal.Data;
@@ -61,6 +62,28 @@ public interface IAgentTelemetryStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Alleen het registratiedocument van één agent van deze klant, zonder zijn laatste run.
+    /// </summary>
+    /// <param name="scope">Het leesrecht op deze klant.</param>
+    /// <param name="agentName">De technische naam van de agent.</param>
+    /// <param name="cancellationToken">Annuleringstoken.</param>
+    /// <returns>
+    /// De registratie, of <c>null</c> als de agent niet bestaat óf van een andere klant is. Die
+    /// twee zijn bewust hetzelfde antwoord.
+    /// </returns>
+    /// <remarks>
+    /// Bestaat naast <see cref="GetAgentAsync"/> omdat de tabbladen op het agentdetail alleen willen
+    /// weten of deze agent zichtbaar mag zijn en op welke omgeving hij draait. De laatste afgeronde
+    /// run erbij ophalen is voor die vraag een tweede query die niemand leest. Dit is één point read
+    /// — de goedkoopste leesactie die Cosmos kent — en daarmee is de zichtbaarheidscontrole per
+    /// tabblad goedkoop genoeg om hem niet over te slaan.
+    /// </remarks>
+    Task<AgentRegistration?> GetRegistrationAsync(
+        CustomerScope scope,
+        string agentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// De runs van één agent, nieuwste eerst, gepagineerd.
     /// </summary>
     /// <param name="scope">Het leesrecht op deze klant.</param>
@@ -88,6 +111,68 @@ public interface IAgentTelemetryStore
         CustomerScope scope,
         string agentName,
         LogQuery query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Telt de logregels van één agent per niveau, voor de filterchips.
+    /// </summary>
+    /// <param name="scope">Het leesrecht op deze klant.</param>
+    /// <param name="agentName">De technische naam van de agent.</param>
+    /// <param name="query">
+    /// Hetzelfde filter als aan <see cref="GetLogsAsync"/> is meegegeven.
+    /// <see cref="LogQuery.Levels"/> wordt genegeerd — zie de opmerkingen.
+    /// </param>
+    /// <param name="cancellationToken">Annuleringstoken.</param>
+    /// <returns>De telling per niveau.</returns>
+    /// <remarks>
+    /// <para><strong>Het niveaufilter wordt bewust genegeerd.</strong> Zou het meedoen, dan telt
+    /// elke chip alleen zichzelf: met alleen "error" aan zou er "info 0, warn 0, error 3" staan en
+    /// zou de lezer niet kunnen zien dat er iets te vinden is als hij "warn" aanzet. De zoekterm,
+    /// de runId en de bovengrens doen wél mee, want die gelden voor de hele tabel. Het resultaat is
+    /// dat het aanzetten van een chip precies het aantal regels oplevert dat erop stond.</para>
+    ///
+    /// <para>Eén query met <c>GROUP BY c.level</c>, en niet drie tellingen. Gemeten op de echte
+    /// opslag: 3,30 RU tegen 3,12 RU voor één losse telling — drie losse tellingen zouden dus ruim
+    /// het drievoudige kosten en bovendien drie momenten zijn.</para>
+    ///
+    /// <para>Dit is een telling over álle bewaarde regels binnen het filter, niet over de
+    /// zichtbare pagina. Bij de bewaartermijn van dertig dagen groeit de kost daarvan mee met wat
+    /// een agent in die dertig dagen heeft geschreven; wordt dat een probleem, dan is een
+    /// tijdvenster op de hele logweergave het antwoord en niet een telling die iets anders
+    /// omvat dan de lijst.</para>
+    /// </remarks>
+    Task<LogLevelTally> CountLogLevelsAsync(
+        CustomerScope scope,
+        string agentName,
+        LogQuery query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// De logregels die er ná de cursor bij zijn gekomen. Dit is de live tail.
+    /// </summary>
+    /// <param name="scope">Het leesrecht op deze klant.</param>
+    /// <param name="agentName">De technische naam van de agent.</param>
+    /// <param name="query">De cursor en dezelfde filters als de tabel; zie <see cref="LogQuery.Tail"/>.</param>
+    /// <param name="cancellationToken">Annuleringstoken.</param>
+    /// <returns>
+    /// De nieuwe regels, oudste eerst, met de doorgeschoven cursor. Bij niets nieuws een leeg
+    /// antwoord met dezelfde cursor erin — nooit <c>null</c>.
+    /// </returns>
+    /// <remarks>
+    /// <para><strong>Geen regel twee keer.</strong> De cursor is een paar van tijdstempel en ULID,
+    /// en de vergelijking is <c>ts &gt; @since OR (ts = @since AND id &gt; @sinceId)</c>. Met
+    /// alleen een tijdstempel moet je kiezen tussen een regel overslaan en er eentje dubbel tonen;
+    /// dit is precies gemeten tegen de echte opslag, waar een cursor op de tijd alleen zijn eigen
+    /// regel opnieuw meelevert.</para>
+    ///
+    /// <para><strong>Geen regel overgeslagen.</strong> De query sorteert oplopend en de cursor
+    /// schuift door naar de laatste regel die daadwerkelijk is meegegeven. Zie de opmerkingen bij
+    /// <see cref="LogTail"/> voor waarom aflopend sorteren hier regels zou laten verdwijnen.</para>
+    /// </remarks>
+    Task<LogTail> TailLogsAsync(
+        CustomerScope scope,
+        string agentName,
+        LogTailQuery query,
         CancellationToken cancellationToken = default);
 
     /// <summary>

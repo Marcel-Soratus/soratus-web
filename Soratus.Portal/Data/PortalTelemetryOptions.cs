@@ -84,3 +84,25 @@ public static class CosmosContainerNames
     /// <summary><c>LogRecord</c>-documenten, TTL 30 dagen.</summary>
     public const string Logs = "logs";
 }
+
+/// <summary>
+/// Hoe lang telemetrie bewaard blijft, volgens het contract.
+/// </summary>
+/// <remarks>
+/// <para>Retentie is een eigenschap van de container (<c>DefaultTimeToLive</c>) en wordt centraal
+/// ingericht. Deze waarden zijn de <em>afspraak</em> uit het agentcontract en niet iets dat het
+/// portaal uitleest; loopt een container daarvan af, dan is dat een inrichtingsfout die hier niet
+/// zichtbaar wordt.</para>
+///
+/// <para>Twee getallen en niet één. Bij een factuurdiscussie of de vraag "wat is er in mei gebeurd"
+/// wil je de runs nog hebben terwijl de logregels allang zijn opgeruimd. Een configuratietabblad dat
+/// er één bewaartermijn van maakt, liegt over de helft.</para>
+/// </remarks>
+public static class TelemetryRetention
+{
+    /// <summary>Hoe lang logregels bewaard blijven.</summary>
+    public static TimeSpan Logs => TimeSpan.FromDays(30);
+
+    /// <summary>Hoe lang runs bewaard blijven.</summary>
+    public static TimeSpan Runs => TimeSpan.FromDays(400);
+}

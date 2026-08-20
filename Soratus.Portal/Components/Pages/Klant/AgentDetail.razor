@@ -1,0 +1,315 @@
+@page "/klant/{Slug}/agents/{Agentnaam}"
+@attribute [Authorize]
+
+@* Het agentdetail (§3.3): kop met status, feitenrij, en drie tabbladen.
+
+   Er staat hier geen @rendermode. De pagina is static SSR; alleen het logtabblad is een
+   interactief eiland, en die rendermode staat op de aanroep van LogsPanel verderop. Zo blijft
+   alles wat zonder JavaScript kan ook zonder JavaScript werken: de kop, de feiten, de runs,
+   de configuratie en het wisselen van tabblad.
+
+   De tabs zijn links met ?tab=…, dus deelbaar en werkend met de terugknop van de browser.
+
+   Twee rollen, twee viewmodels, net als op de agentlijst. Een klantgebruiker krijgt
+   CustomerAgentDetailView, en die heeft geen omgeving, geen contractversie en geen
+   telemetrielocatie — niet als leeg veld, maar helemaal niet. Vraagt een klant het detail op
+   van een agent buiten productie, dan geeft de viewmodelbouwer null en geeft deze pagina 404:
+   hetzelfde antwoord als bij een agent die niet bestaat. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject IPortalViews Views
+@inject IAgentDetailViews Details
+@inject NavigationManager Navigation
+
+<PageTitle>@_agentName · Agent Portal</PageTitle>
+
+@if (_operatorDetail is { } operatorDetail)
+{
+    var agent = operatorDetail.Agent;
+
+    <div class="toolbar">
+        <a class="btn btn--small" href="@AgentsHref"><span class="mono" aria-hidden="true">←</span>Agents van @operatorDetail.CustomerDisplayName</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title mono">@agent.AgentName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(operatorDetail.GeneratedAt)">
+            @agent.DisplayType · @AgentText.Environment(agent.AgentEnvironment) ·
+            bijgewerkt @TimeFormat.Clock(operatorDetail.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@operatorDetail.CustomerId" />
+
+    <div class="card">
+        <div class="card__body agent-head">
+            <StatusBadge Status="agent.Status" />
+            <span class="mono-meta">
+                @agent.Version · @AgentText.Lifecycle(agent.Lifecycle)
+                @if (agent.IsContractVersionStale)
+                {
+                    <span class="stale">contract v@agent.ContractVersion van
+                        v@AgentRegistration.CurrentContractVersion</span>
+                }
+            </span>
+        </div>
+
+        <StatusNotice Status="agent.Status"
+                      Text="@AgentText.StatusNotice(agent.Status, agent.Silence, agent.LastRun)" />
+
+        <div class="card__body">
+            <FactRow>
+                <FactTile Label="Versie" Value="@agent.Version" />
+                <FactTile Label="Draait sinds"
+                          Value="@TimeFormat.Relative(agent.StartedAt, operatorDetail.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(agent.StartedAt)" />
+                <FactTile Label="Laatste heartbeat"
+                          Value="@TimeFormat.Relative(agent.LastHeartbeatAt, operatorDetail.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(agent.LastHeartbeatAt)"
+                          Warn="agent.Status == AgentStatus.Degraded" />
+                <FactTile Label="Laatste run">
+                    <RelativeTime Value="agent.LastActivityAt" Now="operatorDetail.GeneratedAt" />
+                </FactTile>
+                <FactTile Label="Volgende run" Value="@NextRun(agent.NextRunAt, agent.TriggerKind, agent.TriggerDetail)"
+                          Title="@(agent.NextRunAt is { } n ? TimeFormat.Absolute(n) : agent.TriggerDetail)" />
+            </FactRow>
+        </div>
+    </div>
+
+}
+else if (_customerDetail is { } customerDetail)
+{
+    var agent = customerDetail.Agent;
+
+    <div class="toolbar">
+        <a class="btn btn--small" href="@AgentsHref"><span class="mono" aria-hidden="true">←</span>Alle agents</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title mono">@agent.AgentName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(customerDetail.GeneratedAt)">
+            @agent.DisplayType · bijgewerkt @TimeFormat.Clock(customerDetail.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@customerDetail.CustomerId" />
+
+    <div class="card">
+        <div class="card__body agent-head">
+            <StatusBadge Status="agent.Status" />
+            <span class="mono-meta">@agent.Version</span>
+        </div>
+
+        <StatusNotice Status="agent.Status"
+                      Text="@AgentText.StatusNotice(agent.Status, agent.Silence, agent.LastRun)" />
+
+        <div class="card__body">
+            <FactRow>
+                <FactTile Label="Versie" Value="@agent.Version" />
+                <FactTile Label="Draait sinds"
+                          Value="@TimeFormat.Relative(agent.StartedAt, customerDetail.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(agent.StartedAt)" />
+                <FactTile Label="Laatste heartbeat"
+                          Value="@TimeFormat.Relative(agent.LastHeartbeatAt, customerDetail.GeneratedAt)"
+                          Title="@TimeFormat.Absolute(agent.LastHeartbeatAt)"
+                          Warn="agent.Status == AgentStatus.Degraded" />
+                <FactTile Label="Laatste run">
+                    <RelativeTime Value="agent.LastActivityAt" Now="customerDetail.GeneratedAt" />
+                </FactTile>
+                <FactTile Label="Volgende run" Value="@NextRun(agent.NextRunAt, agent.TriggerKind, agent.TriggerDetail)"
+                          Title="@(agent.NextRunAt is { } n ? TimeFormat.Absolute(n) : agent.TriggerDetail)" />
+            </FactRow>
+        </div>
+    </div>
+
+}
+
+@* De tabbalk en de inhoud staan buiten de rolblokken: welk tabblad open staat en wat erin
+   komt is voor beide rollen dezelfde vraag. Het configuratietabblad kiest binnenin alsnog
+   het juiste viewmodel, want dáár verschillen de rollen wel. *@
+@if (_customerId is { } customerId && _canonicalName is { } canonicalName)
+{
+    <TabBar Tabs="TabItems" ActiveId="@_tab" />
+
+    @if (_tab == TabRuns)
+    {
+        @* CanLoadMore blijft uit. Doorbladeren vraagt een interactief eiland, en het
+           logtabblad is het enige eiland in deze fase; een knop die niets doet is verboden.
+           De voetregel benoemt daarom de beperking in plaats van hem weg te poetsen. *@
+        <RunsTable Rows="@(_runs?.Runs ?? [])" Footer="@RunsFooter" />
+    }
+    else if (_tab == TabConfig)
+    {
+        <ConfigurationPanel Operator="_operatorConfig" Customer="_customerConfig" />
+    }
+    else
+    {
+        @* Het enige interactieve eiland van het portaal. Alleen strings over de grens: de
+           slug en de agentnaam, en die staan al in de URL. Het eiland autoriseert zichzelf
+           opnieuw en kiest zelf het viewmodel dat bij de rol hoort. *@
+        <LogsPanel CustomerId="@customerId"
+                   AgentName="@canonicalName"
+                   @rendermode="InteractiveServer" />
+    }
+}
+
+@code {
+    private const string TabLogs = "logs";
+    private const string TabRuns = "runs";
+    private const string TabConfig = "configuratie";
+
+    private static readonly TabItem[] TabItems =
+    [
+        new(TabLogs, "Logs"),
+        new(TabRuns, "Runs"),
+        new(TabConfig, "Configuratie")
+    ];
+
+    private OperatorAgentDetailView? _operatorDetail;
+    private CustomerAgentDetailView? _customerDetail;
+    private AgentRunsView? _runs;
+    private OperatorAgentConfigurationView? _operatorConfig;
+    private CustomerAgentConfigurationView? _customerConfig;
+
+    private string _tab = TabLogs;
+    private string _agentName = "Agent";
+
+    /// <summary>
+    /// De canonieke slug en agentnaam, zoals de resolver en de opslag ze kennen. Uit het
+    /// viewmodel en niet uit de route: de URL kan andere letters dragen dan de configuratie,
+    /// en het eiland en de subnav horen de canonieke vorm te krijgen.
+    /// </summary>
+    private string? _customerId;
+
+    private string? _canonicalName;
+
+    /// <summary>De klant-slug uit de route.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    /// <summary>De technische naam van de agent uit de route.</summary>
+    [Parameter]
+    public string? Agentnaam { get; set; }
+
+    /// <summary>
+    /// Welk tabblad open staat. Onbekende of afwezige waarden vallen terug op Logs; de TabBar
+    /// verzint dat niet voor ons.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private string AgentsHref => $"/klant/{Uri.EscapeDataString(Slug ?? string.Empty)}/agents";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null || string.IsNullOrWhiteSpace(Agentnaam))
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _tab = Tab switch
+        {
+            not null when string.Equals(Tab, TabRuns, StringComparison.OrdinalIgnoreCase) => TabRuns,
+            not null when string.Equals(Tab, TabConfig, StringComparison.OrdinalIgnoreCase) => TabConfig,
+            _ => TabLogs,
+        };
+
+        var user = (await AuthenticationState).User;
+
+        // Operatorrecht eerst — een operator krijgt ook een gewone klantscope, en dan zou hij
+        // de smalle klantweergave van zijn eigen beheerscherm zien.
+        if (await Scopes.ResolveOperatorAsync(user, Slug) is { } operatorScope)
+        {
+            _operatorDetail = await Views.BuildAgentDetailAsync(operatorScope, Agentnaam);
+
+            if (_operatorDetail is null)
+            {
+                Navigation.NotFound();
+                return;
+            }
+
+            _agentName = _operatorDetail.Agent.AgentName;
+            _customerId = _operatorDetail.CustomerId;
+            _canonicalName = _operatorDetail.Agent.AgentName;
+            await LoadTabAsync(operatorScope, null);
+            return;
+        }
+
+        if (await Scopes.ResolveAsync(user, Slug) is { } customerScope)
+        {
+            _customerDetail = await Views.BuildAgentDetailAsync(customerScope, Agentnaam);
+
+            // null betekent hier drie dingen tegelijk: bestaat niet, van een andere klant, of
+            // niet in productie. Alle drie geven 404 — het scherm hoort ze niet uit elkaar te
+            // houden, want dan verklapt de statuscode dat er een acceptatie-agent bestaat.
+            if (_customerDetail is null)
+            {
+                Navigation.NotFound();
+                return;
+            }
+
+            _agentName = _customerDetail.Agent.AgentName;
+            _customerId = _customerDetail.CustomerId;
+            _canonicalName = _customerDetail.Agent.AgentName;
+            await LoadTabAsync(null, customerScope);
+            return;
+        }
+
+        Navigation.NotFound();
+    }
+
+    /// <summary>
+    /// Haalt alleen op wat het open tabblad nodig heeft. Het logtabblad haalt zelf niets op:
+    /// dat doet het eiland, met zijn eigen scope.
+    /// </summary>
+    private async Task LoadTabAsync(OperatorCustomerScope? operatorScope, CustomerScope? customerScope)
+    {
+        switch (_tab)
+        {
+            case TabRuns:
+                _runs = operatorScope is not null
+                    ? await Details.BuildRunsAsync(operatorScope, Agentnaam!)
+                    : await Details.BuildRunsAsync(customerScope!, Agentnaam!);
+                break;
+
+            case TabConfig when operatorScope is not null:
+                _operatorConfig = await Details.BuildConfigurationAsync(operatorScope, Agentnaam!);
+                break;
+
+            case TabConfig:
+                _customerConfig = await Details.BuildConfigurationAsync(customerScope!, Agentnaam!);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// De voetregel onder de runtabel. Zegt hoeveel er staan en of er meer is.
+    /// </summary>
+    private string RunsFooter
+    {
+        get
+        {
+            if (_runs is not { } runs || runs.IsEmpty)
+            {
+                return string.Empty;
+            }
+
+            return runs.HasMore
+                ? $"{runs.Runs.Count} runs, nieuwste eerst · er zijn oudere runs; verder "
+                  + "terugbladeren kan in deze fase nog niet"
+                : $"{runs.Runs.Count} runs, nieuwste eerst · dit is alles wat er bewaard is";
+        }
+    }
+
+    /// <summary>
+    /// De eerstvolgende run. Zonder gepland moment de trigger, en geen verzonnen tijdstip.
+    /// </summary>
+    private static string NextRun(DateTimeOffset? nextRunAt, TriggerKind kind, string? detail) =>
+        nextRunAt is { } next
+            ? TimeFormat.Clock(next)
+            : $"op trigger · {AgentText.Trigger(kind)}";
+}

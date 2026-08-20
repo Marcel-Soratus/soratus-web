@@ -1,0 +1,165 @@
+@* De runtabel van het agentdetail: gestart, duur, resultaat, aantal items, runId (§3.3).
+
+   De rijen zijn geen link en geen knop. Er is in fase 1 geen rundetail om naartoe te gaan, en een
+   rij die eruitziet als een doorklik maar niets doet is erger dan een rij die er rustig bij staat.
+
+   EEN LOPENDE RUN. AgentRunRow zet Duration, Outcome en ItemsProcessed allemaal op null zolang de
+   run loopt, en dat is precies de vorm die dit scherm nodig heeft: waar niets is, staat een
+   streepje. Geen "0 ms" en geen "0 items" — dat zou beweren dat er iets is gemeten.
+
+   De resultaatkolom krijgt bij een lopende run wél een woord: een neutrale grijze badge "Loopt".
+   Dit is de ene plek waar ik afwijk van de opdracht, die ook daar een streepje vroeg. Reden: een
+   streepje in de resultaatkolom is niet te onderscheiden van ontbrekende data, terwijl "Loopt" een
+   waar en leesbaar antwoord is op de vraag die de kolom stelt. De badge is bewust grijs (rang 0 uit
+   §8): geen groen en geen amber, want er is nog niets afgelopen. Moet het toch een streepje worden,
+   dan is dat één regel — de afbeelding zit in RunResultVisuals. *@
+
+@using Soratus.Agents.Contracts
+@using Soratus.Portal.Views
+
+<DataCard Grid="Columns">
+    <DataRowHeader />
+
+    @if (Rows.Count == 0)
+    {
+        <p class="table-empty">@EmptyText</p>
+    }
+    else
+    {
+        @foreach (var run in Rows)
+        {
+            <DataRow @key="run.RunId" Tint="RunResultVisuals.Tint(run.Outcome)">
+                <DataCell Class="runs-cell__time">
+                    <time datetime="@TimeFormat.Iso(run.StartedAt)"
+                          title="@TimeFormat.Absolute(run.StartedAt, TimeZone)">@TimeFormat.Clock(run.StartedAt, TimeZone)</time>
+                </DataCell>
+                <DataCell Class="runs-cell__duration" title="@DurationTitle(run)">@TimeFormat.Duration(run.Duration)</DataCell>
+                <DataCell>
+                    <span class="@RunResultVisuals.BadgeClass(run.Outcome)" title="@ResultTitle(run)">
+                        <span class="badge__glyph" aria-hidden="true">@RunResultVisuals.Glyph(run.Outcome)</span>@RunResultVisuals.Label(run.Outcome)
+                    </span>
+                </DataCell>
+                <DataCell Class="runs-cell__items" title="@ItemsTitle(run)">@Items(run)</DataCell>
+                <DataCell Class="runs-cell__run">@run.RunId</DataCell>
+            </DataRow>
+        }
+    }
+</DataCard>
+
+@if (!string.IsNullOrWhiteSpace(Footer) || (CanLoadMore && OnLoadMore.HasDelegate))
+{
+    <div class="table-foot">
+        <span class="table-foot__count">@Footer</span>
+        @if (CanLoadMore && OnLoadMore.HasDelegate)
+        {
+            <button type="button" class="btn btn--small" @onclick="OnLoadMore">@LoadMoreLabel</button>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// De kolomsporen, letterlijk uit de mockup: <c>92px 96px 132px minmax(0, 1fr) 84px</c> met
+    /// 14px ertussen.
+    /// </summary>
+    /// <remarks>
+    /// De itemskolom is de flexibele: hij heeft het minst breedte nodig en vangt zo de restruimte
+    /// op. Ook hier <c>minmax(0, …)</c> en niet <c>1fr</c>, om dezelfde reden als in de logtabel —
+    /// een lange ononderbroken waarde mag de tabel niet oprekken.
+    /// </remarks>
+    public static readonly RowGrid Columns = new(
+        "14px",
+        new GridColumn("Gestart", "92px"),
+        new GridColumn("Duur", "96px"),
+        new GridColumn("Resultaat", "132px"),
+        new GridColumn("Items verwerkt", "minmax(0, 1fr)", Align: CellAlign.End),
+        new GridColumn("RunId", "84px", Align: CellAlign.End));
+
+    /// <summary>De runs, nieuwste eerst. De tabel sorteert niet en filtert niet.</summary>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<AgentRunRow> Rows { get; set; } = [];
+
+    /// <summary>De zone waarin de starttijden in beeld komen. Standaard Europe/Amsterdam.</summary>
+    [Parameter]
+    public TimeZoneInfo? TimeZone { get; set; }
+
+    /// <summary>Wat er staat als er geen runs zijn.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "Deze agent heeft nog geen run gestart.";
+
+    /// <summary>Wordt aangeroepen als er op "meer laden" wordt geklikt.</summary>
+    [Parameter]
+    public EventCallback OnLoadMore { get; set; }
+
+    /// <summary>
+    /// Of er nog oudere runs zijn. Geef hier <c>AgentRunsView.HasMore</c> door; zonder deze knop
+    /// stopt de lijst stil bij de eerste pagina.
+    /// </summary>
+    [Parameter]
+    public bool CanLoadMore { get; set; }
+
+    /// <summary>Het label op de laadknop.</summary>
+    [Parameter]
+    public string LoadMoreLabel { get; set; } = "Oudere runs laden";
+
+    /// <summary>
+    /// De voetregel onder de tabel. Laat leeg als er niets te melden is; er komt dan geen voet.
+    /// </summary>
+    [Parameter]
+    public string? Footer { get; set; }
+
+    /// <summary>
+    /// Het aantal verwerkte items, of een streepje zolang de run loopt.
+    /// </summary>
+    private static string Items(AgentRunRow run) =>
+        run.ItemsProcessed is { } items ? items.ToString() : "—";
+
+    private static string? ItemsTitle(AgentRunRow run)
+    {
+        if (run.IsRunning)
+        {
+            return "de run is nog bezig; er is nog geen eindstand";
+        }
+
+        if (run.ItemsFailed is not { } failed || failed == 0)
+        {
+            return null;
+        }
+
+        return run.RolledBack
+            ? $"{failed} afgekeurd; de transactie is teruggedraaid"
+            : $"{failed} afgekeurd";
+    }
+
+    private static string? DurationTitle(AgentRunRow run)
+    {
+        if (run.IsRunning)
+        {
+            return "de run is nog bezig";
+        }
+
+        return run.Duration is null ? "geen duur meegeschreven" : null;
+    }
+
+    /// <summary>
+    /// De tooltip bij de badge. Bij een mislukte run staat de foutmelding erin: die past niet in de
+    /// kolom, maar is het eerste wat je wilt weten.
+    /// </summary>
+    private static string? ResultTitle(AgentRunRow run)
+    {
+        if (run.IsRunning)
+        {
+            return "gestart, nog niet afgerond";
+        }
+
+        return run.Outcome switch
+        {
+            RunResult.Failed => string.IsNullOrWhiteSpace(run.ErrorMessage)
+                ? run.ErrorType
+                : run.ErrorMessage,
+            RunResult.Skipped => "er was niets te doen; dit is geen fout",
+            _ => null,
+        };
+    }
+}

@@ -1,0 +1,55 @@
+@* De uitgeklapte JSON onder een logregel: de volledige payload en, bij een fout, de stacktrace.
+
+   Dit paneel staat als broer van de rij en niet erin. Dat is niet netheid maar noodzaak: de rij
+   is een CSS-grid, en een <pre> binnen die rij zou een grid-item worden en meetellen in de
+   kolombreedte. Eén stacktrace van 3400 tekens maakt de tabel dan breder dan het scherm, en dan
+   schuiven ook alle andere rijen mee. Zie de opmerking bij LogRow.
+
+   Drie eigenschappen doen samen het afbreken:
+     white-space: pre-wrap    — regelovergangen uit de JSON blijven staan, de rest wrapt;
+     overflow-wrap: anywhere  — een tekenreeks zonder spaties (een token, een pad, een URL) breekt
+                                middenin af in plaats van de breedte op te rekken;
+     max-height + overflow    — een lange stacktrace duwt de volgende rijen niet buiten beeld.
+
+   Omdat het paneel kan schuiven, is het met tabindex="0" bereikbaar met het toetsenbord. Een
+   schuifbaar vlak dat je alleen met de muis kunt bewegen is precies de val die WCAG 2.1.1 dicht
+   wil hebben. *@
+
+<pre @attributes="AdditionalAttributes"
+     id="@Id"
+     class="@CssClass"
+     tabindex="0"
+     aria-label="@Label">@Json</pre>
+
+@code {
+    /// <summary>
+    /// Het id waar de uitklaprij met <c>aria-controls</c> naar wijst. Moet uniek zijn op de
+    /// pagina.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string? Id { get; set; }
+
+    /// <summary>De JSON als tekst. Gebruik <see cref="LogJson.Format"/>.</summary>
+    [Parameter]
+    [EditorRequired]
+    public string? Json { get; set; }
+
+    /// <summary>
+    /// De toegankelijke naam van het paneel. Zeg waar de payload bij hoort, want een schermlezer
+    /// die het paneel binnenkomt is de rij erboven al kwijt.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Onderliggende JSON van deze logregel";
+
+    /// <summary>Extra classnamen op het paneel.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op het paneel zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "json-disclosure" : $"json-disclosure {Class}";
+}

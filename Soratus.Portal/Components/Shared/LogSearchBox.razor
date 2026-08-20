@@ -1,0 +1,196 @@
+@* Het zoekveld boven de logtabel: zoek in event, bericht of runId (§3.3).
+
+   Waarom hier debouncing zit. Zonder pauze vuurt elke toetsaanslag een zoekopdracht af. Bij
+   "voorraad" zijn dat acht ronden naar de server, waarvan zeven een antwoord opleveren dat al
+   verouderd is voordat het aankomt — en op een static-SSR-eiland met een Cosmos-query erachter
+   betaal je die zeven ook in RU's. Tweehonderd milliseconde is de gebruikelijke waarde: korter
+   dan een mens tussen twee letters pauzeert, lang genoeg om een woord in één keer te versturen.
+
+   De vorige aanslag wordt afgebroken met een CancellationTokenSource en niet met een teller of
+   een tijdstempel. Reden: dan hoeft er niets te worden opgeruimd als de gebruiker doortypt of
+   wegnavigeert, en breekt de wachtende taak echt af in plaats van straks alsnog een verouderde
+   zoekterm door te geven.
+
+   Wissen gaat bewust niet door de debounce heen. Op de kruisknop klikken is een besluit en geen
+   tussentoestand; een pauze van 200 ms zou daar als traagheid voelen.
+
+   De kruisknop staat naast het veld en niet erin: een <button> binnen een <label> is ongeldige
+   HTML (een label mag geen ander labelable element bevatten dan zijn eigen veld). De mockup doet
+   dat wel; wij niet. De toegankelijke naam van het veld komt daarom van aria-label en niet van
+   een omhullend label. *@
+
+@implements IDisposable
+
+<div @attributes="AdditionalAttributes" class="@CssClass">
+    <span class="search-box__prefix" aria-hidden="true">/</span>
+    <input class="search-box__input"
+           type="text"
+           value="@_text"
+           placeholder="@Placeholder"
+           aria-label="@Label"
+           autocomplete="off"
+           spellcheck="false"
+           @oninput="OnInput" />
+    @if (_text.Length > 0)
+    {
+        <button type="button"
+                class="search-box__clear"
+                aria-label="Zoekterm wissen"
+                title="Zoekterm wissen"
+                @onclick="ClearAsync">✕</button>
+    }
+</div>
+
+@code {
+    private CancellationTokenSource? _pending;
+    private string _text = string.Empty;
+
+    /// <summary>
+    /// De laatste zoekterm die wij naar buiten hebben gemeld. Daarmee is een nieuwe
+    /// <see cref="Value"/> van de ouder te onderscheiden van de echo van onze eigen melding —
+    /// zonder dat verschil zou elke ronde de tekst in het veld terugzetten terwijl je typt.
+    /// </summary>
+    private string _reported = string.Empty;
+
+    /// <summary>
+    /// De zoekterm zoals de pagina hem kent. Verandert deze buiten het veld om — een deeplink met
+    /// <c>?q=</c>, of een gewiste filterreeks — dan volgt het veld.
+    /// </summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// Wordt aangeroepen met de nieuwe zoekterm, ten hoogste één keer per
+    /// <see cref="Debounce"/> aan aaneengesloten getypte tekst.
+    /// </summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland: op static SSR blijft het veld leesbaar en typbaar, maar
+    /// er wordt niets gezocht.
+    /// </remarks>
+    [Parameter]
+    public EventCallback<string> OnSearch { get; set; }
+
+    /// <summary>De placeholder. Standaard de tekst uit de mockup.</summary>
+    [Parameter]
+    public string Placeholder { get; set; } = "zoek in event, bericht of runId";
+
+    /// <summary>
+    /// De toegankelijke naam van het veld. Een placeholder is geen naam: hij verdwijnt zodra er
+    /// iets staat en sommige schermlezers lezen hem niet voor.
+    /// </summary>
+    [Parameter]
+    public string Label { get; set; } = "Zoek in logregels";
+
+    /// <summary>
+    /// Hoe lang er wordt gewacht na de laatste toetsaanslag. Zet dit op
+    /// <see cref="TimeSpan.Zero"/> om zonder pauze te zoeken — alleen zinnig als het filteren in
+    /// het geheugen gebeurt.
+    /// </summary>
+    [Parameter]
+    public TimeSpan Debounce { get; set; } = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>Extra classnamen op het veld.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de omhulling.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "search-box" : $"search-box {Class}";
+
+    protected override void OnParametersSet()
+    {
+        var incoming = Value ?? string.Empty;
+
+        if (!string.Equals(incoming, _reported, StringComparison.Ordinal))
+        {
+            // De ouder zet een andere waarde dan wij hebben gemeld: die wint, en een nog
+            // wachtende toetsaanslag is daarmee achterhaald.
+            Cancel();
+            _text = incoming;
+            _reported = incoming;
+        }
+    }
+
+    private void OnInput(ChangeEventArgs args)
+    {
+        _text = args.Value as string ?? string.Empty;
+        Schedule(_text);
+    }
+
+    private async Task ClearAsync()
+    {
+        Cancel();
+        _text = string.Empty;
+        _reported = string.Empty;
+
+        if (OnSearch.HasDelegate)
+        {
+            await OnSearch.InvokeAsync(string.Empty);
+        }
+    }
+
+    private void Schedule(string text)
+    {
+        Cancel();
+
+        if (Debounce <= TimeSpan.Zero)
+        {
+            _reported = text;
+            _ = OnSearch.InvokeAsync(text);
+            return;
+        }
+
+        var source = new CancellationTokenSource();
+        _pending = source;
+        _ = DebounceAsync(source, text);
+    }
+
+    private async Task DebounceAsync(CancellationTokenSource source, string text)
+    {
+        try
+        {
+            await Task.Delay(Debounce, source.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        // Identiteit en niet de token: na Cancel() is de bron mogelijk al opgeruimd, en dan is
+        // hem nog iets vragen een uitzondering. Zijn wij niet meer de wachtende, dan doen we niets.
+        if (!ReferenceEquals(_pending, source))
+        {
+            return;
+        }
+
+        _pending = null;
+        _reported = text;
+
+        if (OnSearch.HasDelegate)
+        {
+            await InvokeAsync(() => OnSearch.InvokeAsync(text));
+        }
+    }
+
+    private void Cancel()
+    {
+        var source = _pending;
+        _pending = null;
+
+        if (source is null)
+        {
+            return;
+        }
+
+        // Cancel() roept de registraties synchroon aan, dus de wachtende Task.Delay is klaar
+        // voordat Dispose() eraan toe komt. Daarna raakt niemand de token nog aan.
+        source.Cancel();
+        source.Dispose();
+    }
+
+    /// <summary>Breekt een wachtende zoekopdracht af als het scherm verdwijnt.</summary>
+    public void Dispose() => Cancel();
+}

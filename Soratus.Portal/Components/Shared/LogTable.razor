@@ -1,0 +1,182 @@
+@* De logtabel van het agentdetail: tijd, level, event, bericht, runId (§3.3).
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DIT IS HET OPERATORPAD. RICHT HEM NIET OP EEN KLANTSCHERM.
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Rows neemt LogRecord, en dat type draagt het veld extra: vrije JSON die de agentbouwer vult en
+   die in de uitklap letterlijk op het scherm komt. In de echte telemetrie staan daar een
+   Graph-endpoint, een OAuth-scope, onze bronpaden in een stacktrace, een resource group, en bij de
+   interne beheerklant de slugs van andere klanten. §2 zegt dat een klant dat alles niet ziet.
+
+   Daarom leest de klantzijde niet uit dit component. CustomerAgentLogsView levert
+   CustomerLogLine — vijf velden, geen extra — en daar staat een eigen tabel op zonder uitklap.
+   Zet je een klantweergave alsnog door LogTable, dan is dat lek terug; KlantLogregelTests legt
+   het vast. Zie de opmerking bij LogJson voor waarom de grens in het type zit en niet in een
+   filter hier.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM HIER GEEN <Virtualize> STAAT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Virtualize rekent met een vaste rijhoogte (ItemSize) en houdt daarmee de ruimte boven en onder
+   het zichtbare venster op maat. Een uitklapbare rij heeft geen vaste hoogte: één open regel met
+   een stacktrace is twintig rijen hoog. Dan klopt de berekende ruimte niet meer, en het gevolg is
+   een scrollbalk die verspringt zodra je iets openklapt — precies in het scherm waar je aan het
+   lezen bent.
+
+   In plaats daarvan een eerlijke voetregel: hoeveel je ziet van hoeveel er is, met een knop om
+   meer te laden. Dat is geen omweg maar het juiste antwoord: een operator wil weten dát er meer
+   is, en 500 regels in het DOM is voor een tabel als deze geen probleem.
+
+   Zou de tabel ooit toch gevirtualiseerd moeten worden, dan verhuist de uitklap naar een
+   detailpaneel naast de tabel. De rijen zijn daarop voorbereid: LogRow houdt zijn uitklapstaat
+   niet zelf bij.
+
+   @key staat op LogRecord.Id en niet op de index. De live tail voegt regels vóóraan toe, dus met
+   een index als sleutel zou Blazor bij elke nieuwe regel alle rijen als "gewijzigd" zien en de
+   hele tabel opnieuw opbouwen — inclusief het sluiten van wat er open stond. Het id bestaat
+   precies voor dit doel; zie de opmerking bij LogRecord.Id in het contract.
+
+   Er staat nergens aria-live op deze tabel, en dat moet zo blijven. Met live tail aan komen er
+   elke paar seconden regels bij; een schermlezer die dat voorleest, leest de gebruiker dood. Wat
+   er te melden is — of live tail aan staat — meldt LiveTailToggle. *@
+
+@using Soratus.Agents.Contracts
+
+<DataCard Grid="Columns">
+    <DataRowHeader />
+
+    @if (Rows.Count == 0)
+    {
+        <p class="table-empty">@EmptyText</p>
+    }
+    else
+    {
+        @foreach (var record in Rows)
+        {
+            <LogRow @key="record.Id"
+                    Record="record"
+                    IsExpanded="IsExpanded(record.Id)"
+                    OnToggle="OnToggle"
+                    TimeZone="TimeZone" />
+        }
+    }
+</DataCard>
+
+<div class="table-foot">
+    <span class="table-foot__count">@Footer</span>
+    @if (CanLoadMore && OnLoadMore.HasDelegate)
+    {
+        <button type="button" class="btn btn--small" @onclick="OnLoadMore">@LoadMoreLabel</button>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomsporen, letterlijk uit de mockup: <c>78px 52px 168px minmax(0, 1fr) 74px 16px</c>.
+    /// </summary>
+    /// <remarks>
+    /// De berichtkolom is <c>minmax(0, 1fr)</c> en niet <c>1fr</c>. Dat verschil is het hele
+    /// verschil: een kale <c>1fr</c> heeft <c>min-width: auto</c> en groeit mee met de langste
+    /// ononderbroken tekenreeks in de kolom. In de logdata zit een regel van ruim 3400 tekens met
+    /// een payload en een stacktrace erin; met <c>1fr</c> rekt die de tabel op tot ver buiten het
+    /// scherm en schuiven alle andere rijen mee.
+    ///
+    /// De laatste kolom is de uitklapmarkering en heeft geen kop; hij draagt daarom ook geen
+    /// cellabel — "▸" met het label "" ervoor is voor niemand nuttig.
+    /// </remarks>
+    public static readonly RowGrid Columns = new(
+        "12px",
+        new GridColumn("Tijd", "78px"),
+        new GridColumn("Level", "52px"),
+        new GridColumn("Event", "168px"),
+        new GridColumn("Bericht", "minmax(0, 1fr)"),
+        new GridColumn("RunId", "74px"),
+        new GridColumn(string.Empty, "16px", Align: CellAlign.End, Labelled: false));
+
+    /// <summary>
+    /// De regels die in beeld komen: al gefilterd en al begrensd. De tabel filtert niet en sorteert
+    /// niet — nieuwste eerst is een besluit van de laag die ze ophaalt.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<LogRecord> Rows { get; set; } = [];
+
+    /// <summary>
+    /// Hoeveel regels er in totaal aan het filter voldoen. <c>null</c> betekent "net zoveel als er
+    /// in beeld staan".
+    /// </summary>
+    /// <remarks>
+    /// Dit getal maakt de voetregel eerlijk. Staat er "50 van 50 regels" terwijl er 900 zijn, dan
+    /// gaat iemand op een dag concluderen dat er niets is gebeurd.
+    /// </remarks>
+    [Parameter]
+    public int? TotalCount { get; set; }
+
+    /// <summary>
+    /// De id's van de regels die uitgeklapt staan. <c>null</c> of leeg betekent alles ingeklapt.
+    /// </summary>
+    [Parameter]
+    public IReadOnlySet<string>? ExpandedIds { get; set; }
+
+    /// <summary>Wordt aangeroepen met de <see cref="LogRecord.Id"/> waarop is geklikt.</summary>
+    [Parameter]
+    public EventCallback<string> OnToggle { get; set; }
+
+    /// <summary>Wordt aangeroepen als er op "meer laden" wordt geklikt.</summary>
+    [Parameter]
+    public EventCallback OnLoadMore { get; set; }
+
+    /// <summary>
+    /// Of er nog meer te laden is. Zet dit uit zodra alles in beeld staat: een knop die niets meer
+    /// oplevert is erger dan geen knop.
+    /// </summary>
+    [Parameter]
+    public bool CanLoadMore { get; set; }
+
+    /// <summary>Het label op de laadknop.</summary>
+    [Parameter]
+    public string LoadMoreLabel { get; set; } = "Meer laden";
+
+    /// <summary>
+    /// Of live tail aan staat. Komt alleen in de voetregel terecht, zodat er ook onder de tabel
+    /// staat waaróm er regels bij komen.
+    /// </summary>
+    [Parameter]
+    public bool LiveTail { get; set; }
+
+    /// <summary>De zone waarin de tijden in beeld komen. Standaard Europe/Amsterdam.</summary>
+    [Parameter]
+    public TimeZoneInfo? TimeZone { get; set; }
+
+    /// <summary>
+    /// Wat er staat als er geen regels zijn. De standaardtekst gaat ervan uit dat er een filter
+    /// aan staat; voor een agent die nog nooit iets heeft gelogd hoort de pagina een
+    /// <c>EmptyState</c> te tonen in plaats van deze tabel.
+    /// </summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "Geen logregels die aan het filter voldoen.";
+
+    /// <summary>
+    /// De uitleg in de voetregel. Uit de mockup; §8 geeft voor een tabelvoet niets.
+    /// </summary>
+    [Parameter]
+    public string Hint { get; set; } = "klik een regel voor de onderliggende JSON";
+
+    private bool IsExpanded(string id) => ExpandedIds is not null && ExpandedIds.Contains(id);
+
+    private string Footer
+    {
+        get
+        {
+            var total = TotalCount ?? Rows.Count;
+            var text = $"{Rows.Count} van {total} regels";
+
+            if (!string.IsNullOrWhiteSpace(Hint))
+            {
+                text += $" · {Hint}";
+            }
+
+            return LiveTail ? $"{text} · live tail actief" : text;
+        }
+    }
+}

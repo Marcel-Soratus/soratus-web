@@ -1,0 +1,106 @@
+@* De niveaufilters boven de logtabel: info, warn en error, elk met zijn telling (§3.3).
+
+   Drie chips, altijd drie. Ook een agent zonder waarschuwingen krijgt de warn-chip met een 0:
+   verdwijnt de chip, dan verspringt de rij zodra er één waarschuwing bij komt, en belangrijker —
+   "er is geen warn-chip" en "er zijn geen warns" zijn dan niet te onderscheiden.
+
+   Toggleknoppen met aria-pressed, geen checkboxes. Een checkbox belooft een formulier dat je
+   verstuurt; deze filters werken direct. aria-pressed is precies wat een schakelknop is.
+
+   De uit-toestand: §8 beschrijft die niet voor chips. Uit de mockup overgenomen — grijs vlak
+   (--fill-neutral), lichte rand (--line) en tekst in #a4aabd. Die tekstkleur staat niet in §8 en
+   dus niet in tokens.css; hij staat als --level-chip-off-ink bij dit patroon in patterns.css,
+   zodat duidelijk blijft dat hij van elders komt.
+
+   De telling is geen aparte kleur per niveau. Aan staat het label in de niveaukleur en de
+   telling in meta-grijs, precies als in de mockup: het getal is een hoeveelheid en geen alarm. *@
+
+@using Soratus.Agents.Contracts
+
+<div @attributes="AdditionalAttributes" class="@CssClass" role="group" aria-label="@Label">
+    @foreach (var level in Order)
+    {
+        var current = level;
+        var on = IsOn(current);
+
+        <button type="button"
+                class="@ChipClass(current, on)"
+                aria-pressed="@(on ? "true" : "false")"
+                title="@Tooltip(current, on)"
+                @onclick="() => Toggle(current)">
+            <span class="level-chip__label">@Text(current)</span>
+            <span class="level-chip__count">@Count(current)</span>
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// De volgorde op het scherm: oplopend in ernst, zoals de logtabel ze ook sorteert in kleur.
+    /// </summary>
+    private static readonly LogLevel[] Order = [LogLevel.Info, LogLevel.Warn, LogLevel.Error];
+
+    /// <summary>
+    /// Hoeveel regels er per niveau zijn. Een ontbrekend niveau telt als 0.
+    /// </summary>
+    /// <remarks>
+    /// Dit is de telling vóór het filter, niet erna. Anders zou een uitgezette chip altijd 0
+    /// tonen en kon je niet zien wat je mist door hem uit te laten staan.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyDictionary<LogLevel, int>? Counts { get; set; }
+
+    /// <summary>
+    /// Welke niveaus aan staan. <c>null</c> betekent alle drie — de begintoestand van het scherm.
+    /// </summary>
+    [Parameter]
+    public IReadOnlySet<LogLevel>? Enabled { get; set; }
+
+    /// <summary>Wordt aangeroepen met het niveau waarop is geklikt. De pagina houdt de staat bij.</summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland: op static SSR gebeurt er niets als je klikt.
+    /// </remarks>
+    [Parameter]
+    public EventCallback<LogLevel> OnToggle { get; set; }
+
+    /// <summary>De toegankelijke naam van de groep.</summary>
+    [Parameter]
+    public string Label { get; set; } = "Filter op logniveau";
+
+    /// <summary>Extra classnamen op de groep.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de groep zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "level-chips" : $"level-chips {Class}";
+
+    private bool IsOn(LogLevel level) => Enabled is null || Enabled.Contains(level);
+
+    private int Count(LogLevel level) =>
+        Counts is not null && Counts.TryGetValue(level, out var count) ? count : 0;
+
+    private static string Text(LogLevel level) => level switch
+    {
+        LogLevel.Warn => "warn",
+        LogLevel.Error => "error",
+        _ => "info",
+    };
+
+    private static string ChipClass(LogLevel level, bool on) =>
+        on
+            ? $"level-chip level-chip--{Text(level)}"
+            : "level-chip level-chip--off";
+
+    private string Tooltip(LogLevel level, bool on) =>
+        on
+            ? $"{Count(level)} regels op niveau {Text(level)} — klik om ze te verbergen"
+            : $"{Count(level)} regels op niveau {Text(level)} — klik om ze te tonen";
+
+    private Task Toggle(LogLevel level) =>
+        OnToggle.HasDelegate ? OnToggle.InvokeAsync(level) : Task.CompletedTask;
+}

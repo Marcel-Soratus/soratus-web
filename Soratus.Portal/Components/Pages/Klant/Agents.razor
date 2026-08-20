@@ -14,11 +14,11 @@
    voor elke klant. Krijgen we geen van beide, dan 404 en geen 403 — we
    bevestigen niet dat een klant bestaat aan iemand die er niet bij hoort.
 
-   Er staat geen doorklik op een agentrij. Het agentdetail (§3.3) komt in fase 1;
-   tot die tijd zou de rij naar een route leiden die niet bestaat, en een dode
-   link is net zo goed een dode knop. *@
+   Elke agentrij is een navigatierij naar het agentdetail, dus een <a> met Href en
+   geen knop: deep-linkbaar, middelklik opent een tabblad, en een schermlezer zegt
+   "link" waar dat klopt. De slug in die link komt uit het viewmodel en niet uit de
+   route, zodat er altijd de canonieke schrijfwijze in staat. *@
 
-@using System.Globalization
 @inject ICustomerScopeResolver Scopes
 @inject IPortalViews Views
 @inject NavigationManager Navigation
@@ -67,7 +67,8 @@
                     <DataRowHeader />
                     @foreach (var agent in operatorView.Agents)
                     {
-                        <DataRow Tint="agent.Status">
+                        <DataRow Href="@DetailHref(operatorView.CustomerId, agent.AgentName)"
+                                 Tint="agent.Status">
                             <DataCell Truncate="true">
                                 <span class="agent-name">@agent.AgentName</span>
                             </DataCell>
@@ -75,7 +76,7 @@
                             <DataCell Truncate="true">@agent.DisplayType</DataCell>
 
                             <DataCell Truncate="true">
-                                <span class="mono-meta">@EnvironmentLabel(agent.AgentEnvironment)</span>
+                                <span class="mono-meta">@AgentText.Environment(agent.AgentEnvironment)</span>
                             </DataCell>
 
                             <DataCell>
@@ -90,7 +91,7 @@
                             </DataCell>
 
                             <DataCell>
-                                <span class="num">@Duration(agent.LastRun?.Duration)</span>
+                                <span class="num">@TimeFormat.Duration(agent.LastRun?.Duration)</span>
                             </DataCell>
 
                             @* Altijd twaalf blokken, ook bij een agent die niets deed.
@@ -110,7 +111,7 @@
                                 else
                                 {
                                     <span class="mono-meta"
-                                          title="@(agent.TriggerDetail ?? "draait alleen op een trigger")">op trigger · @TriggerLabel(agent.TriggerKind)</span>
+                                          title="@(agent.TriggerDetail ?? "draait alleen op een trigger")">op trigger · @AgentText.Trigger(agent.TriggerKind)</span>
                                 }
                             </DataCell>
 
@@ -171,7 +172,8 @@ else if (_customerView is { } customerView)
                     <DataRowHeader />
                     @foreach (var agent in customerView.Agents)
                     {
-                        <DataRow Tint="agent.Status">
+                        <DataRow Href="@DetailHref(customerView.CustomerId, agent.AgentName)"
+                                 Tint="agent.Status">
                             <DataCell Truncate="true">
                                 <span class="agent-name">@agent.AgentName</span>
                             </DataCell>
@@ -190,7 +192,7 @@ else if (_customerView is { } customerView)
                             </DataCell>
 
                             <DataCell>
-                                <span class="num">@Duration(agent.LastRun?.Duration)</span>
+                                <span class="num">@TimeFormat.Duration(agent.LastRun?.Duration)</span>
                             </DataCell>
 
                             @* Altijd twaalf blokken, ook bij een agent die niets deed.
@@ -210,7 +212,7 @@ else if (_customerView is { } customerView)
                                 else
                                 {
                                     <span class="mono-meta"
-                                          title="@(agent.TriggerDetail ?? "draait alleen op een trigger")">op trigger · @TriggerLabel(agent.TriggerKind)</span>
+                                          title="@(agent.TriggerDetail ?? "draait alleen op een trigger")">op trigger · @AgentText.Trigger(agent.TriggerKind)</span>
                                 }
                             </DataCell>
 
@@ -263,7 +265,6 @@ else if (_customerView is { } customerView)
         new GridColumn("Volgende run", "112px"),
         new GridColumn("Versie", "74px", Align: CellAlign.End));
 
-    private static readonly CultureInfo Nl = CultureInfo.GetCultureInfo("nl-NL");
 
     private static readonly string[] CustomerEmptyFacts = ["agents in productie: 0"];
 
@@ -325,22 +326,12 @@ else if (_customerView is { } customerView)
     private static string Suffix(string? value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : $" · {value}";
 
-    private static string EnvironmentLabel(AgentEnvironment environment) => environment switch
-    {
-        AgentEnvironment.Production => "productie",
-        AgentEnvironment.Acceptance => "acceptatie",
-        _ => "ontwikkeling",
-    };
-
-    private static string TriggerLabel(TriggerKind kind) => kind switch
-    {
-        TriggerKind.Timer => "timer",
-        TriggerKind.Queue => "queue",
-        TriggerKind.Http => "HTTP",
-        TriggerKind.Webhook => "webhook",
-        TriggerKind.Blob => "blob",
-        _ => "handmatig",
-    };
+    /// <summary>
+    /// Het pad naar het agentdetail. De slug komt uit het viewmodel en niet uit de route,
+    /// zodat er altijd de canonieke vorm in de link staat.
+    /// </summary>
+    private static string DetailHref(string customerId, string agentName) =>
+        $"/klant/{Uri.EscapeDataString(customerId)}/agents/{Uri.EscapeDataString(agentName)}";
 
     /// <summary>
     /// De tooltip bij de statusbadge: wanneer deze agent zich voor het laatst meldde.
@@ -348,30 +339,4 @@ else if (_customerView is { } customerView)
     /// </summary>
     private static string Heartbeat(DateTimeOffset heartbeat, DateTimeOffset now) =>
         $"laatste hartslag {TimeFormat.Relative(heartbeat, now)} ({TimeFormat.Absolute(heartbeat)})";
-
-    /// <summary>
-    /// De duur van de laatste run. Geen afgeronde run is een streepje en geen nul:
-    /// nul milliseconden zou beweren dat er iets draaide.
-    /// </summary>
-    private static string Duration(TimeSpan? duration)
-    {
-        if (duration is not { } value)
-        {
-            return "—";
-        }
-
-        if (value.TotalSeconds < 1)
-        {
-            return $"{value.TotalMilliseconds.ToString("0", Nl)} ms";
-        }
-
-        if (value.TotalSeconds < 60)
-        {
-            return $"{value.TotalSeconds.ToString("0.00", Nl)} s";
-        }
-
-        return value.TotalMinutes < 60
-            ? $"{(int)value.TotalMinutes} m {value.Seconds} s"
-            : $"{(int)value.TotalHours} u {value.Minutes} m";
-    }
 }
