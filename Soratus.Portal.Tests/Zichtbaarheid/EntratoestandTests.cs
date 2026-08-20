@@ -184,7 +184,7 @@ public class EntratoestandTests : Portaalrendertest
 
         Assert.Equal(
             3,
-            Voorkomens(cut.Markup, ContractText.AccessState(AccessEntraState.Unknown)));
+            Voorkomens(Toegangenkaart(cut), ContractText.AccessState(AccessEntraState.Unknown)));
 
         Assert.Contains("uitgenodigd", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("kan niet zien", cut.Markup, StringComparison.OrdinalIgnoreCase);
@@ -213,14 +213,14 @@ public class EntratoestandTests : Portaalrendertest
             MeldKlantAan();
         }
 
-        var markup = RenderPagina(Contractpagina).Markup;
+        var kaart = Toegangenkaart(RenderPagina(Contractpagina));
 
         foreach (var toestand in Enum.GetValues<AccessEntraState>())
         {
             var woord = ContractText.AccessState(toestand);
 
             Assert.True(
-                Voorkomens(markup, woord) == 1,
+                Voorkomens(kaart, woord) == 1,
                 $"De toestand {toestand} hoort met het woord \"{woord}\" precies één keer op het " +
                 "scherm te staan — de fixture zet de drie regels op de drie toestanden. Staat hij " +
                 "er niet, dan valt die toestand op het scherm samen met een andere, en dan is het " +
@@ -228,15 +228,55 @@ public class EntratoestandTests : Portaalrendertest
         }
     }
 
+    /// <summary>
+    /// De volledige markup van de toegangentabel, als tekenreeks.
+    /// </summary>
+    /// <param name="cut">De gerenderde contractpagina.</param>
+    /// <returns>De <c>outerHTML</c> van de kaart.</returns>
+    /// <remarks>
+    /// <para><strong>Waarom er geteld wordt binnen de kaart en niet over de hele pagina.</strong> Hier
+    /// stond <c>cut.Markup</c>, en dat is één woord te ruim. Gemeten op de operatorweergave: het woord
+    /// "onbekend" staat een tweede keer op het scherm, in de uitleg onder het veld voor het
+    /// Cosmos-endpoint op de omgevingskaart ("… staat deze klant op het overzicht als 'status
+    /// onbekend'"). Die zin is juist en hoort daar; "onbekend" is een gewoon Nederlands woord, en de
+    /// eis dat het precies één keer op een hele pagina voorkomt koppelt deze test aan elke andere
+    /// volzin die er ooit bij komt. Dat is geen meting van de drie toestanden meer maar van de
+    /// woordkeus van het hele scherm.</para>
+    ///
+    /// <para><strong>Wat er daardoor niet meer wordt gezien, expliciet.</strong> Een toestandswoord
+    /// dat buiten deze kaart in de markup lekt. Dat is ook niet wat deze tests meten: hier gaat het
+    /// erom dat de drie toestanden in de toegangentabel drie verschillende woorden krijgen. Voor het
+    /// woord dat wél buiten die kaart hoort te blijven is er het klantvangnet.</para>
+    ///
+    /// <para><strong>Nog steeds de markup en niet <c>TextContent</c>.</strong> Dat is de reden die
+    /// hier al stond en die overeind blijft: het woord staat in een <c>span</c> met een tooltip, en
+    /// juist een tooltip is in dit portaal eerder de plek geweest waar iets lekte. <c>TextContent</c>
+    /// laat attributen weg en zou een toestand in een <c>title</c> dus missen. Wat er staat is wat een
+    /// lezer ziet, waar in de kaart het ook staat.</para>
+    ///
+    /// <para>Beide rollen hebben deze kaart, met een titel die één woord verschilt — "Toegang tot het
+    /// portaal" voor de operator, "Toegang tot dit portaal" voor de klant. Vandaar de prefixselector,
+    /// en vandaar dat er hard wordt gefaald als er niet precies één zo'n kaart staat: verdwijnt de
+    /// kaart of wordt hij hernoemd, dan hoort deze test dat te zeggen en niet nul voorkomens te
+    /// tellen.</para>
+    /// </remarks>
+    private static string Toegangenkaart(IRenderedComponent<Bunit.Rendering.ContainerFragment> cut)
+    {
+        var kaarten = cut.FindAll("section[aria-label^='Toegang tot ']");
+
+        Assert.True(
+            kaarten.Count == 1,
+            $"Er staan {kaarten.Count} toegangenkaarten op de contractpagina; er hoort er precies " +
+            "één te staan. Is de kop veranderd, dan hoort deze selector mee te veranderen — niet " +
+            "de telling nul te laten worden.");
+
+        return kaarten[0].OuterHtml;
+    }
+
     /// <summary>Hoe vaak deze tekst in de markup staat.</summary>
     /// <param name="markup">De gerenderde markup.</param>
     /// <param name="tekst">De tekst.</param>
     /// <returns>Het aantal keren.</returns>
-    /// <remarks>
-    /// Op de tekst en niet op een selector: het woord staat in een <c>span</c> met een tooltip, en
-    /// juist de tooltip is de plek waar in dit portaal eerder iets is gelekt. Wat er staat is wat
-    /// een lezer ziet, waar het ook staat.
-    /// </remarks>
     private static int Voorkomens(string markup, string tekst)
     {
         var aantal = 0;

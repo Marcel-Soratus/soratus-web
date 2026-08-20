@@ -1,0 +1,459 @@
+@* Het urenscherm zoals de operator het ziet (§3.6): dezelfde maandtabel met een kolom erbij,
+   dezelfde specificatie met een stand en twee acties erbij, en de afgewezen regels eronder.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM DIT EEN APART COMPONENT IS EN GEEN VLAG OP CustomerHours
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   De acceptatie van fase 3 is dat de klant niets van de fiatteringsstroom ziet, en dat is hier
+   een typeverschil en geen @if. Dit component neemt een OperatorHoursView; dat type draagt de
+   te fiatteren regels, de standen, de afgewezen lijst en de tellers. CustomerHours neemt een
+   CustomerHoursView, en daarop bestaan die velden niet.
+
+   Eén component met een `isOperator`-vlag zou betekenen dat er in één bestand een uitdrukking
+   te schrijven is die het operatormodel op een klantscherm zet. Dat is precies wat er niet moet
+   kunnen: een vergeten @if lekt, een ontbrekende property compileert niet.
+
+   Dat kost twee RowGrid's die op elkaar lijken. Dat is dezelfde afweging als bij de logtabel
+   (§12), waar om dezelfde reden twee tabellen naast elkaar staan, en niet die bij de runtabel
+   (§14) waar één tabel mocht — daar zijn de kolommen identiek en verschilt alleen een tooltip.
+   Hier verschillen de kolommen echt: er komt een actiekolom bij en een standkolom.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   FIATTEREN EN AFWIJZEN ZIJN LINKS EN GEEN KNOPPEN
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Beide acties leiden naar een tweede stand van dezelfde pagina (?beoordeel=…&actie=…), waar de
+   regel voluit staat met de bijbehorende waarschuwing en één knop. Redenen, in gewicht:
+
+     1. Afwijzen vraagt een verplichte reden (punt 17). Dat is een veld, dus een tweede stap is
+        er hoe dan ook — en dan is dezelfde vorm voor fiatteren consistenter dan twee vormen.
+     2. Fiatteren is onomkeerbaar (punt 18). ConfirmAction bestaat precies daarvoor, maar vraagt
+        een interactief eiland. Deze pagina is static SSR; twee klikken over twee adressen doen
+        hetzelfde werk, en de waarschuwing staat dan bij de knop in plaats van boven de tabel.
+     3. Een link is deelbaar, werkt met de terugknop en heeft geen formulier in een tabelrij
+        nodig. Een <form> per rij zou per rij een eigen naam vragen, en de rij zou verdwijnen
+        zodra een andere operator hem net beoordeelde — dan komt de POST aan bij een formulier
+        dat niet meer bestaat.
+
+   De rij zelf is daarmee geen link: een rij met rij-acties is nooit zelf activeerbaar (§5 van de
+   afwijkingennotitie), en RowActions gooit een fout als dat toch gebeurt. *@
+
+@using System.Globalization
+
+<div class="stack">
+    @if (!View.HasContract)
+    {
+        <p class="meta notice">
+            Voor deze klant is nog geen contract vastgelegd, dus er is niets om de uren tegen af te
+            zetten. Boeken kan wel — onboarding gaat in die volgorde. Leg de bundel en het tarief
+            vast op het
+            <a href="@ContractPath">contractscherm</a>.
+        </p>
+    }
+
+    <DataCard Grid="MonthColumns" Title="Uren per maand">
+        <HeaderContent>
+            @if (IsYear)
+            {
+                <a class="btn btn--small" href="@HourText.CurrentMonthPath(View.CustomerId)">Alleen deze maand</a>
+                <a class="btn btn--small" href="@HourText.YearPath(View.CustomerId, Year - 1)"
+                   title="@($"de maanden van {Year - 1}")"><span class="mono" aria-hidden="true">←</span>@(Year - 1)</a>
+                @if (Year < ThisYear)
+                {
+                    <a class="btn btn--small" href="@HourText.YearPath(View.CustomerId, Year + 1)"
+                       title="@($"de maanden van {Year + 1}")">@(Year + 1)<span class="mono" aria-hidden="true">→</span></a>
+                }
+            }
+            else
+            {
+                <a class="btn btn--small" href="@HourText.YearPath(View.CustomerId, Year)">Alle maanden</a>
+            }
+        </HeaderContent>
+        <ChildContent>
+            <DataRowHeader />
+
+            @if (View.Months.Count == 0)
+            {
+                <p class="table-empty">@EmptyMonths</p>
+            }
+            else
+            {
+                @foreach (var row in View.Months)
+                {
+                    var month = row.Balance;
+
+                    <DataRow @key="month.Month"
+                             Href="@MonthHref(month.Month)"
+                             aria-current="@(IsSelected(month.Month) ? "true" : null)"
+                             title="@MonthHint(month.Month)">
+                        <DataCell Truncate="true">
+                            @month.MonthLabel
+                            @if (IsSelected(month.Month))
+                            {
+                                <span class="mono-meta">· gefilterd</span>
+                            }
+                        </DataCell>
+                        <DataCell Class="num">@HourText.Hours(month.BundledHours)</DataCell>
+                        <DataCell Class="num" title="@HourText.MonthTitle(month)">@HourText.Hours(month.Booked)</DataCell>
+                        <DataCell Class="num" title="@OverBundleTitle(month)">@HourText.Balance(month.Balance)</DataCell>
+                        <DataCell>
+                            <HourStatusBadge Month="month.Status" />
+                        </DataCell>
+
+                        @* De kolom die op het klantscherm niet bestaat. Leeg als er niets ligt, en
+                           dan een streepje: een lege cel laat de lezer denken dat het scherm niet
+                           klaar is. Geen nul, want nul uren te fiatteren en nul regels zijn
+                           hetzelfde en beide zijn "er ligt niets". *@
+                        <DataCell Class="num">
+                            @if (row.HasPending)
+                            {
+                                @HourText.Pending(row.PendingHours, row.PendingCount)
+                            }
+                            else
+                            {
+                                @HourText.Dash
+                            }
+                        </DataCell>
+                    </DataRow>
+                }
+
+                @if (View.Year is { } year)
+                {
+                    <DataRow Total="true">
+                        <DataCell Truncate="true">Jaartotaal @year.Year</DataCell>
+                        <DataCell Class="num">@HourText.Hours(year.BundledHours)</DataCell>
+                        <DataCell Class="num">@HourText.Hours(year.Booked)</DataCell>
+                        <DataCell Class="num" title="@NoYearBalance">@HourText.Dash</DataCell>
+                        <DataCell>@YearOverBundle(year)</DataCell>
+                        <DataCell Class="num" Label="">@YearPending</DataCell>
+                    </DataRow>
+                }
+            }
+        </ChildContent>
+    </DataCard>
+
+    <p class="meta notice">@View.TotalNotice</p>
+
+    <p class="meta notice">@View.PendingNotice</p>
+
+    @if (View.NoBundleNotice is { } noBundle)
+    {
+        <p class="meta notice">@noBundle</p>
+    }
+
+    @* Boven de tabel en niet als voetregel eronder: dit is de waarschuwing die je gelezen moet
+       hebben vóór je op Fiatteren klikt. Hij staat óók op de bevestigingskaart, waar de knop
+       staat die het echt doet — hier zodat de operator weet waar hij aan begint, daar zodat hij
+       het niet te laat leest. *@
+    <p class="meta notice">@View.ApprovalNotice</p>
+
+    <DataCard Grid="EntryColumns" Title="Specificatie">
+        <HeaderContent>
+            <span>@Scope</span>
+            @if (View.PendingCount > 0)
+            {
+                <span class="mono-meta">@HourText.Pending(View.PendingHours, View.PendingCount) te fiatteren</span>
+            }
+        </HeaderContent>
+        <ChildContent>
+            <DataRowHeader />
+
+            @if (View.Entries.Count == 0)
+            {
+                <p class="table-empty">@EmptyEntries</p>
+            }
+            else
+            {
+                @foreach (var entry in View.Entries)
+                {
+                    <DataRow>
+                        <DataCell Class="mono-meta" title="@RecordedTitle(entry)">
+                            <time datetime="@HourText.Iso(entry.RecordedOn)">@HourText.RecordedOn(entry.RecordedOn)</time>
+                        </DataCell>
+                        <DataCell Truncate="true" Label="Omschrijving" title="@entry.Note">
+                            <span>@entry.Note</span>
+                            <span class="mono-meta">@HourText.EntryMeta(entry.Category, entry.MonthLabel, ShowMonth)</span>
+                        </DataCell>
+                        <DataCell title="@SourceTitle(entry)">
+                            <span class="@HourStatusVisuals.SourceClass(entry.Source)">@entry.SourceLabel</span>
+                        </DataCell>
+                        <DataCell Truncate="true" title="@ByTitle(entry)">@entry.By</DataCell>
+                        <DataCell Class="num">@HourText.Hours(entry.Hours)</DataCell>
+                        <DataCell>
+                            <HourStatusBadge Entry="entry.Status" title="@StatusTitle(entry)" />
+                        </DataCell>
+                        <DataCell>
+                            <RowActions>
+                                @* Uit HourEntryTransitions via het viewmodel, en niet uit een
+                                   eigen vergelijking op de stand. Anders staat er een knop die
+                                   een melding oplevert — of erger, ontbreekt er een bij iets wat
+                                   wel mag, en dat verschil blijkt dan pas bij het klikken. *@
+                                @if (entry.CanApprove)
+                                {
+                                    <a class="btn btn--small"
+                                       href="@JudgePath(entry, HourText.ApproveAction)"
+                                       title="telt deze uren mee in het maandtotaal; dit is niet ongedaan te maken">Fiatteren</a>
+                                }
+                                @if (entry.CanReject)
+                                {
+                                    <a class="btn btn--small btn--danger"
+                                       href="@JudgePath(entry, HourText.RejectAction)"
+                                       title="de regel blijft staan met de reden erbij en telt niet mee">Afwijzen</a>
+                                }
+                            </RowActions>
+                        </DataCell>
+                    </DataRow>
+                }
+
+                @* Het gefiatteerde totaal, en niet de som van alles wat erboven staat. Dat is de
+                   acceptatie-eis: te fiatteren uren staan in de tabel omdat je moet kunnen zien
+                   wat ze met de maand zouden doen, maar ze tellen niet mee tot iemand ze
+                   fiatteert. Ze staan daarom in de kolom ernaast en niet in dit getal. *@
+                <DataRow Total="true">
+                    <DataCell Truncate="true">Gefiatteerd @Scope</DataCell>
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Class="num">@HourText.Hours(View.EntryHours)</DataCell>
+                    <DataCell Label="">
+                        @if (View.PendingCount > 0)
+                        {
+                            <span class="mono-meta">@HourText.Pending(View.PendingHours, View.PendingCount)</span>
+                        }
+                    </DataCell>
+                    <DataCell Label="" />
+                </DataRow>
+            }
+        </ChildContent>
+    </DataCard>
+
+    @* Alleen als er iets is afgewezen. Leeg is de gewone toestand, en dan hoort er geen sectie te
+       staan die zegt dat er niets is. Zie OperatorHoursView.Rejected: dat de lijst hier apart
+       staat is het antwoord op het enige echte bezwaar tegen het bewaren van afgewezen regels —
+       een specificatie die volloopt met regels die niet meetellen. *@
+    @if (View.Rejected.Count > 0)
+    {
+        <DataCard Grid="RejectedColumns" Title="Afgewezen regels">
+            <HeaderContent>
+                <span>@HourText.Rows(View.Rejected.Count)</span>
+            </HeaderContent>
+            <ChildContent>
+                <DataRowHeader />
+
+                @foreach (var entry in View.Rejected)
+                {
+                    <DataRow>
+                        <DataCell Class="mono-meta" title="@RecordedTitle(entry)">
+                            <time datetime="@HourText.Iso(entry.RecordedOn)">@HourText.RecordedOn(entry.RecordedOn)</time>
+                        </DataCell>
+                        <DataCell Truncate="true" Label="Omschrijving" title="@entry.Note">
+                            <span>@entry.Note</span>
+                            <span class="mono-meta">@HourText.EntryMeta(entry.Category, entry.MonthLabel, withMonth: true)</span>
+                        </DataCell>
+                        <DataCell>
+                            <span class="@HourStatusVisuals.SourceClass(entry.Source)">@entry.SourceLabel</span>
+                        </DataCell>
+                        <DataCell Class="num">@HourText.Hours(entry.Hours)</DataCell>
+                        <DataCell Truncate="true" title="@RejectedTitle(entry)">@(entry.RejectionReason ?? HourText.Dash)</DataCell>
+                        <DataCell>
+                            <RowActions>
+                                @* Een afgewezen regel kan alsnog gefiatteerd worden (punt 18):
+                                   afwijzen is een besluit van een mens en mensen klikken mis. Er
+                                   staat geen tweede afwijsknop — hij is al afgewezen. *@
+                                @if (entry.CanApprove)
+                                {
+                                    <a class="btn btn--small"
+                                       href="@JudgePath(entry, HourText.ApproveAction)"
+                                       title="fiatteer deze regel alsnog; hij gaat dan meetellen in het maandtotaal">Fiatteren</a>
+                                }
+                            </RowActions>
+                        </DataCell>
+                    </DataRow>
+                }
+            </ChildContent>
+        </DataCard>
+
+        <p class="meta notice">@View.RejectionNotice</p>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomsporen van de maandtabel: die van de klant, met "te fiatteren" erachter (§3.6).
+    /// </summary>
+    /// <remarks>
+    /// De zesde kolom staat achteraan en niet naast "besteed". Dat is met opzet: de eerste vijf
+    /// kolommen zijn precies de kolommen die de klant ook ziet, in dezelfde volgorde en met dezelfde
+    /// breedtes, zodat een operator die naast een klant zit hetzelfde beeld leest. Wat erbij komt,
+    /// komt erachter.
+    /// </remarks>
+    private static readonly RowGrid MonthColumns = new(
+        new GridColumn("Maand", "minmax(0, 1fr)", Labelled: false),
+        new GridColumn("Bundel", "96px", Align: CellAlign.End),
+        new GridColumn("Besteed", "96px", Align: CellAlign.End),
+        new GridColumn("Saldo", "96px", Align: CellAlign.End),
+        new GridColumn("Stand", "150px"),
+        new GridColumn("Te fiatteren", "150px", Align: CellAlign.End));
+
+    /// <summary>
+    /// De kolomsporen van de specificatie: die van de klant, met de stand en de acties erachter.
+    /// </summary>
+    /// <remarks>
+    /// De actiekolom staat op <c>Labelled: false</c> en heeft geen kop: onder 768px staat "Acties
+    /// Fiatteren Afwijzen" alleen in de weg.
+    /// </remarks>
+    private static readonly RowGrid EntryColumns = new(
+        new GridColumn("Geboekt", "92px", Labelled: false),
+        new GridColumn("Omschrijving", "minmax(0, 1.6fr)", Labelled: false),
+        new GridColumn("Bron", "136px"),
+        new GridColumn("Geboekt door", "minmax(0, 1fr)"),
+        new GridColumn("Uren", "76px", Align: CellAlign.End),
+        new GridColumn("Stand", "128px"),
+        new GridColumn(string.Empty, "184px", Labelled: false, Align: CellAlign.End));
+
+    /// <summary>
+    /// De kolomsporen van de afgewezen regels: de reden neemt de plek van de boeker en de stand in.
+    /// </summary>
+    /// <remarks>
+    /// Geen kolom "Stand": elke regel in deze tabel is afgewezen, en een kolom waarin op elke rij
+    /// hetzelfde staat is witruimte met een kop erboven. Wie het wel moet weten, leest het in de
+    /// tooltip van de reden: daar staat wie hem afwees en wanneer.
+    /// </remarks>
+    private static readonly RowGrid RejectedColumns = new(
+        new GridColumn("Geboekt", "92px", Labelled: false),
+        new GridColumn("Omschrijving", "minmax(0, 1.4fr)", Labelled: false),
+        new GridColumn("Bron", "136px"),
+        new GridColumn("Uren", "76px", Align: CellAlign.End),
+        new GridColumn("Afgewezen omdat", "minmax(0, 1.2fr)"),
+        new GridColumn(string.Empty, "108px", Labelled: false, Align: CellAlign.End));
+
+    private const string EmptyMonths =
+        "Voor dit jaar staat er geen maand op het overzicht. Dat gebeurt als het contract later "
+        + "ingaat dan het jaar dat je bekijkt; boek je op zo'n maand toch uren, dan komt hij er "
+        + "alsnog bij te staan.";
+
+    private const string EmptyEntries =
+        "Er staan hier geen uren. Boek ze hieronder, of laat de koppeling ze inschieten.";
+
+    private const string NoYearBalance =
+        "Een jaarsaldo bestaat niet: de urenbundel is een afspraak per maand en rolt niet door. Wat "
+        + "er wel is, staat ernaast: de som van de overschrijdingen per maand. Dat is het getal dat "
+        + "de facturatie gebruikt.";
+
+    /// <summary>De urenweergave van de operator.</summary>
+    [Parameter]
+    [EditorRequired]
+    public OperatorHoursView View { get; set; } = default!;
+
+    private bool IsYear => View.Year is not null;
+
+    private int Year =>
+        View.Year?.Year
+        ?? (View.Months.Count > 0 ? HourMonths.YearOf(View.Months[0].Balance.Month) : null)
+        ?? ThisYear;
+
+    private int ThisYear => TimeFormat.In(View.GeneratedAt).Year;
+
+    private bool ShowMonth => IsYear && View.SelectedMonth is null;
+
+    private string ContractPath => $"/klant/{Uri.EscapeDataString(View.CustomerId)}/contract";
+
+    private string Scope =>
+        View.SelectedMonth is { } month ? HourMonths.Label(month)
+        : View.Year is { } year ? year.Year.ToString(CultureInfo.InvariantCulture)
+        : View.Months.Count > 0 ? View.Months[0].Balance.MonthLabel
+        : string.Empty;
+
+    /// <summary>Wat er in de jaarrij in de te-fiatteren-kolom staat.</summary>
+    /// <remarks>
+    /// De som over de maanden in beeld, uit de maandrijen zelf en niet uit een tweede telling. Er
+    /// staat een streepje als er niets ligt, en niet "0 u": nul uren te fiatteren betekent hetzelfde
+    /// als geen enkele regel, en dat is "er ligt niets".
+    /// </remarks>
+    private string YearPending
+    {
+        get
+        {
+            var hours = View.Months.Sum(month => month.PendingHours);
+            var count = View.Months.Sum(month => month.PendingCount);
+
+            return count == 0 ? HourText.Dash : HourText.Pending(hours, count);
+        }
+    }
+
+    private bool IsSelected(string month) =>
+        string.Equals(View.SelectedMonth, month, StringComparison.Ordinal);
+
+    private string MonthHref(string month) => IsSelected(month)
+        ? HourText.YearPath(View.CustomerId, Year)
+        : HourText.MonthPath(View.CustomerId, month);
+
+    private string MonthHint(string month) => IsSelected(month)
+        ? "de specificatie is op deze maand gefilterd; klik om het filter eraf te halen"
+        : "filter de specificatie op deze maand en zet hem in het boekformulier";
+
+    private string? OverBundleTitle(HourBalance month) =>
+        HourText.OverBundleCost(month.OverBundleHours, View.HourlyRate, View.IsInternal);
+
+    private string YearOverBundle(HourYear year) => year.OverBundleHours switch
+    {
+        null => HourText.Dash,
+        0m => "geen uren boven bundel",
+        var over => $"{HourText.Hours(over.Value)} boven bundel",
+    };
+
+    private string JudgePath(OperatorHourRow entry, string action) =>
+        HourText.JudgePath(View.CustomerId, entry.Month, entry.EntryId, action);
+
+    /// <summary>
+    /// De tooltip bij de dag: het exacte moment van vastleggen (§1, absolute tijd in de tooltip).
+    /// </summary>
+    /// <remarks>
+    /// Alleen de operator ziet dit. <c>RecordedAt</c> staat alleen op het operatortype, en dat klopt:
+    /// het tijdstip waarop iemand een uur in de administratie zette zegt de klant niets, en een
+    /// tooltip met 15:04:05 erin nodigt uit tot de aanname dat het over het werk gaat. Bij een te
+    /// fiatteren regel is dit de leeftijd van de wachtrij, en dat is de informatie waar de operator
+    /// naar handelt — vandaar de andere zin.
+    /// </remarks>
+    private static string RecordedTitle(OperatorHourRow entry) =>
+        entry.Status == HourEntryStatus.Pending
+            ? $"wacht sinds {TimeFormat.Absolute(entry.RecordedAt)}"
+            : $"vastgelegd {TimeFormat.Absolute(entry.RecordedAt)}";
+
+    /// <summary>Waar deze regel vandaan komt, met de sleutel van de koppeling erbij.</summary>
+    private static string? SourceTitle(OperatorHourRow entry) =>
+        entry.ExternalId is { } external ? $"sleutel van de koppeling: {external}" : null;
+
+    /// <summary>Wie de regel heeft weggeschreven, als dat iemand anders is dan wie hem op zijn naam heeft.</summary>
+    /// <remarks>
+    /// Bij een MCP-regel is <c>by</c> de mens die het werk deed en <c>createdBy</c> de koppeling die
+    /// de regel wegschreef. Die twee zijn niet hetzelfde, en bij een factuurdiscussie is juist de
+    /// tweede de vraag.
+    /// </remarks>
+    private static string? ByTitle(OperatorHourRow entry) =>
+        entry.CreatedBy is { } author && !string.Equals(author, entry.By, StringComparison.Ordinal)
+            ? $"weggeschreven door {author}"
+            : null;
+
+    /// <summary>Wat er bij de stand te melden valt: wie fiatteerde, of wie afwees en waarom.</summary>
+    private static string? StatusTitle(OperatorHourRow entry)
+    {
+        if (entry.Status == HourEntryStatus.Approved)
+        {
+            return entry.ApprovedAt is { } moment
+                ? $"gefiatteerd {TimeFormat.Absolute(moment)}{By(entry.ApprovedBy)}"
+                : null;
+        }
+
+        return entry.Status == HourEntryStatus.Pending
+            ? "telt nog niet mee in het maandtotaal en is voor de klant niet zichtbaar"
+            : RejectedTitle(entry);
+    }
+
+    private static string? RejectedTitle(OperatorHourRow entry) =>
+        entry.RejectedAt is { } moment
+            ? $"afgewezen {TimeFormat.Absolute(moment)}{By(entry.RejectedBy)}"
+            : null;
+
+    private static string By(string? actor) =>
+        string.IsNullOrWhiteSpace(actor) ? string.Empty : $" door {actor}";
+}

@@ -166,19 +166,49 @@ public class ContractschermTests : Portaalrendertest
         Assert.DoesNotContain("rg-acme-prod", markup, StringComparison.Ordinal);
         Assert.DoesNotContain("sub-soratus", markup, StringComparison.Ordinal);
         Assert.Contains("West-Europa", markup, StringComparison.Ordinal);
+
+        // En de opslaglocatie ook niet. Die staat sinds het omgevingsblok op het operatortype, en
+        // waar de klant nu een korte aanduiding leest hoort geen endpoint bij te komen.
+        Assert.DoesNotContain("documents.azure.com", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cosmos", markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EenOperatorZietDeSubscriptionEnDeResourceGroupWelEnKanZeWijzigen()
+    {
+        // De spiegel van de test hierboven. Die stond eerder op het viewmodel in plaats van op de
+        // markup, met de eerlijke toelichting "er is vandaag geen contractscherm dat dit veld
+        // rendert" — en dat was precies de bevinding: het veld bestond, de zichtbaarheidstest was
+        // tevreden, en niemand kon het zien. Een tikfout in een subscription-id was daarmee alleen
+        // met de hand in Cosmos te herstellen.
+        //
+        // Nu staat hij waar hij hoort: in de markup, en als invoerveld en niet als tekst. Zonder
+        // deze kant blijft de klanttest ook groen nadat de subscription overal is verdwenen, en dan
+        // meet die niet de scheiding maar de sloop.
+        MeldOperatorAan();
+
+        var cut = RenderPagina(Contractpagina);
+
+        Assert.Contains(
+            $"value=\"{Vasteportaalopslag.Omgevingsdetail}\"",
+            cut.Markup,
+            StringComparison.Ordinal);
+
+        Assert.Contains("Subscription en resource group", cut.Markup, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task DeOperatorweergaveVanHetContractDraagtDeVolledigeOmgevingWel()
     {
-        // De spiegel van de test hierboven, en hij staat met opzet op het viewmodel en niet op de
-        // markup: er is vandaag geen contractscherm dat dit veld rendert. Zonder deze test zou de
-        // klanttest ook groen blijven nadat de subscription overal was verdwenen, en dan meet hij
-        // niet de scheiding maar de sloop. Zie het rapport bij deze bevinding.
+        // Dezelfde eigenschap één laag lager, en die laag is niet overbodig: de markuptest hierboven
+        // zou ook groen zijn als het scherm de waarde uit de klantenlijst haalde in plaats van uit
+        // het viewmodel. Deze test zegt dat de projectie hem draagt.
         var weergave = await new VasteContractweergaven(Opslag)
             .BuildContractAsync(await Weergavelaag.Schrijfscope());
 
         Assert.Equal(Vasteportaalopslag.Omgevingsdetail, weergave.EnvironmentDetail);
+        Assert.Equal(Autorisatiebron.StandaardEndpoint, weergave.TelemetryEndpoint);
+        Assert.Equal("telemetry", weergave.TelemetryDatabase);
     }
 
     [Fact]

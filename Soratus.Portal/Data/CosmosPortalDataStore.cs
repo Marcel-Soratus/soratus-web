@@ -227,7 +227,13 @@ internal sealed class CosmosPortalDataStore(
             PartitionKey = scope.CustomerId,
             CustomerId = scope.CustomerId,
             Name = edit.Name.Trim(),
-            IsInternal = current?.IsInternal ?? false,
+
+            // Wat er staat gaat vóór wat het formulier meestuurt. Er bestaat dus geen bewerking
+            // waarmee een bestaande klant intern wordt of ophoudt dat te zijn — dat raakt de
+            // facturatie en is geen formulierveld. Alleen als er nog geen document is (de klant die
+            // uit de configuratie komt) wordt de waarde van de bewerking gebruikt; anders zou de
+            // eerste wijziging aan de interne beheerklant hem stil tot gewone klant maken.
+            IsInternal = current?.IsInternal ?? edit.IsInternal,
             Environment = Clean(edit.Environment),
             EnvironmentDetail = Clean(edit.EnvironmentDetail),
             TelemetryEndpoint = Clean(edit.TelemetryEndpoint),

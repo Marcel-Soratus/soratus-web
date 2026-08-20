@@ -118,9 +118,17 @@ public interface IPortalDataStore
     /// hoort een Azure-omgeving bij en een rol-toewijzing in Entra, en die twee zijn geen Cosmos en
     /// dus niet transactioneel. Wat er dan halverwege kan stoppen, stopt daar — buiten deze aanroep.
     /// De portaalgegevens dragen dat zichtbaar: een klant zonder telemetrie-endpoint komt op het
-    /// overzicht als "status onbekend", en een toegang zonder
-    /// <see cref="AccessDocument.InvitedAt"/> staat op het scherm als "uitnodiging nog niet
-    /// verstuurd". De halve toestand is dus leesbaar in plaats van stil.</para>
+    /// overzicht als "status onbekend", en bij een toegangsregel staat op het scherm dat de
+    /// uitnodiging in Entra een aparte, handmatige stap is. De halve toestand is dus leesbaar in
+    /// plaats van stil.</para>
+    ///
+    /// <para>Hier stond dat een toegang zonder <c>InvitedAt</c> op het scherm als "uitnodiging nog
+    /// niet verstuurd" komt te staan. Dat veld bestaat niet en gaat er niet komen, en de belofte was
+    /// het echte probleem en niet de dode verwijzing: niets in het portaal zou hem ooit kunnen
+    /// vullen, dus het scherm zou "wacht op uitnodiging" blijven zeggen ook nadat iemand het had
+    /// gedaan. Wat het scherm werkelijk zegt is <em>onbekend</em>, en dat is een zwakkere maar ware
+    /// mededeling. Zie de toelichting bij <see cref="AccessDocument"/> en
+    /// <see cref="Views.AccessEntraState"/>.</para>
     /// </remarks>
     Task<PortalWriteResult<CustomerDocument>> CreateCustomerAsync(
         PortalWriteScope scope,
@@ -171,8 +179,10 @@ public interface IPortalDataStore
     /// openstaande vraag uit §9, en het is de reden dat deze methode een schrijfbewijs vraagt dat
     /// een klantgebruiker niet kan krijgen.
     ///
-    /// Toegang geven is hier vastleggen, niet uitnodigen. De Entra-rol blijft handwerk; zie
-    /// <see cref="AccessDocument.InvitedAt"/>.
+    /// Toegang geven is hier vastleggen, niet uitnodigen. De Entra-rol blijft handwerk, en het
+    /// portaal kan niet eens zien of iemand die stap heeft gedaan — er staat dus geen veld op het
+    /// document dat het bijhoudt, en op het scherm staat "onbekend". Zie
+    /// <see cref="AccessDocument"/> en <see cref="Views.AccessEntraState"/>.
     /// </remarks>
     Task<PortalWriteResult<AccessDocument>> GrantAccessAsync(
         CustomerWriteScope scope,

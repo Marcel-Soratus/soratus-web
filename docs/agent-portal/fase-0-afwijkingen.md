@@ -694,6 +694,372 @@ niet-nullable bundel zou élke klant met geboekte uren "Boven bundel" hebben ges
 
 ---
 
+## 20. Een urenregel heeft geen `date`, alleen een `createdAt`
+
+**Spec:** §6 geeft `HourEntry` een veld `date` en zegt niet wat het betekent. De mockup laat het twee
+dingen zijn: de seed-regels hebben datums verspreid over de maand (dat leest als de dag waarop het werk
+is gedaan) en een nieuwe boeking krijgt `DATA.now` (dat is de dag van vastleggen).
+
+**Waarom alleen de tweede betekenis voor élke bron waar kan.** §3.6 geeft het boekformulier maand, uren,
+categorie, boeker en omschrijving — géén datumveld, dus een operator kán geen werkdatum opgeven. De
+MCP-tool uit §5 heeft evenmin een datumparameter. Alleen `devops-sync` zou er een kunnen leveren, uit de
+revisie van het work item.
+
+**Eerste besluit, en het onvolledige: `date` betekent de dag van vastleggen.** Zou het veld "werkdatum
+waar we die hebben, en anders de dag van vastleggen" betekenen, dan betekent de datumkolom in de
+specificatie twee verschillende dingen afhankelijk van de rij — precies het defect dat bij
+`AgentRunRow.Duration` is afgewezen, waar "de tijd die hij al bezig is" en "zijn duur" niet in dezelfde
+kolom mochten staan.
+
+**Wat er bij het opschrijven pas zichtbaar werd: dan is `date` een duplicaat van `createdAt`.** Dat veld
+staat er al, het is hetzelfde moment, en het is canoniek UTC in plaats van een kalenderdag in
+Nederlandse tijd. Twee velden over hetzelfde moment op verschillende korrel en in verschillende
+tijdzones kunnen van elkaar gaan afwijken, en dan is niet te zeggen welke van de twee de specificatie
+haalt. Dat is een zwaarder gebrek dan een misleidende naam, en het is dezelfde reden waarom `tarief`
+niet naast `uurTarief` op het contract staat en waarom een agent zijn eigen status niet publiceert
+(punt 2).
+
+**Besluit: `date` bestaat niet op een urenregel.** Er is één tijdstip, `createdAt`, en de specificatie
+laat daaruit de Nederlandse dag zien onder de kop **Geboekt** — niet "Datum", want dat woord belooft de
+werkdatum. Het omrekenen gebeurt bij het weergeven en niet bij het opslaan (punt 7), op één plek
+(`HourDay.Of`), want twee plekken lopen op de zomertijdgrens uiteen. De sortering van de specificatie
+loopt over `createdAt` en niet over een kalenderdag; dat is fijner van korrel en breekt gelijke stand
+vanzelf.
+
+**De werkperiode zit in `month`, en dat is waarom dat veld bestaat.** Werk van 31 juli dat op 1 augustus
+wordt vastgelegd heeft `createdAt` op 1 augustus en `month` op juli. Dat laatste is de vraag die de
+facturatie stelt.
+
+**Wat openblijft:** een aparte `workDate` voor de bronnen die er wél een hebben, als tweede veld met een
+eigen naam en een eigen kolom. Nooit als tweede betekenis van dit veld.
+
+---
+
+## 21. De MCP-tool heet `uren_boeken` en niet `uren.boeken`
+
+**Spec:** §5 schrijft de tool letterlijk zo op:
+`uren.boeken({ klant, maand, uren, categorie, omschrijving })`.
+
+**Afwijking:** de tool wordt geregistreerd als `uren_boeken`. Alleen de naam; de vijf parameters en
+hun betekenis zijn ongewijzigd.
+
+**Waarom het niet anders kan.** De Messages-API van Anthropic eist dat een toolnaam past op
+`^[a-zA-Z0-9_-]{1,64}$`. Claude Code stuurt de naam van een MCP-tool niet los mee maar met zijn eigen
+voorvoegsel, als één toolnaam: `mcp__soratus-uren__uren.boeken`. Een punt daarin levert
+`400 tools.N.custom.name: String should match pattern` op.
+
+**Wat het duur maakt is niet de fout maar waar hij valt.** Die 400 komt bij **elke prompt in de
+sessie**, ook een die niets met uren te maken heeft — de toolomschrijvingen gaan bij ieder verzoek mee.
+Het symptoom is dus "Claude Code werkt niet meer" en niet "het boeken van uren werkt niet", en niemand
+zoekt de oorzaak bij een tool die hij niet heeft aangeroepen. Vandaar dat de naam een test heeft
+(`ToolvormTests`) die hem tegen het patroon houdt, inclusief het voorvoegsel: zonder die test valt dit
+pas op nadat iemand de server heeft aangesloten.
+
+**Het is een clientgrens en geen protocolgrens**, en dat is het vermelden waard omdat het bepaalt waar
+de oplossing hoort. De MCP-specificatie stelt geen eis aan een toolnaam; de eis komt van de API
+waarlangs Claude Code praat. Zou de tool ooit door een andere client worden gebruikt, dan is de punt
+daar geen probleem — maar deze server bestaat voor Claude Code, dus die grens is de bindende. Hetzelfde
+soort correctie als §4 en §11: de spec beschrijft een aanname die met de platformkeuze is vervallen.
+
+**Wat er tegenover staat, zodat het niet stil verdwijnt:** `uren.boeken` staat in de `title` van de
+tool ("Uren boeken in het Soratus Agent Portal (uren.boeken)"), in de beschrijving en in
+[`mcp-uren.md`](mcp-uren.md), zodat wie op de naam uit de spec zoekt hem vindt.
+
+**Terzijde, uit dezelfde ronde:** de parameternamen zijn Nederlands (`klant`, `maand`, `uren`,
+`categorie`, `omschrijving`) en dat is géén afwijking van de conventie "Engelse identifiers". Het
+C#-SDK gebruikt de parameternaam letterlijk als veldnaam in het JSON-schema van de tool, dus dit zijn
+geen identifiers die wij kiezen maar de publieke vorm die §5 vastlegt. Er staat een test op, zodat een
+refactor die ze hernoemt de vorm uit de spec niet stil verandert.
+
+---
+
+## 22. Het omgevingsbeheer bestond als viewmodel en niet als scherm
+
+**Spec:** §3.9 laat een operator een klant aanmaken met alle velden, waaronder de omgeving en de
+subscription met resource group. §2 geeft hem op contract en toegang lezen én bewerken. Over
+corrigeren ná het aanmaken zegt de spec niets, en dat gat is precies waar dit misging.
+
+**Wat er stond.** `OperatorContractView` droeg `Environment`, `EnvironmentDetail` en `CustomerETag`,
+de projectie in `ContractViews` vulde ze, en `ContractZichtbaarheidTests` bewaakte dat het klanttype
+ze níet had. Alleen: geen enkel scherm rendeerde ze, en `IPortalDataStore.SaveCustomerAsync` werd
+nergens aangeroepen. Het contractscherm deed het contract en de toegangen; de omgeving was
+alleen-lezen data die niemand las.
+
+**Wat een mens hieruit verkeerd zou concluderen.** Twee dingen, en de tweede is de erge. Wie de
+zichtbaarheidstest groen zag staan, concludeerde dat het operator-only veld goed was afgeschermd —
+en dat was ook waar, maar het is de verkeerde vraag. Er stond nergens een test op de tegenhanger:
+*kán iemand het zien.* Dit is dezelfde vorm als §14, waar `errorType` alleen in de tooltip stond als
+de foutmelding leeg was — het veld bestond, de klant zag het soms, en de operator nooit. De test op
+typeniveau is daar tevreden omdat het veld *bestaat*, niet omdat iemand er iets mee kan.
+
+De tweede: wie de acceptatie van fase 2 las — "een nieuwe klant kan volledig zonder database-actie
+worden ingericht" — mocht aannemen dat dat ook voor een correctie gold. Dat gold niet. Een verkeerd
+getypt subscription-id, een verkeerde Cosmos-endpoint of een verkeerd gespelde klantnaam was na het
+aanmaken alleen nog met de hand in Cosmos te herstellen. Aanmaken lukte, corrigeren niet, en een
+tikfout in een subscription-id is de eerste week en geen randgeval.
+
+**Wat er nu staat.** Een tweede kaart op het operator-eiland van het contractscherm, boven de
+contractkaart: klantnaam, korte omgevingsaanduiding, subscription met resource group,
+Cosmos-endpoint en databasenaam. Hij schrijft via `SaveCustomerAsync`, met de etag uit het formulier
+en niet uit een verse lezing, en handelt een botsing af zoals de contractkaart dat doet — met de
+verschillenkaart eronder en een etag die opschuift, zodat een tweede klik de eigen waarden alsnog
+vastlegt maar pas nadat de operator heeft gezien wat hij overschrijft. De verschillenkaart is één
+`RenderFragment` die beide kaarten gebruiken; twee kopieën van die lus zouden uit elkaar gaan lopen
+zoals de gekopieerde CSS uit §6.
+
+Twee kaarten met twee knoppen en niet één, want het zijn twee documenten met twee etags. Eén kaart
+zou van elke correctie op een subscription-id een gelijktijdigheidsbotsing maken op een
+contractdocument dat de operator niet heeft aangeraakt.
+
+**Wat er níet te wijzigen is, en dat blijkt uit het scherm.** Het klant-id staat er als platte tekst
+en niet als uitgegrijsd vak: §8 zegt dat read-only platte tekst is, en een uitgegrijsd vak belooft
+dat het ooit open gaat. Dat gaat het niet — de slug is de partitiesleutel van élk document van deze
+klant en de `customerId` waaronder zijn agents publiceren, dus hem wijzigen is een migratie en geen
+bewerking. `CustomerEdit` heeft het veld daarom ook niet, en daar stond al een test op. Of dit een
+interne beheeromgeving is staat er om dezelfde reden als tekst: dat raakt de facturatie (§4).
+
+**Twee dingen die bij het bouwen naar boven kwamen en zijn meegegaan.**
+
+De eerste is een stille bewering van een `bool`, en het is dezelfde familie als §15. `SaveCustomerAsync`
+vervangt het hele klantdocument en zette `IsInternal = current?.IsInternal ?? false`. Bij een klant
+die nog geen document heeft — die alleen uit de configuratie komt, en dat is de klant wiens
+inrichting je zit te repareren — legde de eerste wijziging daarmee `isInternal: false` vast, ongeacht
+wat de configuratie zei. Bij de interne beheerklant maakte één klik hem tot een gewone,
+factureerbare klant: stil, en zonder dat de verschillenkaart er iets over kon zeggen, want het
+formulier heeft dat veld niet. `CustomerEdit` draagt hem nu door en de schrijfkant leest
+`current?.IsInternal ?? edit.IsInternal` — wat er staat gaat vóór wat het formulier meestuurt, dus
+een bestaande klant kan hier niet omslaan en een formulierfout kan geen schade doen. Dat is dezelfde
+regel als bij een contractbedrag: een waarde die "niet ingevuld" moet kunnen uitdrukken, kan dat niet
+met een type waarin die toestand niet bestaat. Bij een `bool` is de standaardwaarde geen leegte maar
+een bewering, en hier luidde die bewering "deze klant is factureerbaar".
+
+De tweede: `TelemetryEndpoint` en `TelemetryDatabase` stonden niet op het operatortype en horen daar
+wel. Niet omdat het scherm ze zo graag toont, maar omdat het ze moet terugsturen — een veld dat het
+formulier niet draagt wordt door een volledige vervanging leeggemaakt. Zonder die twee zou een
+operator die de klantnaam verbetert de telemetrie van die klant afsluiten, waarna het overzicht
+"status onbekend" zegt en niemand weet waardoor. Ze staan als operator-only opgesomd in
+`ContractZichtbaarheidTests`, met `CustomerChangedAt` en `CustomerChangedBy`, die er zijn omdat het
+klantdocument een eigen geschiedenis heeft naast die van het contract.
+
+**Twee kleinere onwaarheden die hierbij zijn rechtgezet.** De melding voor de niet-gemigreerde klant
+zei "je eerste wijziging hier legt het klantdocument alsnog aan"; geen enkele knop op dat scherm kon
+dat, want een contractwijziging schrijft alleen het contractdocument en een toegang alleen een
+toegangsdocument. Nu is er één kaart die het wél doet en de melding wijst die aan. En de opslag in
+het geheugen van het testproject liet een bewerking zónder etag op een klant die inmiddels wél een
+document had gewoon slagen, terwijl `UpsertAsync` in dat geval een `CreateItemAsync` doet en op een
+409 loopt. De fixture overschreef dus stil waar productie een botsing geeft — precies in het geval
+van de klant die alleen uit de configuratie komt, en dus precies onder de test die dat geval meet.
+
+**Wat er openblijft.** De kop van het contractscherm komt uit de scope die de pagina bij het openen
+heeft opgehaald, en die pagina is static SSR. Wijzigt een operator de klantnaam, dan volgt het
+eiland maar blijft de kop tot een herlaadslag de oude naam dragen. Dat staat als voetregel onder de
+kaart in plaats van dat het een verrassing is; het weg te werken zou vragen dat een eiland de pagina
+eromheen laat hertekenen, en dat is precies wat de render-mode-grens niet toestaat.
+
+---
+
+## 23. Drie cijfers achter een scheidingsteken is een duizendscheiding en geen bedrag
+
+**Niet in de spec, wel een besluit over een getal dat op een factuur belandt.**
+
+**Wat er stond.** `ContractText.TryNumber` probeerde de invoer eerst in `nl-NL` en dan invariant,
+beide zonder `AllowThousands`. Die dubbele cultuur is er met een goede reden: "125.50" is wat een
+browser teruggeeft voor een `type="number"`-veld waarin een Nederlander 125,50 typte, en dat moet
+doorkomen. De prijs stond in een test met een eerlijke naam:
+`EenPuntIsAltijdEenDecimaaltekenOokWaarIemandDuizendenBedoelde`. "1.250" werd 1,25 en "12.500" werd
+12,5 — een factor duizend, stil, met `true` als uitkomst. "1.250,50" werd wél geweigerd, want twee
+scheidingstekens in één getal kan in geen van beide culturen.
+
+**Wat een mens hieruit verkeerd zou concluderen.** Dat de afruil onvermijdelijk was. Zo was hij ook
+opgeschreven en verdedigd, en dat klonk sluitend: je kunt een punt niet tegelijk als decimaalteken
+accepteren en als duizendscheiding weigeren. Alleen is dat niet waar — het *aantal cijfers achter het
+scheidingsteken* maakt het onderscheid, en dat stond nergens. Een groep van een duizendscheiding is
+per definitie exact drie cijfers lang. Eén of twee cijfers kan dus geen groep zijn, vier of meer ook
+niet, en alleen bij exact drie zijn de twee lezingen niet te scheiden.
+
+Wat het kostte: een uurtarief boven de duizend typt een Nederlandse operator als "1.250", het veld
+is `FieldKind.Amount` en dus vrije tekst, en er kwam een tarief van € 1,25 in de opslag zonder één
+melding. Dat is een factuurfout die niemand ziet tot de klant belt.
+
+**Wat er nu staat.** Bij exact drie cijfers achter één enkel scheidingsteken weigert `TryNumber`, en
+de melding onder het veld vraagt om een komma: hij zegt dat dit een duizendscheiding kan zijn of een
+decimaalteken, dat het verschil een factor duizend is, en wat de operator dan moet typen. Alle andere
+gevallen gaan ongewijzigd door — "125.5", "125.50", "1.2500" en "125." komen door, en "1.250.000" en
+"1.250,50" blijven geweigerd door de parser zelf omdat twee scheidingstekens nergens kunnen. Dat
+laatste is geen dubbelzinnigheid maar een fout, dus daar staat de algemene melding en niet de vraag;
+welke van de twee het wordt, beslist dezelfde functie die de weigering doet, zodat er geen melding
+kan verschijnen die niet bij de reden van de weigering hoort.
+
+**Eén regel en niet twee, en de komma valt eronder.** De regel is niet "de punt is verdacht" maar
+"drie cijfers achter een scheidingsteken is een groep". Dat de komma er net zo goed onder valt is
+geen symmetrie om de symmetrie: bij alle drie de getallen die deze parser bedient — een urenbundel,
+een uurtarief in euro's en een opslagpercentage — is een derde decimaal zinloos, dus een waarde met
+exact drie cijfers achter het scheidingsteken is nooit een geldige waarde van zo'n veld, welk teken
+er ook staat. Alleen de punt afvangen zou het gat open laten voor een bedrag uit een Engelse bron:
+`nl-NL` leest "1,250" als 1,25, en dat is dezelfde factor duizend de andere kant op. En het houdt de
+regel vrij van veldkennis, wat de voorwaarde is om één parser voor drie schermen te hebben.
+
+**Wat het kost, eerlijk.** "0,500" en "12,500" zijn in het Nederlands te lezen als 0,5 en 12,5 met
+een overbodige nul erachter, en die worden nu geweigerd. Dat is de prijs. Hij is klein en hij is
+zichtbaar: de operator ziet een melding en typt "0,5". De fout die hiervoor wegvalt was onzichtbaar
+en stond op een factuur.
+
+**De regel geldt op elke vindplaats van de melding, en dat is de reden dat er één is.** Het
+contract-eiland en het aanmaakformulier geven de invoer mee, zodat ze de scherpe melding krijgen; de
+signatuur laat dat argument weg zolang niemand het meegeeft, en dan verschijnt de algemene melding —
+die niet onwaar is, maar wel minder scherp bij precies het geval waar hij het meest te zeggen heeft.
+Er is nog één aanroeper die hem niet meegeeft: `HourFormText.HoursError` in `Components/Pages/Klant/`.
+Die weigert "1.250" dus wel, maar met de algemene melding. Dat bestand hoort bij fase 3 en de
+wijziging is één regel; hij staat hier zodat hij niet als "bijna overal goed" wegzakt.
+
+---
+
+## 24. Razorcommentaar hoort niet in een `@code`-blok
+
+Dit is geen afwijking van de spec maar een val in het gereedschap, en hij staat hier omdat hij een
+uur werk heeft gekost en elke `.razor` met overloads hem kan krijgen.
+
+**Aanleiding:** `ContractPanel.razor` gaf `CS1503: cannot convert from 'CustomerDocument' to
+'ContractDocument'` op de aanroep `Changes(_customerConflict)`, terwijl `Changes(CustomerDocument)`
+twintig regels lager in dezelfde klasse stond.
+
+**Oorzaak:** een `@* … *@` verderop in datzelfde `@code`-blok. Razor knipt het blok daar in twee
+gegenereerde stukken, en twee overloads van dezelfde naam aan weerszijden van die knip zien elkaar
+niet meer. De naamzoektocht vindt alleen de eerste en klaagt dan over een conversie die niemand heeft
+gevraagd. Nagemeten op de gegenereerde `ContractPanel_razor.g.cs` met
+`-p:EmitCompilerGeneratedFiles=true`: beide methoden staan wél in dezelfde klasse, dus het is puur
+die knip. In twee richtingen bewezen — de overload hernoemen laat de fout verdwijnen, en alléén het
+commentaar op `//` zetten laat hem óók verdwijnen zonder hernoeming.
+
+**Regel:** commentaar binnen `@code` altijd met `//` of `///`. Razorcommentaar hoort in de markup.
+
+**Waarom dit duur is:** de melding is een typeconversiefout op een regel die klopt, dus de eerste
+reflex is de aanroep of het type aanpassen — precies de twee dingen die niet stuk zijn. De fout wijst
+naar de verkeerde plek, en dan zoek je daar. `Components/` is gescand: dit was de enige vindplaats.
+
+Er zit een tweede les onder. Dit kon ontstaan doordat twee sessies in hetzelfde bestand werkten: aan
+het contract-eiland is een omgevingsblok van ruim vierhonderd regels toegevoegd door iemand anders
+dan de auteur. Het blok is functioneel in orde, maar één bestand met twee auteurs is de plek waar dit
+soort dingen ontstaat. Bij verder werk in `Components/Pages/Klant/` hoort een bestand aan één sessie
+toegewezen te worden, of het blok een eigen eiland te krijgen.
+
+---
+
+## 25. De schrijfkant van het portaal schreef tijden niet canoniek weg
+
+Punt 7 zegt dat opslag canoniek UTC met vaste breedte is en dat er een assertie op staat. Dat gold
+voor de agentkant. Voor de schrijfkant van het portaal gold het niet, en dat was aan niets te zien
+omdat er nergens op een tijdveld werd gesorteerd.
+
+**De gemeten fout.** Eén klantdocument door de opties die het portaal aan de Cosmos-SDK gaf, naast
+hetzelfde document door de gerepareerde opties:
+
+```
+STANDAARD >>> …,"createdAt":"2026-08-20T17:04:05.678+02:00","changedAt":"2026-08-20T17:04:05.678+02:00",…
+PORTAAL   >>> …,"createdAt":"2026-08-20T15:04:05.6780000Z","changedAt":"2026-08-20T15:04:05.6780000Z",…
+```
+
+Een offset in plaats van een `Z`, en een variabel aantal decimalen. Cosmos bewaart deze velden als
+tekst en `ORDER BY` vergelijkt lexicografisch, dus dat sorteert stil verkeerd — geen fout, een
+verkeerde volgorde die eruitziet als een goede. Bij de urenregels van fase 3 wordt dat een val:
+`ORDER BY c.createdAt` is de optimalisatie die zich aanbiedt en juist die sorteert verkeerd.
+
+**Eén implementatie in plaats van drie.** De normalisatie stond in `Soratus.Agents.Telemetry` en was
+daar `internal`; het seed-gereedschap had er een eigen kopie van, met in de eigen documentatie de
+toegift dat de assertie erop niet kon zien of de twee nog gelijk wáren. Een derde exemplaar in het
+portaal zou de reeks afmaken. De regel staat nu in `TimestampNormalization` in
+`Soratus.Agents.Contracts` — het project dat agents en portaal al delen, dezelfde afweging als bij
+`MessageTruncation` — en de drie schrijvers roepen alle drie `Register` en `AssertCanonical` aan op
+precies de opties waarmee zij schrijven. "Nog gelijk zijn" is daarmee geen meting meer maar een
+eigenschap van de code.
+
+**Hoe bewezen is dat het portaal nu canoniek schrijft.** Niet door naar de code te kijken. De opties
+zijn `internal` gemaakt zodat een test het echte exemplaar kan pakken in plaats van een nagebouwde
+kopie — het nabouwen van die opties is precies de fout die hier gerepareerd wordt.
+`Soratus.Portal.Tests/Portaalgegevens/PortaaltijdvormTests.cs` pint op `ReferenceEquals` vast dat het
+object dat de SDK als `UseSystemTextJsonSerializerWithOptions` krijgt hetzelfde object is dat de
+overige tests uitoefenen, en serialiseert daarmee de echte documenttypen. Dat laatste is nodig omdat
+een `[JsonConverter]` op een property vóór een converter in de opties gaat en een tijdveld dat als
+`string` is gemodelleerd er helemaal langs heen gaat; geen van beide is aan de opties te zien.
+
+**De assertie had twee blinde vlekken, en die zijn gemeten en gedicht.** Dit is het deel dat de
+reparatie bijna stil onvolledig liet.
+
+1. **De `DateTime`-proef kon een ontbrekende converter niet zien.** Haar enige waarde had zeven
+   gevulde decimalen, en juist die schrijft `System.Text.Json` van zichzelf al canoniek:
+   `2026-08-19T15:13:19.9449045Z`, 28 tekens, afsluitende `Z`. Gemeten met de standaardopties:
+
+   ```
+   944 ms + 9045 ticks (7 cijfers gevuld) -> 2026-08-19T15:13:19.9449045Z  (28 tekens)  ← canoniek!
+   944 ms exact (3 cijfers)               -> 2026-08-19T15:13:19.944Z      (24 tekens)
+   geen fractie                           -> 2026-08-19T15:14:00Z          (20 tekens)
+   ```
+
+   Met alleen de `DateTimeOffset`-converter geregistreerd bleef `AssertCanonical` dus groen, terwijl
+   het `DateTime`-pad — de structured-logging-state van een agent, in hetzelfde document — open
+   stond. Er is een tweede proef bij met afsluitende nullen, die de standaard wél tot 24 tekens
+   trimt.
+
+2. **De volgordecontrole kon niet afgaan.** Zij stond er met vier momenten uit één augustusdag, en
+   die vier sorteren op tekst toevallig hetzelfde als op tijd — óók helemaal zonder normalisatie. De
+   controle las als dekking en was leeg. De reeks is vervangen door vijf momenten die per foute vorm
+   nagemeten zijn: twee momenten in dezelfde seconde met en zonder decimaaldeel (betrapt wisselende
+   breedte), een moment in `+02:00` dat tussen twee UTC-momenten valt (betrapt een niet-omgerekende
+   offset), en een moment in een andere maand (betrapt een formaat met de dag vooraan).
+
+**De assertie gaat af bij het eerste gebruik en niet bij het opstarten.** In het portaal is het een
+statische veldinitialisatie in `CosmosClientCache`, en die loopt lui. Dat is nog altijd vóór elke
+lees- of schrijfactie — al het Cosmos-verkeer loopt via deze klasse — maar niet vóór het eerste
+verzoek, en de fout komt dan verpakt in een `TypeInitializationException`. Bewust zo gelaten: eerder
+afgaan vraagt een aanroep in `Program.cs`, en dan staat de controle niet meer op de plek waar de
+opties gemaakt worden.
+
+**De blokletter-waarschuwing in `CosmosPortalHoursStore` is gecorrigeerd en niet weggehaald.** Haar
+zwaarste been — "de serializer van dit portaal schrijft ze niet in de canonieke vorm" — is gemeten
+onwaar geworden en moest weg; een comment dat iets beweert wat niet klopt maakt de rest van datzelfde
+comment ook onbetrouwbaar. Het verbod zelf staat er nog, op het been dat overblijft: de tie-break.
+Bij een gelijk moment moet de sleutel de volgorde bepalen, en een `ORDER BY` op één veld laat die
+gevallen in willekeurige volgorde staan. Wie het ooit naar de query verplaatst heeft een composite
+index op `(createdAt DESC, id ASC)` nodig plus de zekerheid dat elk document in de container canoniek
+is.
+
+**Wat de migratie van de bestaande documenten vraagt.** Gemeten in `platform/customers` op
+`cosmos-soratus-prod` (alleen gelezen, 2,36 RU): **8 documenten, 8 tijdstempelwaarden, alle 8 niet
+canoniek.**
+
+| veld | documenten | vorm | canoniek |
+|---|---|---|---|
+| `createdAt` | 7 (`kind=customer`) | `2026-08-20T13:58:47.276957+00:00` (32 tekens) | 0 van 7 |
+| `ranAt` | 1 (`kind=bootstrap`) | `2026-08-20T13:58:47.276957+00:00` (32 tekens) | 0 van 1 |
+| `changedAt` | 0 | komt op geen enkel document voor | — |
+| `grantedAt` | 0 | komt op geen enkel document voor | — |
+
+`platform` heeft precies één container (`customers`), dus dit is de volledige omvang. Er is nog geen
+urencontainer, dus elke urenregel die er ooit in komt wordt door de gerepareerde schrijfkant
+geschreven.
+
+Twee dingen aan die tabel zijn de moeite. Ten eerste dat alle acht waarden identiek zijn: ze komen
+uit één bootstrap-run, dus de container bevat op dit moment **één** vorm en sorteert daarmee nog
+consistent — verkeerd van vorm, maar niet gemengd. Ten tweede dat `changedAt` en `grantedAt` nergens
+voorkomen: er is nog geen klant gewijzigd en er is nog geen toegang vastgelegd.
+
+Daaruit volgt de urgentie, en die zit niet waar je hem verwacht. **De eerste schrijfactie van het
+gerepareerde portaal maakt de container gemengd**, en gemengd is erger dan uniform verkeerd omdat het
+er dan uitziet alsof het klopt. Dat kan een nieuwe klant zijn, een wijziging die `changedAt` zet, of
+een toegang die `grantedAt` zet. Migreren hoort dus vóór de volgende schrijfactie, niet "een keer".
+
+Wat de migratie is: de acht documenten lezen, `createdAt` respectievelijk `ranAt` herschrijven naar
+`TimestampNormalization.ToCanonical` van dezelfde waarde, en terugschrijven met `If-Match` op de
+`_etag` zodat een gelijktijdige portaalwijziging niet stil wordt overschreven. Het is geen conversie
+van betekenis maar van spelling: `…T13:58:47.276957+00:00` wordt `…T13:58:47.2769570Z`, hetzelfde
+moment. Daarmee is het idempotent en herhaalbaar. `changedAt` en `grantedAt` staan in de migratie
+omdat ze er morgen wél kunnen zijn, niet omdat er nu iets aan te doen valt.
+
+**Deze migratie is niet uitgevoerd.** Er is alleen gelezen. Het besluit om te schrijven is niet van
+de sessie die de fout vond.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Facturatie, sprint en support. Uit §9 van de spec staat daarmee nog één besluit open dat aan uren
@@ -706,3 +1072,25 @@ en de sleutelregel liggen vast, maar er is nog geen bewijstype voor een aanroepe
 — `CustomerWriteScope` betekent "operator die naar deze klant kijkt", en dat is een koppeling niet.
 Zolang dat type niet bestaat, staat er ook geen schrijfmethode voor op `IPortalHoursStore`: een
 leesbaar type met een gat erachter is erger dan geen type.
+
+### Wat er van de urenopslag níet is gemeten
+
+De documentvorm, de queryvormen, de etagcontrole en de weigering van een dubbele sleutel zijn tegen
+`cosmos-soratus-prod` gemeten. Dat is gebeurd op de partitiesleutel `$portal-verificatie` — geen
+geldige klantslug (`PortalSlug` eist een begin met een kleine letter of cijfer), dus geen enkel
+codepad kan die documenten zien. Ze zijn na de meting op exacte id verwijderd en de partitie is
+teruggemeten op nul; de container stond voor en na op acht documenten.
+
+**Wat daarmee dus een aanname is en geen meting:** het gedrag in de partitie van een échte klant,
+waar urenregels naast een klant-, contract- en toegangsdocument staan. Er is geen reden om verschil
+te verwachten — de query filtert op `c.kind` en de RU-kosten van een gefilterde query hangen aan het
+aantal *teruggegeven* rijen, niet aan wat er nog in de partitie staat — en de meting op de
+klantenlijst wijst dezelfde kant op (2,96 RU, gelijk met en zonder urenregels in de container). Maar
+het is redenering en niet bewijs. De eerste echte urenregel op een klantpartitie is het moment om de
+maandquery opnieuw te meten.
+
+Eén punt-lees is hier wél gedekt en dat is de plek waar één container echt iets kost:
+`CosmosPortalHoursStore` leest een urenregel op een id uit een formulier, en in diezelfde partitie
+liggen documenten van drie andere soorten. Er staat daarom een `kind`-controle op die lezing, zodat
+een id die naar een contract of een toegangsregel wijst `null` oplevert in plaats van als urenregel
+gelezen te worden.

@@ -28,6 +28,21 @@ public static class PortalDocumentKinds
     /// <summary>Eén portaaltoegang: een e-mailadres met een naam en een rol.</summary>
     public const string Access = "access";
 
+    /// <summary>
+    /// Eén urenregel (§6 <c>HourEntry</c>). Er zijn er onbeperkt veel per klant.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Dit is de eerste soort die onbeperkt doorgroeit, en hij staat toch in dezelfde
+    /// container.</strong> Zie <see cref="HourEntryDocument"/> voor de afweging en voor de deur die
+    /// dat besluit sluit.</para>
+    ///
+    /// <para>De naam is camelCase waar de andere drie één woord zijn. Dat volgt de veldnamen van de
+    /// documenten zelf (<c>envFull</c>, <c>telemetryEndpoint</c>, <c>isInternal</c>) en de naam die
+    /// §6 aan het type geeft. <c>hours</c> zou een verzameling suggereren; één document is één
+    /// regel.</para>
+    /// </remarks>
+    public const string HourEntry = "hourEntry";
+
     /// <summary>De markering dat de eenmalige migratie uit de configuratie heeft gelopen.</summary>
     public const string Bootstrap = "bootstrap";
 }
@@ -65,6 +80,30 @@ public static class PortalDocumentIds
     /// <param name="email">Het e-mailadres, al genormaliseerd naar kleine letters.</param>
     /// <returns>De id.</returns>
     public static string Access(string email) => $"access-{email}";
+
+    /// <summary>
+    /// De id van een urenregel, binnen de partitie van die klant.
+    /// </summary>
+    /// <param name="key">
+    /// De sleutel binnen de klant: zie <see cref="HourEntryKeys"/>. Voor een regel uit het portaal
+    /// een tijdstempel met een korte hash; voor een regel uit een koppeling de bron met de
+    /// idempotentiesleutel van die koppeling.
+    /// </param>
+    /// <returns>De id.</returns>
+    /// <remarks>
+    /// <para><strong>De sleutel is geen willekeurig getal, en dat is de hele bedoeling.</strong> Een
+    /// urenregel wordt geld: een dubbel weggeschreven regel is een dubbel gefactureerd uur. Met een
+    /// herleidbare id levert een herhaalde schrijfactie een 409 op in plaats van een tweede regel.
+    /// Dat dekt twee gevallen die anders geen van beide zichtbaar zijn — een dubbele verzending van
+    /// het boekformulier (static SSR, dus geen JavaScript dat de knop uitzet) en een koppeling die
+    /// zijn aanroep herhaalt na een netwerkfout.</para>
+    ///
+    /// <para>De id is bewust <em>niet</em> chronologisch sorteerbaar over alle bronnen heen. Er
+    /// wordt nergens op id gesorteerd: de maandquery filtert op <c>month</c> en sorteert op
+    /// <c>date</c>. Een id-vorm die suggereert dat hij een ordening draagt nodigt uit tot een query
+    /// die daarop leunt, en die breekt zodra de eerste regel uit een koppeling binnenkomt.</para>
+    /// </remarks>
+    public static string HourEntry(string key) => $"hourEntry-{key}";
 }
 
 /// <summary>

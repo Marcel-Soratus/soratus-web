@@ -1,0 +1,83 @@
+@* De badge in de statuskolom van het urenscherm: rand + vlak + glyph + woordlabel (§8).
+
+   Twee soorten stand, en ze sluiten elkaar uit:
+
+     Month → de stand van een maand tegenover de bundel (§3.6). Staat op beide schermen.
+     Entry → de fiatteringsstand van één regel. Staat uitsluitend op het operatorscherm, en dat
+             wordt niet hier afgedwongen maar door het typesysteem: CustomerHourRow heeft geen
+             Status, dus een klantscherm heeft geen waarde om hier in te stoppen.
+
+   Waarom dit één component is en niet twee, en waarom het er überhaupt is: de markup van een
+   badge (glyph aria-hidden, dan het woordlabel als echte tekst) staat in dit portaal al twee
+   keer — in StatusBadge en inline in RunsTable. Het urenscherm heeft hem op drie plekken nodig:
+   de maandtabel van de klant, de maandtabel van de operator en de specificatie van de operator.
+   Drie kopieën is één te veel om nog "toevallig hetzelfde" te blijven.
+
+   Waarom niet StatusBadge uitbreiden: dat component neemt een AgentStatus, en een urenstand is
+   dat niet. Zie de toelichting bij HourStatusVisuals — dezelfde reden waarom RunResultVisuals
+   een eigen klasse is.
+
+   De glyph is aria-hidden: een schermlezer zou bij ◐ "cirkel met linkerhelft zwart" voorlezen.
+   Het woordlabel is echte tekst en geen aria-label, zodat het meetelt in de toegankelijke naam
+   van de rij waar de badge in staat. *@
+
+<span @attributes="AdditionalAttributes" class="@CssClass">
+    <span class="badge__glyph" aria-hidden="true">@Glyph</span>@Label
+</span>
+
+@code {
+    /// <summary>De stand van een maand tegenover de bundel. Sluit <see cref="Entry"/> uit.</summary>
+    [Parameter]
+    public HourMonthStatus? Month { get; set; }
+
+    /// <summary>
+    /// De fiatteringsstand van één regel. Sluit <see cref="Month"/> uit, en bestaat alleen op het
+    /// operatorpad.
+    /// </summary>
+    [Parameter]
+    public HourEntryStatus? Entry { get; set; }
+
+    /// <summary>Kleinere variant, voor een badge naast een uitlegregel.</summary>
+    [Parameter]
+    public bool Small { get; set; }
+
+    /// <summary>Extra classnamen.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen, zoals <c>title</c>. Landt op de badge zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string Glyph => Month is { } month
+        ? HourStatusVisuals.Glyph(month)
+        : HourStatusVisuals.Glyph(Entry!.Value);
+
+    private string Label => Month is { } month
+        ? HourStatusVisuals.Label(month)
+        : HourStatusVisuals.Label(Entry!.Value);
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            Month is { } month
+                ? HourStatusVisuals.BadgeClass(month)
+                : HourStatusVisuals.BadgeClass(Entry!.Value),
+            Small ? "badge--sm" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+
+    protected override void OnParametersSet()
+    {
+        // Precies één van de twee. Beide zou een badge opleveren die twee dingen zegt en er één
+        // toont; geen van beide zou een leeg vlak zijn met een rand eromheen — en dat is precies
+        // het soort stille leegte dat een lezer voor "er is niets" aanziet.
+        if (Month is null == Entry is null)
+        {
+            throw new InvalidOperationException(
+                "HourStatusBadge krijgt precies één stand: Month voor een maand tegenover de "
+                + "bundel, Entry voor de fiatteringsstand van een regel. Er staan er nu "
+                + (Month is null ? "geen" : "twee") + ".");
+        }
+    }
+}

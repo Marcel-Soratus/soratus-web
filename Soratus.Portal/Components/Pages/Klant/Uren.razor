@@ -1,0 +1,771 @@
+@page "/klant/{Slug}/uren"
+@attribute [Authorize]
+
+@* Uren (§3.6): het verbruik tegen de bundel per maand, de specificatie eronder, en voor de
+   operator het fiatteren, het boeken en het corrigeren.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   TWEE ROLLEN, TWEE VORMEN, EN HET VERSCHIL IS EEN TYPE
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   De acceptatie van fase 3 heeft twee eisen. De eerste — het maandtotaal is de som van de
+   gefiatteerde regels — staat in HourBalanceCalculator en niet hier; dit scherm telt niets op en
+   toont alleen wat de berekening zegt. De tweede — de klant ziet niets van de fiatteringsstroom —
+   staat hier, en is een typeverschil en geen filter:
+
+     Scopes.ResolveWriteAsync  → CustomerWriteScope  → OperatorHoursView → <OperatorHours />
+     Scopes.ResolveAsync       → CustomerScope       → CustomerHoursView → <CustomerHours />
+
+   IHourViews heeft twee overloads met dezelfde naam en een andere scope, en er bestaat geen
+   aanroep waarmee je met een klantscope het operatormodel krijgt. De twee weergaven staan
+   bovendien in twee eigen componenten en niet als twee takken in dit bestand: een tak deelt zijn
+   scope met de andere tak, en dan is het operatormodel in de klantmarkup één typefout ver weg.
+   Zie de toelichting bovenaan CustomerHours.razor.
+
+   Dat is dezelfde vorm als bij CustomerLogLine (§12), CustomerRunRow (§14), CustomerAgentsView
+   (§9) en de contractmarge (§2) — voor de vijfde keer, en om dezelfde reden: wat er niet op het
+   type staat kan niet lekken, ook niet als iemand er over een half jaar een tooltip bij zet.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   STATIC SSR, GEEN EILAND. WAAROM
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   In fase 1 is er precies één eiland (LogsPanel) en de reden daarvoor was live tail. Fase 2 zette
+   het contractblok in een eiland omdat het drie dingen nodig heeft die alleen daar kunnen: laten
+   zien dát er niets is gewijzigd vóór er iets is ingediend, een tweede klik binnen dezelfde ronde
+   tegenhouden, en een regel intrekken zonder je plek in de lijst te verliezen.
+
+   Geen van die drie geldt hier.
+
+     • Er is geen dirty-stand. Boeken en corrigeren leggen elke keer iets nieuws vast; er is niets
+       om "onveranderd" over te zeggen.
+     • Een tweede klik is hier al ondervangen aan de schrijfkant: HourEntryKeys.ForPortal leidt de
+       documentsleutel af uit het moment en de inhoud, en de datalaag zegt in dezelfde opmerking
+       expliciet dat dit portaal static SSR is. Zie wel het voorbehoud onderaan dit blok.
+     • Er verdwijnt niets uit een lijst. Een gefiatteerde regel blijft staan met een andere stand,
+       een afgewezen regel verhuist naar de lijst eronder, en een correctie is een rij erbij. Na
+       elke schrijfactie verandert bovendien het maandtotaal, het jaartotaal, de te-fiatteren-
+       teller én de lijst met boekbare maanden. Een eiland zou dat allemaal opnieuw moeten
+       opbouwen; een volledige POST is hier geen compromis maar de juiste vorm.
+
+   Wat het oplevert boven een eiland:
+
+     1. Er gaat geen viewmodel over een serialisatiegrens, dus er staat geen urengegeven in de
+        paginabron. Bij §12 was dat het argument om `extra` van het klanttype te halen; hier is
+        het gratis.
+     2. Elke weergave is een adres: ?maand=…, ?alle=1&jaar=…, ?beoordeel=…&actie=…. Deelbaar,
+        werkend met de terugknop, en te openen naast de mailwissel waar het over gaat.
+     3. Het werkt zonder JavaScript.
+
+   Wat het kost, en dat hoort erbij te staan:
+
+     • ConfirmAction kan niet. Fiatteren en afwijzen gaan daarom over twee adressen in plaats van
+       over twee klikken op dezelfde plek. Zie de toelichting in OperatorHours.razor.
+     • Er is geen etag bij het fiatteren en afwijzen. Op static SSR is de enige plek om een etag
+        tussen twee verzoeken vast te houden de paginabron, en daar hoort een schrijfvoorwaarde
+        niet te staan — dat is de regel die het contractscherm al stelt en die daar met een test is
+        vastgelegd. Wat er in plaats daarvan geldt: geen enkele methode op IPortalHoursStore
+        wijzigt de uren, de maand, de categorie of de omschrijving van een bestaande regel, dus het
+        enige dat kan veranderen is de stand — en juist die wordt aan de schrijfkant tegen het
+        huidige document getoetst door HourEntryTransitions. Een tweede operator die net eerder was
+        levert dus een melding op en geen stille overschrijving.
+     • FormCard's eigen slot tegen dubbel indienen (_busy) werkt alleen in een eiland. Wat er
+       overblijft is de sleutel per milliseconde, en die dekt een dubbelklik en niet een tweede
+       klik na drie seconden op een langzaam antwoord. Dat gat staat in het rapport van fase 3.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   NA EEN GELUKTE SCHRIJFACTIE VOLGT EEN REDIRECT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   POST → redirect → GET, naar de maand waarop de actie betrekking had. Twee redenen. Zonder
+   redirect stuurt een verversing hetzelfde formulier opnieuw, en bij boeken levert dat een tweede
+   urenregel op met een nieuwe sleutel — dus een dubbel gefactureerd uur. En de operator landt op
+   de maand die hij net heeft veranderd, dus hij ziet de rij die hij heeft toegevoegd en het
+   maandtotaal dat erdoor is opgeschoven. Dat is een sterkere bevestiging dan "✓ Bewaard".
+
+   Een mislukte schrijfactie doet géén redirect: dan blijft het formulier staan met de melding,
+   en met wat er was ingetypt.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   404 EN GEEN 403
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Geen recht, of een klant die niet bestaat: hetzelfde antwoord. Zie ICustomerScopeResolver — een
+   403 zou bevestigen dat de klant achter die URL bestaat. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject IHourViews Views
+@inject IPortalHoursStore Store
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<PageTitle>Uren · @_title · Agent Portal</PageTitle>
+
+@if (_operatorView is { } operatorView)
+{
+    <div class="toolbar">
+        <a class="btn btn--small" href="/overzicht"><span class="mono" aria-hidden="true">←</span>Alle klanten</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title">@operatorView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(operatorView.GeneratedAt)">
+            uren · bijgewerkt @TimeFormat.Clock(operatorView.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@operatorView.CustomerId" />
+
+    <div class="stack">
+        @* De beoordeling van één regel, bovenaan: dat is waar de operator net op heeft geklikt, en
+           het is het enige dat hij nu moet doen. *@
+        @if (_judged is { } judged)
+        {
+            <FormCard Title="@(IsApproving ? "Regel fiatteren" : "Regel afwijzen")"
+                      Mode="FieldMode.Edit"
+                      Layout="FieldLayout.Row"
+                      Model="Judgement"
+                      FormName="@JudgeFormName"
+                      State="_judgeState"
+                      Error="@_judgeError"
+                      FieldErrorCount="@(_reasonError is null ? 0 : 1)"
+                      OnSave="JudgeAsync"
+                      SaveLabel="@(IsApproving ? "Ja, fiatteren" : "Afwijzen")"
+                      SavingLabel="@(IsApproving ? "Fiatteren…" : "Afwijzen…")"
+                      Footnote="@(IsApproving ? operatorView.ApprovalNotice : operatorView.RejectionNotice)">
+                <Actions>
+                    <a class="btn btn--small" href="@HourText.MonthPath(operatorView.CustomerId, judged.Month)">Annuleren</a>
+                </Actions>
+                <ChildContent>
+                    @* De regel voluit, als platte tekst binnen een bewerkbare kaart. Dat is het
+                       uitzonderingsgeval waarvoor FormField.Mode bestaat: hier valt niets aan te
+                       passen, er valt alleen iets te besluiten, en dan is een uitgegrijsd vak een
+                       onwaarheid (§8). *@
+                    <FormField Label="Geboekt op"
+                               Mode="FieldMode.ReadOnly"
+                               ReadOnlyText="@HourText.RecordedOn(judged.RecordedOn)"
+                               Title="@TimeFormat.Absolute(judged.RecordedAt)"
+                               Mono="true" />
+                    <FormField Label="Maand"
+                               Mode="FieldMode.ReadOnly"
+                               ReadOnlyText="@judged.MonthLabel" />
+                    <FormField Label="Uren"
+                               Mode="FieldMode.ReadOnly"
+                               Kind="FieldKind.Number"
+                               ReadOnlyText="@HourText.Hours(judged.Hours)" />
+                    <FormField Label="Categorie"
+                               Mode="FieldMode.ReadOnly"
+                               ReadOnlyText="@judged.Category" />
+                    <FormField Label="Bron"
+                               Mode="FieldMode.ReadOnly"
+                               ReadOnlyText="@judged.SourceLabel" />
+                    <FormField Label="Geboekt door"
+                               Mode="FieldMode.ReadOnly"
+                               ReadOnlyText="@judged.By" />
+                    <FormField Label="Omschrijving"
+                               Mode="FieldMode.ReadOnly"
+                               ReadOnlyText="@judged.Note" />
+
+                    @if (!IsApproving)
+                    {
+                        @* Verplicht, en de uitleg zegt waarom: de regel blijft staan met deze
+                           reden erbij, en over een maand is dit het antwoord op "waarom staat dit
+                           niet op mijn factuur". *@
+                        <FormField Label="Reden"
+                                   Name="@JudgeField(nameof(Judgement.Reason))"
+                                   Value="@Judgement.Reason"
+                                   Required="true"
+                                   Error="@_reasonError"
+                                   Hint="De regel blijft met deze reden bewaard en telt niet mee. De klant ziet hem niet."
+                                   maxlength="400" />
+                    }
+                </ChildContent>
+            </FormCard>
+        }
+        else if (_judgeMissing is { } missing)
+        {
+            <p class="meta notice" role="alert"><span aria-hidden="true">✕</span> @missing</p>
+        }
+
+        <OperatorHours View="operatorView" />
+
+        <FormCard Title="Uren boeken"
+                  Mode="FieldMode.Edit"
+                  Layout="FieldLayout.Row"
+                  Model="Booking"
+                  FormName="@BookFormName"
+                  State="_bookState"
+                  Error="@_bookError"
+                  FieldErrorCount="_bookErrors.Count"
+                  OnSave="BookAsync"
+                  SaveLabel="Uren boeken"
+                  SavingLabel="Boeken…"
+                  Footnote="Wat je hier boekt is meteen gefiatteerd en staat direct op de specificatie van de klant: een operator in het portaal ís het akkoord van Soratus (§5).">
+            <HeaderContent>
+                <span>§3.6 · portaal</span>
+            </HeaderContent>
+            <ChildContent>
+                @* Een keuzelijst uit BookableMonths en geen vrij veld. Die lijst komt uit de
+                   datalaag, dus het formulier kan geen maand aanbieden die de schrijfkant
+                   weigert — dezelfde regel als bij de aanduidingen op het contractscherm. *@
+                <FormField Label="Maand"
+                           Kind="FieldKind.Select"
+                           Options="Months(operatorView)"
+                           Name="@BookField(nameof(Booking.Month))"
+                           Value="@Booking.Month"
+                           Error="@BookError(nameof(Booking.Month))"
+                           Hint="Werk van 31 juli dat je op 1 augustus boekt hoort op juli. Klik een maand in de tabel aan om hem hier voor te selecteren." />
+
+                @* FieldKind.Amount en niet Number, ook al is dit een aantal en geen bedrag. Bij
+                   type="number" geven sommige browsers een lege waarde terug zodra er een komma
+                   in staat, en "2,5" is precies wat een Nederlandse operator typt. Dan zou het
+                   veld stil leeg aankomen; zie FieldKind.Amount. *@
+                <FormField Label="Uren"
+                           Kind="FieldKind.Amount"
+                           Name="@BookField(nameof(Booking.Hours))"
+                           Value="@Booking.Hours"
+                           Required="true"
+                           Unit="u"
+                           Error="@BookError(nameof(Booking.Hours))"
+                           Hint="@($"Een komma of een punt mag, bijvoorbeeld {HourFormText.Example}. Meer dan {ContractText.Number(HourLimits.MaximumPerEntry)} uur op één regel wordt geweigerd.")" />
+
+                <FormField Label="Categorie"
+                           Kind="FieldKind.Select"
+                           Options="Categories(operatorView)"
+                           Name="@BookField(nameof(Booking.Category))"
+                           Value="@Booking.Category"
+                           Error="@BookError(nameof(Booking.Category))" />
+
+                <FormField Label="Geboekt door"
+                           Name="@BookField(nameof(Booking.By))"
+                           Value="@Booking.By"
+                           Required="true"
+                           Error="@BookError(nameof(Booking.By))"
+                           Hint="Wie het werk heeft gedaan. Dit staat op de specificatie van de klant."
+                           maxlength="120" />
+
+                <FormField Label="Omschrijving"
+                           Name="@BookField(nameof(Booking.Note))"
+                           Value="@Booking.Note"
+                           Required="true"
+                           Error="@BookError(nameof(Booking.Note))"
+                           Hint="Eén regel, in gewone taal: de klant leest deze tekst terug op zijn urenspecificatie."
+                           maxlength="400" />
+            </ChildContent>
+        </FormCard>
+
+        <p class="meta notice">@operatorView.CorrectionNotice</p>
+
+        <FormCard Title="Correctie plaatsen"
+                  Mode="FieldMode.Edit"
+                  Layout="FieldLayout.Row"
+                  Model="Correction"
+                  FormName="@CorrectFormName"
+                  State="_correctState"
+                  Error="@_correctError"
+                  FieldErrorCount="_correctErrors.Count"
+                  OnSave="CorrectAsync"
+                  SaveLabel="Correctie vastleggen"
+                  SavingLabel="Vastleggen…"
+                  Footnote="Een correctie is geen wijziging van een bestaande regel: er komt een gefiatteerde regel bij met de categorie Correctie. Het maandtotaal blijft daarmee de som van de regels, en de klant ziet de correctie op zijn specificatie staan.">
+            <ChildContent>
+                <FormField Label="Maand"
+                           Kind="FieldKind.Select"
+                           Options="Months(operatorView)"
+                           Name="@CorrectField(nameof(Correction.Month))"
+                           Value="@Correction.Month"
+                           Error="@CorrectError(nameof(Correction.Month))" />
+
+                <FormField Label="Uren"
+                           Kind="FieldKind.Amount"
+                           Name="@CorrectField(nameof(Correction.Hours))"
+                           Value="@Correction.Hours"
+                           Required="true"
+                           Unit="u"
+                           Error="@CorrectError(nameof(Correction.Hours))"
+                           Hint="Met een minteken ervoor om het maandtotaal te verlagen, bijvoorbeeld -1,5. Nul verandert niets en wordt geweigerd." />
+
+                <FormField Label="Op naam van"
+                           Name="@CorrectField(nameof(Correction.By))"
+                           Value="@Correction.By"
+                           Required="true"
+                           Error="@CorrectError(nameof(Correction.By))"
+                           maxlength="120" />
+
+                <FormField Label="Waarom"
+                           Name="@CorrectField(nameof(Correction.Note))"
+                           Value="@Correction.Note"
+                           Required="true"
+                           Error="@CorrectError(nameof(Correction.Note))"
+                           Hint="Dit is de audittrail: over een half jaar is deze regel het antwoord op de vraag waarom het maandtotaal is bijgesteld. De klant leest hem mee."
+                           maxlength="400" />
+            </ChildContent>
+        </FormCard>
+    </div>
+}
+else if (_customerView is { } customerView)
+{
+    <div class="page-head">
+        <h1 class="page-title">@customerView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(customerView.GeneratedAt)">
+            uren · bijgewerkt @TimeFormat.Clock(customerView.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@customerView.CustomerId" />
+
+    <CustomerHours View="customerView" />
+}
+
+@code {
+    /// <summary>De naam van het boekformulier, in de markup en in de modelbinding.</summary>
+    /// <remarks>
+    /// Er staan drie formulieren op deze pagina, en dan moet elk een eigen naam hebben — anders
+    /// weet Blazor bij een POST niet welk model er gebonden moet worden, en bindt hij ze alle drie
+    /// uit dezelfde velden. De namen staan daarom als constante en niet als letterlijke tekst op
+    /// twee plekken: het attribuut van de eigenschap en de FormName van de kaart horen bij elkaar,
+    /// en een verschrijving daartussen laat een formulier stil niets doen.
+    /// </remarks>
+    private const string BookFormName = "uren-boeken";
+
+    private const string CorrectFormName = "uren-corrigeren";
+
+    private const string JudgeFormName = "uren-beoordelen";
+
+    /// <summary>
+    /// Geen veldfouten: de beginstand van elk van de drie formulieren.
+    /// </summary>
+    /// <remarks>
+    /// Eén gedeelde lege verzameling en geen nieuwe per formulier, en ordinaal omdat de sleutels
+    /// eigenschapsnamen zijn.
+    ///
+    /// Hier stond een toelichting over het voorvoegsel van de <c>name</c>-attributen, met een
+    /// <c>cref</c> naar een helper <c>FieldName</c> die in dit bestand niet bestaat — die naam komt
+    /// uit <c>NieuweKlant.razor</c>. De uitleg hoort bij de drie <c>*Field</c>-helpers onderaan dit
+    /// blok en staat daar ook, bij <see cref="BookField"/>: drie formulieren met gedeelde veldnamen
+    /// hebben drie voorvoegsels nodig, en één opzoekmethode zou elk veld bij het eerste formulier
+    /// laten aankomen.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<string, string> NoErrors =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    private CustomerWriteScope? _write;
+    private OperatorHoursView? _operatorView;
+    private CustomerHoursView? _customerView;
+
+    private string _title = "Uren";
+
+    /// <summary>De regel die beoordeeld wordt, of <c>null</c> als er niets te beoordelen is.</summary>
+    private OperatorHourRow? _judged;
+
+    /// <summary>
+    /// Waarom er niets te beoordelen is, terwijl de URL wel om een beoordeling vraagt.
+    /// </summary>
+    /// <remarks>
+    /// Een gedeelde link naar een regel die intussen buiten de weergave is gevallen, of een id dat
+    /// niet bestaat. Zwijgen zou de operator laten denken dat zijn klik niets deed.
+    /// </remarks>
+    private string? _judgeMissing;
+
+    private FormSaveState _bookState = FormSaveState.Idle;
+    private string? _bookError;
+    private IReadOnlyDictionary<string, string> _bookErrors = NoErrors;
+
+    private FormSaveState _correctState = FormSaveState.Idle;
+    private string? _correctError;
+    private IReadOnlyDictionary<string, string> _correctErrors = NoErrors;
+
+    private FormSaveState _judgeState = FormSaveState.Idle;
+    private string? _judgeError;
+    private string? _reasonError;
+
+    /// <summary>De klantslug uit de route.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    /// <summary>De maand waarop de specificatie is gefilterd (§3.6, klik op een maand).</summary>
+    [SupplyParameterFromQuery(Name = HourText.MonthQuery)]
+    public string? Maand { get; set; }
+
+    /// <summary>Of de hele historie en het jaartotaal open staan (§3.6, "Alle maanden").</summary>
+    [SupplyParameterFromQuery(Name = HourText.AllQuery)]
+    public string? Alle { get; set; }
+
+    /// <summary>Het jaar dat in beeld is. Leeg betekent: dit jaar.</summary>
+    [SupplyParameterFromQuery(Name = HourText.YearQuery)]
+    public int? Jaar { get; set; }
+
+    /// <summary>De regel die beoordeeld wordt. Operator-only.</summary>
+    [SupplyParameterFromQuery(Name = HourText.JudgeQuery)]
+    public string? Beoordeel { get; set; }
+
+    /// <summary>Welke beoordeling: fiatteren of afwijzen. Operator-only.</summary>
+    [SupplyParameterFromQuery(Name = HourText.ActionQuery)]
+    public string? Actie { get; set; }
+
+    /// <summary>Het boekformulier zoals de POST het oplevert.</summary>
+    /// <remarks>
+    /// Nullable en zonder beginwaarde (BL0008): het model wordt bij een POST volledig vervangen, en
+    /// een beginwaarde hier kan door <c>null</c> worden overschreven zodra er niets te binden viel.
+    /// Gebruik daarom <see cref="Booking"/> in de markup.
+    /// </remarks>
+    [SupplyParameterFromForm(FormName = BookFormName)]
+    public HourBookingForm? Boeking { get; set; }
+
+    /// <summary>Het correctieformulier zoals de POST het oplevert.</summary>
+    [SupplyParameterFromForm(FormName = CorrectFormName)]
+    public HourCorrectionForm? Correctie { get; set; }
+
+    /// <summary>Het beoordelingsformulier zoals de POST het oplevert.</summary>
+    [SupplyParameterFromForm(FormName = JudgeFormName)]
+    public HourJudgementForm? Beoordeling { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private HourBookingForm Booking => Boeking ??= new HourBookingForm();
+
+    private HourCorrectionForm Correction => Correctie ??= new HourCorrectionForm();
+
+    private HourJudgementForm Judgement => Beoordeling ??= new HourJudgementForm();
+
+    /// <summary>Of de gevraagde beoordeling een fiattering is. Anders is het een afwijzing.</summary>
+    /// <remarks>
+    /// Fiatteren is de standaard bij een onbekende waarde? Nee — het omgekeerde. Zie
+    /// <see cref="JudgedAction"/>: een onbekende actie levert géén beoordelingskaart op. Deze
+    /// eigenschap wordt alleen gelezen als er een kaart staat, en dan is de actie een van de twee.
+    /// </remarks>
+    private bool IsApproving =>
+        string.Equals(JudgedAction, HourText.ApproveAction, StringComparison.Ordinal);
+
+    /// <summary>
+    /// De gevraagde beoordeling, of <c>null</c> als er geen geldige actie in de URL staat.
+    /// </summary>
+    /// <remarks>
+    /// Alleen de twee bekende waarden. Een verzonnen actie levert geen kaart op en geen melding:
+    /// zonder <c>?beoordeel=</c> is er niets aan de hand, en met een geldige id maar een
+    /// onbekende actie is de veilige uitkomst dat er niets gebeurt.
+    /// </remarks>
+    private string? JudgedAction => Actie switch
+    {
+        not null when string.Equals(Actie, HourText.ApproveAction, StringComparison.OrdinalIgnoreCase)
+            => HourText.ApproveAction,
+        not null when string.Equals(Actie, HourText.RejectAction, StringComparison.OrdinalIgnoreCase)
+            => HourText.RejectAction,
+        _ => null,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Het schrijfrecht eerst. Een operator krijgt ook een gewone klantscope, en dan zou hij de
+        // leesvorm van zijn eigen beheerscherm zien. ResolveWriteAsync en niet ResolveOperatorAsync:
+        // dat laatste vraagt een ingerichte telemetrie-opslag, en uren boeken kan ook op een klant
+        // wiens agents nog niet zijn uitgerold.
+        if (await Scopes.ResolveWriteAsync(user, Slug) is { } write)
+        {
+            _write = write;
+            _title = write.DisplayName;
+            await LoadOperatorAsync();
+            return;
+        }
+
+        if (await Scopes.ResolveAsync(user, Slug) is { } read)
+        {
+            _customerView = await Views.BuildHoursAsync(read, Query(), SelectedMonth);
+            _title = _customerView.DisplayName;
+            return;
+        }
+
+        Navigation.NotFound();
+    }
+
+    /// <summary>
+    /// Bouwt de operatorweergave op en zet de formulieren op wat erbij hoort.
+    /// </summary>
+    /// <remarks>
+    /// Wordt ook na een mislukte schrijfactie aangeroepen, zodat de tabellen tonen wat er nú staat.
+    /// De formulieren worden dan niet overschreven: wat de operator had ingetypt hoort te blijven
+    /// staan naast de melding waarom het niet lukte.
+    /// </remarks>
+    private async Task LoadOperatorAsync()
+    {
+        var view = await Views.BuildHoursAsync(_write!, Query(), SelectedMonth);
+
+        _operatorView = view;
+
+        // Alleen bij een GET: bij een POST komen de modellen uit het verzoek en zou een beginwaarde
+        // de invoer van de operator overschrijven.
+        Boeking ??= new HourBookingForm
+        {
+            Month = view.DefaultMonth,
+            Category = view.Categories.Count > 0 ? view.Categories[0] : null,
+            By = _write!.Actor,
+        };
+
+        Correctie ??= new HourCorrectionForm
+        {
+            Month = view.DefaultMonth,
+            By = _write!.Actor,
+        };
+
+        Beoordeling ??= new HourJudgementForm();
+
+        Judge(view);
+    }
+
+    /// <summary>
+    /// Zoekt de regel op die volgens de URL beoordeeld wordt.
+    /// </summary>
+    /// <remarks>
+    /// In beide lijsten, want een afgewezen regel kan alsnog gefiatteerd worden (punt 18) en die
+    /// staat in <see cref="OperatorHoursView.Rejected"/> en niet in de specificatie.
+    /// </remarks>
+    private void Judge(OperatorHoursView view)
+    {
+        _judged = null;
+        _judgeMissing = null;
+
+        if (string.IsNullOrWhiteSpace(Beoordeel) || JudgedAction is null)
+        {
+            return;
+        }
+
+        _judged = view.Entries.Concat(view.Rejected)
+            .FirstOrDefault(entry => string.Equals(entry.EntryId, Beoordeel, StringComparison.Ordinal));
+
+        if (_judged is null)
+        {
+            _judgeMissing =
+                "Die urenregel staat niet in deze weergave. Hij is misschien al beoordeeld, of hij "
+                + "hoort bij een andere maand; kies de maand in de tabel hieronder.";
+            return;
+        }
+
+        // Een regel die niet meer beoordeeld mág worden krijgt geen kaart maar de reden waarom
+        // niet — uit HourEntryTransitions, dezelfde functie die de schrijfkant gebruikt. Zonder dit
+        // zou een gedeelde link naar een intussen gefiatteerde regel een knop opleveren die een
+        // melding geeft.
+        var why = IsApproving
+            ? HourEntryTransitions.WhyNotApprove(_judged.Status)
+            : HourEntryTransitions.WhyNotReject(_judged.Status);
+
+        if (why is not null)
+        {
+            _judgeMissing = why;
+            _judged = null;
+        }
+    }
+
+    /// <summary>
+    /// Welke regels er worden gelezen: één maand, of een heel jaar (§3.6).
+    /// </summary>
+    /// <remarks>
+    /// De drie schermtoestanden van §3.6, in deze volgorde: een gekozen maand leest het jaar
+    /// (de maandtabel blijft compleet, de specificatie filtert), "alle maanden" leest het jaar
+    /// zonder filter, en de standaard leest alleen de huidige maand.
+    ///
+    /// Een onleesbare maand in de URL wordt genegeerd in plaats van te werpen. HoursQuery.ForMonth
+    /// werpt met opzet op een verzonnen maand — dat is een fout in de aanroeper — en dit is de
+    /// aanroeper die hem moet opvangen, want deze waarde komt uit de adresbalk.
+    /// </remarks>
+    private HoursQuery Query()
+    {
+        if (HourMonths.Parse(Maand) is { } month)
+        {
+            return HoursQuery.ForYear(month.Year);
+        }
+
+        return IsAllMonths
+            ? HoursQuery.ForYear(Jaar ?? Today.Year)
+            : HoursQuery.ForMonth(HourMonths.Of(Today));
+    }
+
+    /// <summary>De maand waarop de specificatie is gefilterd, of <c>null</c>.</summary>
+    /// <remarks>
+    /// Uit de URL, en alleen als hij te lezen is. De genormaliseerde vorm gaat mee en niet de tekst
+    /// van de gebruiker: <c>HourViews</c> vergelijkt ordinaal met de maand in het document, en
+    /// <c>" 2026-07"</c> met een spatie ervoor zou dan nul regels opleveren zonder dat er iets mis
+    /// lijkt.
+    /// </remarks>
+    private string? SelectedMonth =>
+        HourMonths.Parse(Maand) is { } month ? HourMonths.Of(month) : null;
+
+    private bool IsAllMonths =>
+        Alle is not null && !string.Equals(Alle, "0", StringComparison.Ordinal);
+
+    /// <summary>Vandaag, in de Nederlandse dag.</summary>
+    /// <remarks>
+    /// Dezelfde zone als <c>HourViews</c> gebruikt om zijn standaardmaand te bepalen. Zouden die
+    /// twee verschillen, dan leest dit scherm op de eerste van de maand tussen middernacht en twee
+    /// uur 's nachts een andere maand dan het viewmodel voorselecteert.
+    /// </remarks>
+    private DateOnly Today =>
+        DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(Clock.GetUtcNow(), PortalTimeZone.Display).DateTime);
+
+    // ── Schrijven ───────────────────────────────────────────────────────────────────────────────
+
+    private async Task BookAsync()
+    {
+        _bookError = null;
+        _bookErrors = Booking.FieldErrors();
+
+        if (_bookErrors.Count > 0)
+        {
+            _bookState = FormSaveState.Failed;
+            return;
+        }
+
+        _bookState = FormSaveState.Saving;
+
+        var result = await Store.BookHoursAsync(_write!, Booking.ToBooking());
+
+        if (result.IsSaved)
+        {
+            Done(result.Value!.Month);
+            return;
+        }
+
+        _bookError = result.Message;
+        _bookState = FormSaveState.Failed;
+
+        // De tabellen opnieuw, want er kan intussen iets zijn veranderd; het formulier blijft staan
+        // met wat er is ingetypt.
+        await LoadOperatorAsync();
+    }
+
+    private async Task CorrectAsync()
+    {
+        _correctError = null;
+        _correctErrors = Correction.FieldErrors();
+
+        if (_correctErrors.Count > 0)
+        {
+            _correctState = FormSaveState.Failed;
+            return;
+        }
+
+        _correctState = FormSaveState.Saving;
+
+        var result = await Store.CorrectHoursAsync(_write!, Correction.ToCorrection());
+
+        if (result.IsSaved)
+        {
+            Done(result.Value!.Month);
+            return;
+        }
+
+        _correctError = result.Message;
+        _correctState = FormSaveState.Failed;
+
+        await LoadOperatorAsync();
+    }
+
+    /// <summary>
+    /// Fiatteert of wijst de regel af die in de URL staat.
+    /// </summary>
+    /// <remarks>
+    /// Eén handler voor beide, want het is één formulier en één knop; welke van de twee het is
+    /// staat in de URL en niet in een verborgen veld. Zou dit twee formulieren zijn, dan staan er
+    /// twee knoppen naast elkaar op een bevestigingskaart, en dan is de bevestiging geen
+    /// bevestiging meer maar opnieuw een keuze.
+    /// </remarks>
+    private async Task JudgeAsync()
+    {
+        _judgeError = null;
+        _reasonError = null;
+
+        if (_judged is not { } judged)
+        {
+            return;
+        }
+
+        if (!IsApproving && Judgement.ReasonError() is { } reasonError)
+        {
+            _reasonError = reasonError;
+            _judgeState = FormSaveState.Failed;
+            return;
+        }
+
+        _judgeState = FormSaveState.Saving;
+
+        var result = IsApproving
+            ? await Store.ApproveHoursAsync(_write!, judged.EntryId, basedOnETag: null)
+            : await Store.RejectHoursAsync(_write!, Judgement.ToRejection(judged.EntryId));
+
+        if (result.IsSaved)
+        {
+            Done(result.Value!.Month);
+            return;
+        }
+
+        _judgeError = result.Message;
+        _judgeState = FormSaveState.Failed;
+
+        await LoadOperatorAsync();
+    }
+
+    /// <summary>
+    /// Sluit een gelukte schrijfactie af: naar de maand waar hij over ging, met een redirect.
+    /// </summary>
+    /// <param name="month">De maand van de regel die is weggeschreven.</param>
+    /// <remarks>
+    /// POST → redirect → GET. Zonder deze stap stuurt een verversing hetzelfde formulier opnieuw,
+    /// en bij boeken levert dat een tweede urenregel op met een nieuwe sleutel. Zie de toelichting
+    /// bovenaan dit bestand.
+    /// </remarks>
+    private void Done(string month) =>
+        Navigation.NavigateTo(HourText.MonthPath(_write!.CustomerId, month));
+
+    // ── Formulierhulp ───────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Het <c>name</c>-attribuut van een veld van het boekformulier.</summary>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns>Bijvoorbeeld <c>Boeking.Month</c>.</returns>
+    /// <remarks>
+    /// <para>Drie formulieren, drie voorvoegsels, en drie methoden in plaats van één die het
+    /// voorvoegsel opzoekt. Dat laatste stond er eerst en was fout: de drie formulieren delen
+    /// veldnamen (<c>Month</c>, <c>Hours</c>, <c>By</c>, <c>Note</c>), dus een zoektocht op
+    /// veldnaam levert altijd het eerste formulier op — en dan komt elk veld van het
+    /// correctieformulier aan als een veld van het boekformulier, en verdwijnt de invoer stil.</para>
+    ///
+    /// <para>Het voorvoegsel komt uit <c>nameof</c> van de eigenschap en niet als letterlijke tekst:
+    /// model binding op static SSR bindt met die naam, en een verschrijving laat een veld nergens
+    /// aankomen.</para>
+    /// </remarks>
+    private static string BookField(string field) => $"{nameof(Boeking)}.{field}";
+
+    /// <summary>Het <c>name</c>-attribuut van een veld van het correctieformulier.</summary>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns>Bijvoorbeeld <c>Correctie.Hours</c>.</returns>
+    private static string CorrectField(string field) => $"{nameof(Correctie)}.{field}";
+
+    /// <summary>Het <c>name</c>-attribuut van een veld van het beoordelingsformulier.</summary>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns><c>Beoordeling.Reason</c>.</returns>
+    private static string JudgeField(string field) => $"{nameof(Beoordeling)}.{field}";
+
+    /// <summary>De maanden waarop geboekt mag worden, als keuzelijst.</summary>
+    /// <remarks>
+    /// Met het label uit <c>HourMonths.Label</c>: een operator kiest "juli 2026" en niet
+    /// <c>2026-07</c>. De waarde blijft de sleutel, want dat is wat de schrijfkant verwacht.
+    /// </remarks>
+    private static IReadOnlyList<FieldOption> Months(OperatorHoursView view) =>
+    [
+        .. view.BookableMonths.Select(month => new FieldOption(month, HourMonths.Label(month))),
+    ];
+
+    private static IReadOnlyList<FieldOption> Categories(OperatorHoursView view) =>
+        [.. view.Categories.Select(category => new FieldOption(category))];
+
+    private string? BookError(string field) =>
+        _bookErrors.TryGetValue(field, out var message) ? message : null;
+
+    private string? CorrectError(string field) =>
+        _correctErrors.TryGetValue(field, out var message) ? message : null;
+
+}

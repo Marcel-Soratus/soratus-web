@@ -1,4 +1,5 @@
 using Soratus.Portal.Data;
+using Soratus.Portal.Tests.Hulpmiddelen;
 
 namespace Soratus.Portal.Tests.Portaalgegevens;
 
@@ -148,6 +149,57 @@ public class ContractInvoerTests
     [Fact]
     public void EenKlantwijzigingMetNaamKlopt() =>
         Assert.Null(new CustomerEdit { Name = "Bakker Logistiek" }.Validate());
+
+    [Fact]
+    public async Task WatErOpHetDocumentStaatBepaaltOfEenKlantInternIsEnNietDeBewerking()
+    {
+        // Het omgevingsblok rendert IsInternal niet — een klant intern maken raakt de facturatie en
+        // is geen naamswijziging — dus wat het meestuurt is een doorgifte en geen keuze. Zou de
+        // bewerking hier winnen, dan is één verkeerd doorgegeven vlag genoeg om een klant te laten
+        // omslaan, en er is geen veld op het scherm waar dat aan te zien is.
+        //
+        // Deze test meet de opslag in het geheugen en niet Cosmos. Dat is precies wat er te meten
+        // valt: de schermtests draaien hierop, dus als deze fixture van productie afwijkt meten die
+        // het verkeerde. De productiekant staat in de test hieronder.
+        var scope = await Weergavelaag.Schrijfscope();
+        var opslag = new Vasteportaalopslag();
+
+        var uitkomst = await opslag.SaveCustomerAsync(
+            scope,
+            new CustomerEdit
+            {
+                Name = "Acme Logistiek",
+                IsInternal = true,
+                BasedOnETag = opslag.Klant()!.ETag,
+            });
+
+        Assert.True(uitkomst.IsSaved);
+        Assert.False(uitkomst.Value!.IsInternal);
+    }
+
+    [Fact]
+    public void DeEchteOpslagSchrijftIsInternalNietOnvoorwaardelijkUitDeBewerking()
+    {
+        // De productiekant van de test hierboven. CosmosPortalDataStore is zonder Cosmos niet aan te
+        // roepen, dus dit is een test op de vindplaats en niet op het gedrag — dezelfde vorm die de
+        // fase-0-notitie bij §14 gebruikt voor een regel die op meer dan één plek moet staan.
+        //
+        // Het gaat om één teken: `?? false` in plaats van `?? edit.IsInternal` maakt van een klant
+        // die alleen uit de configuratie komt bij zijn eerste wijziging een gewone klant. Bij de
+        // interne beheerklant is dat een factuur aan onszelf.
+        var bron = File.ReadAllText(
+            Path.Combine(Broncode.Portaalproject.FullName, "Data", "CosmosPortalDataStore.cs"));
+
+        Assert.Contains(
+            "IsInternal = current?.IsInternal ?? edit.IsInternal,",
+            bron,
+            StringComparison.Ordinal);
+
+        Assert.DoesNotContain(
+            "IsInternal = edit.IsInternal,",
+            bron,
+            StringComparison.Ordinal);
+    }
 
     [Fact]
     public void DeSlugStaatNietOpHetWijzigingsformulier()

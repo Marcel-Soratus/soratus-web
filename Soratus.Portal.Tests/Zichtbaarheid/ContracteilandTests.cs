@@ -2,6 +2,7 @@ using AngleSharp.Dom;
 using Bunit;
 using Soratus.Portal.Components.Pages.Klant;
 using Soratus.Portal.Data;
+using Soratus.Portal.Security;
 using Soratus.Portal.Tests.Hulpmiddelen;
 
 namespace Soratus.Portal.Tests.Zichtbaarheid;
@@ -36,6 +37,22 @@ public class ContracteilandTests : Portaalrendertest
 
     /// <summary>Wat de andere operator intussen invult.</summary>
     private const string AndermansSla = "Reactie 8 werkuren · herstel 3 werkdagen";
+
+    /// <summary>
+    /// Het veld dat de omgevingstests wijzigen: de volledige omgeving, en operator-only.
+    /// </summary>
+    /// <remarks>
+    /// Met opzet dít veld en niet de klantnaam: het is het veld waarin een tikfout thuishoort te
+    /// worden hersteld en waar de bevinding over ging. Een verkeerd getypt subscription-id was
+    /// alleen met de hand in Cosmos te repareren.
+    /// </remarks>
+    private const string Subscription = "Subscription en resource group";
+
+    /// <summary>Wat de operator van deze test invult.</summary>
+    private const string EigenSubscription = "sub-soratus-acme · rg-acme-productie";
+
+    /// <summary>Wat de andere operator intussen invult.</summary>
+    private const string AndermansSubscription = "sub-soratus-acme · rg-acme-prod-eu";
 
     // ── De gewone gang: bewaren met de versie die op het scherm stond ────────────────────────────
 
@@ -313,6 +330,291 @@ public class ContracteilandTests : Portaalrendertest
         Assert.Contains("leeg", cut.Markup, StringComparison.Ordinal);
     }
 
+    // ── De omgeving: het klantdocument ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void EenOmgevingswijzigingGaatMetDeVersieVanHetKlantdocumentMee()
+    {
+        // Hetzelfde als bij het contract, en het is een eigen etag: het zijn twee documenten. Eén
+        // etag voor beide zou betekenen dat een contractwijziging het omgevingsblok ongeldig maakt,
+        // en dan meldt het scherm botsingen die niet bestaan.
+        var versieOpHetScherm = Opslag.Klant()!.ETag;
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, Subscription, EigenSubscription);
+        BewaarOmgeving(cut);
+
+        var wijziging = Assert.Single(Opslag.Klantwijzigingen);
+
+        Assert.Equal(versieOpHetScherm, wijziging.BasedOnETag);
+        Assert.Equal(EigenSubscription, wijziging.EnvironmentDetail);
+        Assert.Equal(EigenSubscription, Opslag.Klant()!.EnvironmentDetail);
+        Assert.Contains("Bewaard", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenVerkeerdGetyptSubscriptionIdIsOpHetSchermTeHerstellen()
+    {
+        // De bevinding waar dit blok uit komt, als één test. OperatorContractView droeg
+        // EnvironmentDetail al en geen enkel scherm rendeerde het, en SaveCustomerAsync werd nergens
+        // aangeroepen. Een tikfout in een subscription-id was daarmee alleen met de hand in Cosmos
+        // te herstellen — en dan is de acceptatie van fase 2 half gehaald: aanmaken lukt, corrigeren
+        // niet. Een tikfout in een subscription-id is de eerste week en geen randgeval.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Assert.Equal(Vasteportaalopslag.Omgevingsdetail, Waarde(cut, Subscription));
+
+        Vul(cut, Subscription, EigenSubscription);
+        BewaarOmgeving(cut);
+
+        Assert.Equal(EigenSubscription, Opslag.Klant()!.EnvironmentDetail);
+    }
+
+    [Fact]
+    public void HetBewarenVanDeOmgevingLaatDeTelemetrieStaan()
+    {
+        // SaveCustomerAsync vervangt het hele klantdocument. Een veld dat het formulier niet draagt
+        // wordt daarmee bij het eerste bewaren leeggemaakt — en dan is de telemetrie van deze klant
+        // weg zonder dat iemand er iets aan heeft gedaan. Het overzicht zegt dan "status onbekend"
+        // en niemand weet waardoor. Daarom staan de endpoint en de databasenaam op het formulier en
+        // niet buiten het formulier om.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Klantnaam", "Acme Logistiek BV");
+        BewaarOmgeving(cut);
+
+        var klant = Opslag.Klant()!;
+
+        Assert.Equal("Acme Logistiek BV", klant.Name);
+        Assert.Equal(Autorisatiebron.StandaardEndpoint, klant.TelemetryEndpoint);
+        Assert.Equal("telemetry", klant.TelemetryDatabase);
+    }
+
+    [Fact]
+    public void EenOmgevingswijzigingSchrijftHetContractNietOpnieuwWeg()
+    {
+        // Twee kaarten, twee documenten, twee knoppen. Eén kaart met één knop zou van elke correctie
+        // op een subscription-id een gelijktijdigheidsbotsing maken op een document dat de operator
+        // niet heeft aangeraakt.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, Subscription, EigenSubscription);
+        BewaarOmgeving(cut);
+
+        Assert.Single(Opslag.Klantwijzigingen);
+        Assert.Empty(Opslag.Contractbewerkingen);
+
+        Vul(cut, Sla, EigenSla);
+        Bewaar(cut);
+
+        Assert.Single(Opslag.Klantwijzigingen);
+        Assert.Single(Opslag.Contractbewerkingen);
+    }
+
+    [Fact]
+    public void EenConflictOpDeOmgevingLaatDeWijzigingVanDeAnderStaanEnToontWatErVeranderde()
+    {
+        // Dezelfde afhandeling als bij het contract, en dat is opzet: een operator die de ene kaart
+        // heeft geleerd hoort de andere niet opnieuw te hoeven begrijpen.
+        var versieOpHetScherm = Opslag.Klant()!.ETag;
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, Subscription, EigenSubscription);
+
+        Opslag.EenAndereOperatorWijzigtDeKlant(
+            document => document with { EnvironmentDetail = AndermansSubscription });
+
+        BewaarOmgeving(cut);
+
+        var wijziging = Assert.Single(Opslag.Klantwijzigingen);
+
+        Assert.Equal(versieOpHetScherm, wijziging.BasedOnETag);
+        Assert.Equal(AndermansSubscription, Opslag.Klant()!.EnvironmentDetail);
+
+        Assert.Contains("intussen is gewijzigd aan de omgeving", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains(AndermansSubscription, cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("Subscription en resource group", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenTweedePogingOpDeOmgevingLegtDeEigenVersieVastMetDeVersieVanDeAnder()
+    {
+        // De uitweg. De etag schuift op naar die van de ander, dus een tweede klik legt de eigen
+        // waarden alsnog vast — maar pas nadat de operator heeft gezien wat hij overschrijft.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, Subscription, EigenSubscription);
+
+        Opslag.EenAndereOperatorWijzigtDeKlant(
+            document => document with { EnvironmentDetail = AndermansSubscription });
+
+        var versieVanDeAnder = Opslag.Klant()!.ETag;
+
+        BewaarOmgeving(cut);
+        BewaarOmgeving(cut);
+
+        Assert.Equal(2, Opslag.Klantwijzigingen.Count);
+
+        var tweede = Opslag.Klantwijzigingen[1];
+
+        Assert.Equal(versieVanDeAnder, tweede.BasedOnETag);
+        Assert.Equal(EigenSubscription, tweede.EnvironmentDetail);
+        Assert.Equal(EigenSubscription, Opslag.Klant()!.EnvironmentDetail);
+    }
+
+    [Fact]
+    public void DeVersieVanDeAnderOvernemenOpDeOmgevingSchrijftNiets()
+    {
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, Subscription, EigenSubscription);
+
+        Opslag.EenAndereOperatorWijzigtDeKlant(
+            document => document with { EnvironmentDetail = AndermansSubscription });
+
+        BewaarOmgeving(cut);
+
+        Assert.Single(Opslag.Klantwijzigingen);
+
+        Overnemen(cut, "Omgeving");
+
+        Assert.Single(Opslag.Klantwijzigingen);
+        Assert.Equal(AndermansSubscription, Opslag.Klant()!.EnvironmentDetail);
+        Assert.Equal(AndermansSubscription, Waarde(cut, Subscription));
+        Assert.DoesNotContain("aan de omgeving", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenTweedeAanlegVanHetKlantdocumentIsOokEenConflict()
+    {
+        // Het subtiele geval, en hetzelfde als bij het contract: het formulier draagt geen etag,
+        // want deze klant komt alleen uit de configuratie. "Geen etag" mag geen vrijbrief zijn om
+        // over de aanleg van een ander heen te schrijven — de echte opslag doet zonder etag een
+        // CreateItemAsync en die loopt op een 409.
+        Opslag = new Vasteportaalopslag(alleenUitConfiguratie: true);
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, Subscription, EigenSubscription);
+
+        Opslag.EenAndereOperatorLegtDeKlantVast();
+
+        BewaarOmgeving(cut);
+
+        var wijziging = Assert.Single(Opslag.Klantwijzigingen);
+
+        Assert.Null(wijziging.BasedOnETag);
+        Assert.Equal(Vasteportaalopslag.Omgevingsdetail, Opslag.Klant()!.EnvironmentDetail);
+        Assert.Contains("intussen", cut.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DeInterneBeheerklantBlijftInternAlsZijnEersteDocumentWordtAangelegd()
+    {
+        // De stille fout waar CustomerEdit.IsInternal voor bestaat. Het formulier draagt dat veld
+        // niet — een klant intern maken raakt de facturatie en is geen naamswijziging — en zonder
+        // die doorgifte schreef de eerste wijziging isInternal: false weg, ongeacht wat de
+        // configuratie zei. Bij de interne beheerklant maakte die ene klik hem tot een gewone,
+        // factureerbare klant. Stil, en zonder dat de verschillenkaart er iets over zegt.
+        Opslag = new Vasteportaalopslag(alleenUitConfiguratie: true);
+
+        MeldOperatorAan(MetInterneBeheerklant());
+
+        var cut = Eiland();
+
+        Assert.Contains("Interne beheeromgeving", cut.Markup, StringComparison.Ordinal);
+
+        Vul(cut, Subscription, EigenSubscription);
+        BewaarOmgeving(cut);
+
+        Assert.True(
+            Opslag.Klant()!.IsInternal,
+            "De interne beheerklant is bij het aanleggen van zijn klantdocument een gewone klant " +
+            "geworden. Dat is één klik, het is onomkeerbaar zonder handwerk in Cosmos, en het " +
+            "gevolg is een factuur aan onszelf.");
+    }
+
+    [Fact]
+    public void EenKlantDieAlInternIsBlijftDatBijElkeWijziging()
+    {
+        // De andere kant: bij een klant die al een document heeft komt de waarde van dat document en
+        // niet van de klantenlijst, en het bewaren laat hem staan. Deze test rendert de kaart pas ná
+        // de wijziging, want het formulier leest bij het openen — dat is precies de reden dat de
+        // etag van het formulier komt en niet van een verse lezing.
+        Opslag.EenAndereOperatorWijzigtDeKlant(document => document with { IsInternal = true });
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Assert.Contains("Interne beheeromgeving", cut.Markup, StringComparison.Ordinal);
+
+        Vul(cut, Subscription, EigenSubscription);
+        BewaarOmgeving(cut);
+
+        Assert.True(Opslag.Klant()!.IsInternal);
+    }
+
+    [Fact]
+    public void DeKlantslugIsGeenInvoerveldMaarStaatWelOpHetScherm()
+    {
+        // De slug is de partitiesleutel van élk document van deze klant en de customerId waaronder
+        // zijn agents publiceren. Hem wijzigen is een migratie en geen bewerking. Dat hoort te
+        // blijken uit het scherm en niet alleen uit een comment — en als platte tekst en niet als
+        // uitgegrijsd vak: §8 is daar expliciet over, en een uitgegrijsd vak belooft dat het ooit
+        // open gaat.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Assert.Contains("Klant-id", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("partitiesleutel", cut.Markup, StringComparison.Ordinal);
+
+        Assert.DoesNotContain(
+            "Klant-id",
+            cut.FindAll("label").Select(l => l.TextContent.Trim()),
+            StringComparer.Ordinal);
+
+        Assert.Empty(cut.FindAll("input[disabled]"));
+        Assert.Empty(cut.FindAll("input[readonly]"));
+    }
+
+    [Fact]
+    public void EenLegeKlantnaamLevertEenMeldingOnderHetVeldEnGeenSchrijfactie()
+    {
+        // De enige harde eis van CustomerEdit, en de melding komt onder het veld dat hem schendt in
+        // plaats van als blok boven de knop. En de poging bereikt de opslag niet: een naam die
+        // ontbreekt is geen botsing en hoort geen etag te verbruiken.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Klantnaam", "   ");
+        BewaarOmgeving(cut);
+
+        Assert.Empty(Opslag.Klantwijzigingen);
+        Assert.Contains("Vul een klantnaam in", cut.Markup, StringComparison.Ordinal);
+        Assert.Equal("Acme Logistiek", Opslag.Klant()!.Name);
+    }
+
     // ── Toegang: vastleggen en intrekken ────────────────────────────────────────────────────────
 
     [Fact]
@@ -422,6 +724,25 @@ public class ContracteilandTests : Portaalrendertest
 
     // ── Gereedschap ─────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// De standaardklantenlijst, met de eigen klant als interne beheerklant.
+    /// </summary>
+    /// <returns>De klanten.</returns>
+    /// <remarks>
+    /// Hier en niet als parameter op <see cref="Autorisatiebron.Standaard"/>: die lijst wordt door
+    /// tientallen tests gebruikt en een extra vlag erop zou in al die tests een keuze suggereren die
+    /// ze niet maken.
+    /// </remarks>
+    private static CustomerRecord[] MetInterneBeheerklant()
+    {
+        var klanten = Autorisatiebron.Standaard();
+
+        klanten.Single(k => string.Equals(k.Id, EigenKlant, StringComparison.Ordinal)).IsInternal =
+            true;
+
+        return klanten;
+    }
+
     /// <summary>Rendert het eiland voor de eigen klant, zoals de pagina het aanroept.</summary>
     /// <returns>Het gerenderde eiland.</returns>
     /// <remarks>
@@ -476,6 +797,10 @@ public class ContracteilandTests : Portaalrendertest
     private static void Bewaar(IRenderedComponent<ContractPanel> cut) =>
         Formulier(cut, "Contract").Submit();
 
+    /// <summary>Dient het omgevingsblok in.</summary>
+    private static void BewaarOmgeving(IRenderedComponent<ContractPanel> cut) =>
+        Formulier(cut, "Omgeving").Submit();
+
     /// <summary>Dient het toegangsformulier in.</summary>
     private static void BewaarToegang(IRenderedComponent<ContractPanel> cut) =>
         Formulier(cut, "Toegang vastleggen").Submit();
@@ -483,19 +808,29 @@ public class ContracteilandTests : Portaalrendertest
     /// <summary>
     /// Neemt de versie van de ander over: de knop, en dan de bevestiging.
     /// </summary>
+    /// <param name="cut">Het gerenderde eiland.</param>
+    /// <param name="kaart">
+    /// De kaart waarvan de knop wordt geklikt: <c>Contract</c> of <c>Omgeving</c>.
+    /// </param>
     /// <remarks>
-    /// Twee klikken, want dat is wat ConfirmAction doet — en de bevestiging staat met opzet niet op
-    /// de plek van de knop die hem opriep.
+    /// <para>Twee klikken, want dat is wat ConfirmAction doet — en de bevestiging staat met opzet
+    /// niet op de plek van de knop die hem opriep.</para>
+    ///
+    /// <para>De kaart moet erbij, want er staan er nu twee met dezelfde knop. Zonder die begrenzing
+    /// zou een test die "de omgeving overnemen" bedoelt de eerste knop op het scherm klikken, en dat
+    /// is er op een dag een andere — dan meet hij stilletjes iets anders.</para>
     /// </remarks>
-    private static void Overnemen(IRenderedComponent<ContractPanel> cut)
+    private static void Overnemen(IRenderedComponent<ContractPanel> cut, string kaart = "Contract")
     {
         ArgumentNullException.ThrowIfNull(cut);
 
-        cut.FindAll("button")
+        var sectie = $"section[aria-label=\"{kaart}\"]";
+
+        cut.FindAll($"{sectie} button")
             .First(b => b.TextContent.Contains("overnemen", StringComparison.OrdinalIgnoreCase))
             .Click();
 
-        cut.Find(".confirm .btn--primary").Click();
+        cut.Find($"{sectie} .confirm .btn--primary").Click();
     }
 
     /// <summary>Trekt de toegang op deze rij in: de knop, en dan de bevestiging.</summary>

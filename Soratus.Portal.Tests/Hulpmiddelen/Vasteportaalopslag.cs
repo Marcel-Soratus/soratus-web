@@ -31,7 +31,13 @@ namespace Soratus.Portal.Tests.Hulpmiddelen;
 /// <para>De documenten komen door de omzetting van de productiecode heen; zie
 /// <see cref="Documentvorm"/>.</para>
 /// </remarks>
-internal sealed class Vasteportaalopslag : IPortalDataStore
+/// <remarks>
+/// <c>partial</c> en met <see cref="IPortalHoursStore"/> erbij: de urenkant staat in
+/// <c>Vasteportaalopslag.Uren.cs</c>. Eén klasse en geen tweede opslag ernaast, want het urenscherm
+/// leest de urenregels én het contract uit dezelfde partitie — twee fixtures zouden twee
+/// werkelijkheden zijn, en dan is het saldo van de ene niet dat van de andere.
+/// </remarks>
+internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHoursStore
 {
     /// <summary>De klant die standaard gevuld is: dezelfde als in <see cref="Autorisatiebron"/>.</summary>
     public const string Standaardklant = "acme-logistiek";
@@ -158,6 +164,14 @@ internal sealed class Vasteportaalopslag : IPortalDataStore
     /// </remarks>
     public List<ContractEdit> Contractbewerkingen { get; } = [];
 
+    /// <summary>Elke klantwijziging die deze opslag heeft gekregen, in volgorde.</summary>
+    /// <remarks>
+    /// De tegenhanger van <see cref="Contractbewerkingen"/> voor het klantdocument, en om dezelfde
+    /// reden: welke etag ging mee, en welke waarden. Zonder deze lijst is niet te zien of het
+    /// omgevingsblok de versie van het scherm meestuurt of een verse lezing.
+    /// </remarks>
+    public List<CustomerEdit> Klantwijzigingen { get; } = [];
+
     /// <summary>Elke toegang die is vastgelegd, in volgorde.</summary>
     public List<AccessGrant> Toegangverleningen { get; } = [];
 
@@ -166,6 +180,11 @@ internal sealed class Vasteportaalopslag : IPortalDataStore
 
     /// <summary>Elk verzoek om een klant aan te maken.</summary>
     public List<NewCustomerRequest> Klantaanmaken { get; } = [];
+
+    /// <summary>Het klantdocument zoals het nu in de opslag staat.</summary>
+    /// <param name="klant">De klantslug.</param>
+    /// <returns>Het document, of <c>null</c> als deze klant alleen uit de configuratie komt.</returns>
+    public CustomerDocument? Klant(string klant = Standaardklant) => Partitie(klant).Klant;
 
     /// <summary>Het contract zoals het nu in de opslag staat.</summary>
     /// <param name="klant">De klantslug.</param>
@@ -235,6 +254,70 @@ internal sealed class Vasteportaalopslag : IPortalDataStore
             "Ruben Vos",
             Testgegevens.Nu) with { ETag = NieuweEtag() };
     }
+
+    /// <summary>
+    /// Iemand anders wijzigt de omgeving van deze klant terwijl het formulier openstaat.
+    /// </summary>
+    /// <param name="wijziging">Wat die ander verandert.</param>
+    /// <param name="klant">De klantslug.</param>
+    /// <remarks>
+    /// De tegenhanger van <see cref="EenAndereOperatorWijzigtHetContract"/> voor het klantdocument.
+    /// Ook hier buiten de scopes om: dit is een tweede operator in een ander circuit, en de etag
+    /// schuift op zodat de etag die het formulier vasthoudt verouderd is.
+    /// </remarks>
+    public void EenAndereOperatorWijzigtDeKlant(
+        Func<CustomerDocument, CustomerDocument> wijziging,
+        string klant = Standaardklant)
+    {
+        ArgumentNullException.ThrowIfNull(wijziging);
+
+        var partitie = Partitie(klant);
+
+        if (partitie.Klant is null)
+        {
+            throw new InvalidOperationException(
+                $"Klant {klant} heeft geen klantdocument, dus er valt niets aan te wijzigen. Bouw " +
+                "de opslag zonder alleenUitConfiguratie als een test een tweede wijziger nodig " +
+                "heeft, of gebruik EenAndereOperatorLegtDeKlantVast.");
+        }
+
+        partitie.Klant = wijziging(partitie.Klant) with
+        {
+            ChangedAt = Testgegevens.Nu,
+            ChangedBy = "Ruben Vos",
+            ETag = NieuweEtag(),
+        };
+    }
+
+    /// <summary>
+    /// Iemand anders legt het klantdocument vast terwijl het formulier openstaat.
+    /// </summary>
+    /// <param name="klant">De klantslug.</param>
+    /// <param name="naam">De naam die die ander invult.</param>
+    /// <remarks>
+    /// Voor de klant die alleen uit de configuratie komt. Dat geval is het subtiele, net als bij het
+    /// contract: het formulier draagt dan geen etag, en "geen etag" mag geen vrijbrief zijn om over
+    /// de aanleg van een ander heen te schrijven.
+    /// </remarks>
+    public void EenAndereOperatorLegtDeKlantVast(
+        string klant = Standaardklant,
+        string naam = "Acme Logistiek BV") =>
+        Partitie(klant).Klant = new CustomerDocument
+        {
+            Id = PortalDocumentIds.Customer,
+            PartitionKey = klant,
+            CustomerId = klant,
+            Name = naam,
+            Environment = "West-Europa",
+            EnvironmentDetail = Omgevingsdetail,
+            TelemetryEndpoint = Autorisatiebron.StandaardEndpoint,
+            TelemetryDatabase = "telemetry",
+            CreatedAt = Testgegevens.Nu,
+            CreatedBy = "Ruben Vos",
+            ChangedAt = Testgegevens.Nu,
+            ChangedBy = "Ruben Vos",
+            ETag = NieuweEtag(),
+        };
 
     /// <summary>Iemand anders trekt een toegang in terwijl de lijst op het scherm staat.</summary>
     /// <param name="email">Het adres.</param>
@@ -371,6 +454,8 @@ internal sealed class Vasteportaalopslag : IPortalDataStore
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(edit);
 
+        Klantwijzigingen.Add(edit);
+
         if (edit.Validate() is { } melding)
         {
             return Task.FromResult(PortalWriteResult<CustomerDocument>.Invalid(melding));
@@ -378,7 +463,14 @@ internal sealed class Vasteportaalopslag : IPortalDataStore
 
         var partitie = Partitie(scope.CustomerId);
 
-        if (Verouderd(partitie.Klant?.ETag, edit.BasedOnETag))
+        // Twee kanten van dezelfde controle, precies zoals bij het contract hieronder. De tweede —
+        // een bewerking zonder etag op een klant die inmiddels wél een document heeft — stond hier
+        // niet, en dat was een afwijking van de echte opslag: UpsertAsync doet zonder etag een
+        // CreateItemAsync, en die loopt op een 409 als het document er al staat. Zonder deze regel
+        // overschrijft de fixture stil waar productie een conflict geeft, en dat is precies het
+        // geval van de klant die alleen uit de configuratie komt.
+        if (Verouderd(partitie.Klant?.ETag, edit.BasedOnETag)
+            || (edit.BasedOnETag is null && partitie.Klant is not null))
         {
             return Task.FromResult(PortalWriteResult<CustomerDocument>.Conflict(
                 Conflictmelding("klant"),
@@ -391,7 +483,10 @@ internal sealed class Vasteportaalopslag : IPortalDataStore
             PartitionKey = scope.CustomerId,
             CustomerId = scope.CustomerId,
             Name = edit.Name,
-            IsInternal = partitie.Klant?.IsInternal ?? false,
+
+            // Wat er staat gaat vóór wat de bewerking meestuurt; alleen bij een nieuw document telt
+            // de bewerking. Zie SaveCustomerAsync in CosmosPortalDataStore.
+            IsInternal = partitie.Klant?.IsInternal ?? edit.IsInternal,
             Environment = edit.Environment,
             EnvironmentDetail = edit.EnvironmentDetail,
             TelemetryEndpoint = edit.TelemetryEndpoint,

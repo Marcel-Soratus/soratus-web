@@ -105,11 +105,28 @@ public abstract class Portaalrendertest : BunitContext
     protected IContractViews? Contracten { get; set; }
 
     /// <summary>
+    /// De weergavelaag van het urenscherm. Standaard de échte projectie op <see cref="Opslag"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>null</c> betekent "bouw de standaard bij het aanmelden", want die heeft de
+    /// klantenlijst nodig die aan <see cref="MeldAan"/> is meegegeven.</para>
+    ///
+    /// <para>Vervang hem alleen als een test een stand nodig heeft die de projectie niet kan
+    /// opleveren. Voor alles wat over zichtbaarheid gaat is de échte projectie het punt: zie
+    /// <see cref="VasteUrenweergaven"/> — een fixture die het klantpad zelf armer vult, laat de
+    /// scheiding groen staan zonder hem te meten.</para>
+    /// </remarks>
+    protected IHourViews? Uren { get; set; }
+
+    /// <summary>
     /// Richt de container in met een aangemelde gebruiker en de diensten die een pagina vraagt.
     /// </summary>
     /// <param name="gebruiker">De aangemelde gebruiker.</param>
     /// <param name="rollen">De app-rollen voor <c>AuthorizeView</c> en de beleiden.</param>
     /// <param name="beleiden">De autorisatiebeleiden die deze gebruiker haalt.</param>
+    /// <param name="klanten">
+    /// De klantenlijst waaruit de scope-resolver leest. <c>null</c> betekent de standaardlijst.
+    /// </param>
     protected void MeldAan(
         ClaimsPrincipal gebruiker,
         string[] rollen,
@@ -150,6 +167,19 @@ public abstract class Portaalrendertest : BunitContext
         // verkeerde reden.
         Services.AddSingleton(Contracten ?? new VasteContractweergaven(Opslag, lijst));
         Services.AddSingleton<IPortalDataStore>(Opslag);
+
+        // Het urenscherm vraagt deze twee: de weergavelaag voor beide rollen en de opslag voor de
+        // formulieren die schrijven. Ze staan hier en niet per test, om dezelfde reden als de twee
+        // regels erboven: elke pagina valt onder het zichtbaarheidsvangnet en dat rendert ze
+        // allemaal, en een pagina die op een ontbrekende dienst omvalt toont geen verboden woorden
+        // en laat dat vangnet dus groen staan om de verkeerde reden.
+        Services.AddSingleton(Uren ?? VasteUrenweergaven.Bouw(Opslag, lijst));
+        Services.AddSingleton<IPortalHoursStore>(Opslag);
+
+        // Het urenscherm leest de klok zelf om te bepalen welke maand "deze maand" is. Dezelfde
+        // stilstaande klok als de weergavelaag, anders wijst de standaardweergave naar een andere
+        // maand dan het viewmodel voorselecteert.
+        Services.AddSingleton(Weergavelaag.Klok);
     }
 
     /// <summary>Richt de container in voor een klantgebruiker met precies één omgeving.</summary>
@@ -248,6 +278,15 @@ public abstract class Portaalrendertest : BunitContext
     /// genavigeerd.
     /// </summary>
     /// <returns>Het pad, bijvoorbeeld <c>/overzicht</c>.</returns>
+    /// <remarks>
+    /// <strong><see cref="BunitNavigationManager.History"/> staat nieuwste eerst.</strong> Hier stond
+    /// <c>Last()</c>, en dat leverde de óudste navigatie op. Dat bleef onzichtbaar zolang elke
+    /// aanroeper er precies één had — bij de landingsroutes navigeert alleen de pagina zelf, en dan
+    /// zijn de eerste en de laatste dezelfde. Een test die eerst zelf naar een adres met een
+    /// querystring gaat en daarna meet waar een POST heen stuurde, kreeg zijn eigen beginadres terug
+    /// en verweet dat de pagina. Gemeten op de urenschrijfacties: <c>[0]</c> was de redirect uit
+    /// <c>Done</c>, <c>[1]</c> het beginadres van de test.
+    /// </remarks>
     protected string? Doorstuurdoel()
     {
         var navigatie = Services.GetRequiredService<BunitNavigationManager>();
@@ -257,7 +296,7 @@ public abstract class Portaalrendertest : BunitContext
             return null;
         }
 
-        var laatste = navigatie.History.Last();
+        var laatste = navigatie.History.First();
 
         return "/" + navigatie.ToBaseRelativePath(
             navigatie.ToAbsoluteUri(laatste.Uri).ToString());

@@ -136,6 +136,20 @@ builder.Services.AddScoped<IAgentDetailViews>(services => services.GetRequiredSe
 // één klasse die twee opslagen bedient wordt de plek waar het ene met het andere wordt gemengd.
 builder.Services.AddScoped<IContractViews, ContractViews>();
 
+// De urenopslag. Scoped en niet singleton, anders dan CosmosPortalDataStore: die is singleton omdat
+// PortalDirectoryRefresh (een hosted service) hem nodig heeft en geen scoped afhankelijkheid kan
+// krijgen. Voor uren bestaat die aanleiding niet, en dan is scoped de standaard.
+//
+// Een eigen interface naast IPortalDataStore, en niet een paar methoden erbij. Zie IPortalHoursStore:
+// die interface is de autorisatiebron van het portaal, en een pagina die uren boekt hoort niet
+// hetzelfde bewijs in handen te hebben als een pagina die toegang uitdeelt.
+builder.Services.AddScoped<IPortalHoursStore, CosmosPortalHoursStore>();
+
+// Het urenscherm heeft zijn eigen bouwer, om dezelfde reden als het contractscherm. Hij leest de
+// urenregels én het contract — dat laatste voor precies één getal, de bundel, want een saldo bestaat
+// niet zonder bundel en de bundel staat in het contract.
+builder.Services.AddScoped<IHourViews, HourViews>();
+
 // ── Blazor ───────────────────────────────────────────────────────────────────────────────────
 // Static SSR is de standaard. InteractiveServer is alleen beschikbaar als render mode voor de
 // eilanden die later komen (live tail); de app als geheel wordt niet interactief.

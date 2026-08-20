@@ -133,12 +133,18 @@ public sealed record CustomerContractView
     /// Korte omgevingsaanduiding, bijvoorbeeld <c>West-Europa</c>.
     /// </summary>
     /// <remarks>
-    /// Staat wél op de klantweergave, en dat is geen inconsistentie met
-    /// <see cref="EnvironmentDetail"/> op het operatortype. §2 maakt infrastructuur<em>details</em>
-    /// operator-only; de korte aanduiding is volgens fase 0 juist "het enige omgevingsveld dat een
-    /// klant te zien krijgt", en <see cref="CustomerAgentsView"/> draagt hem om dezelfde reden. De
-    /// grens loopt tussen "in welke regio staat mijn omgeving" en "in welke subscription en resource
-    /// group".
+    /// <para>Staat wél op de klantweergave, en dat is geen inconsistentie met
+    /// <see cref="OperatorContractView.EnvironmentDetail"/>. §2 maakt
+    /// infrastructuur<em>details</em> operator-only; de korte aanduiding is volgens fase 0 juist
+    /// "het enige omgevingsveld dat een klant te zien krijgt", en <see cref="CustomerAgentsView"/>
+    /// draagt hem om dezelfde reden. De grens loopt tussen "in welke regio staat mijn omgeving" en
+    /// "in welke subscription en resource group".</para>
+    ///
+    /// <para>Sinds er een omgevingsblok op het operatorscherm staat, loopt die grens ook door de
+    /// bewerkbaarheid heen: de operator wijzigt daar de korte aanduiding, de volledige omgeving en de
+    /// opslaglocatie in één kaart, en van die vijf velden leest de klant er twee — deze en zijn naam.
+    /// Dat is geen filter op dat scherm maar een gevolg van de twee typen: wat hier niet staat kan de
+    /// klantweergave niet renderen.</para>
     /// </remarks>
     public string? Environment { get; init; }
 
@@ -346,6 +352,21 @@ public sealed record OperatorContractView
     public string? ChangedBy { get; init; }
 
     /// <summary>
+    /// Wanneer het klantdocument voor het laatst is gewijzigd, of <c>null</c> als er nog geen
+    /// klantdocument is.
+    /// </summary>
+    /// <remarks>
+    /// Een eigen paar naast <see cref="ChangedAt"/> en <see cref="ChangedBy"/>, want het zijn twee
+    /// documenten met elk hun eigen geschiedenis. Het contract van vorige week zegt niets over de
+    /// subscription die gisteren is verbeterd, en op een scherm waar twee operators kunnen botsen is
+    /// juist dat de aanwijzing dat er iemand anders aan het werk is.
+    /// </remarks>
+    public DateTimeOffset? CustomerChangedAt { get; init; }
+
+    /// <summary>Wie het klantdocument voor het laatst heeft gewijzigd.</summary>
+    public string? CustomerChangedBy { get; init; }
+
+    /// <summary>
     /// De etag van het contract, of <c>null</c> als er nog geen contract is.
     /// </summary>
     /// <remarks>
@@ -362,8 +383,38 @@ public sealed record OperatorContractView
     public string? EnvironmentDetail { get; init; }
 
     /// <summary>
+    /// De Cosmos-endpoint van de telemetrie van déze klant, of <c>null</c> voor het
+    /// standaardaccount. Operator-only.
+    /// </summary>
+    /// <remarks>
+    /// <para>Staat hier omdat het omgevingsblok van het contractscherm hem moet kunnen tonen én
+    /// terugsturen. Dat tweede is niet cosmetisch: <see cref="Data.IPortalDataStore.SaveCustomerAsync"/>
+    /// vervangt het hele klantdocument, dus een veld dat niet op het formulier staat wordt bij het
+    /// eerste bewaren leeggemaakt. Zou dit veld hier ontbreken, dan zou een operator die de klantnaam
+    /// verbetert de telemetrie van die klant afsluiten — het overzicht zegt dan "status onbekend" en
+    /// niemand weet waardoor.</para>
+    ///
+    /// <para>Geen geheim: op de accounts staat local auth uit, dus een endpoint is een adres en geen
+    /// sleutel. Zie <see cref="Security.CustomerRecord"/>.</para>
+    /// </remarks>
+    public string? TelemetryEndpoint { get; init; }
+
+    /// <summary>
+    /// De databasenaam bij <see cref="TelemetryEndpoint"/>, of <c>null</c> voor de standaardnaam.
+    /// Operator-only.
+    /// </summary>
+    /// <remarks>Zie <see cref="TelemetryEndpoint"/>: hij staat hier om dezelfde reden.</remarks>
+    public string? TelemetryDatabase { get; init; }
+
+    /// <summary>
     /// De etag van het klantdocument, of <c>null</c> als deze klant nog niet is gemigreerd.
     /// </summary>
+    /// <remarks>
+    /// Gaat mee als <see cref="Data.CustomerEdit.BasedOnETag"/>, en om dezelfde reden als
+    /// <see cref="ContractETag"/>: het formulier stuurt terug wat er stond toen de operator begon te
+    /// typen. Een verse lezing vlak vóór het schrijven zou de wijziging van een ander binnenhalen en
+    /// er precies overheen schrijven.
+    /// </remarks>
     public string? CustomerETag { get; init; }
 
     /// <summary>

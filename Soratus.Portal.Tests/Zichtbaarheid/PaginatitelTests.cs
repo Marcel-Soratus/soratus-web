@@ -136,6 +136,12 @@ public class PaginatitelTests : Portaalrendertest
                 "Soratus.Portal.Components.Pages.Klant.AgentDetail",
                 "Soratus.Portal.Components.Pages.Klant.Agents",
                 "Soratus.Portal.Components.Pages.Klant.Contract",
+
+                // Fase 3. Het urenscherm rendert voor een klant inhoud — zijn verbruik tegen de
+                // bundel — en zet dus een titel ("Uren · Acme Logistiek · Agent Portal"). Wat er
+                // niet in staat is een woord uit de fiatteringsstroom; dat wordt door de theorie
+                // hierboven gemeten en niet door deze lijst.
+                "Soratus.Portal.Components.Pages.Klant.Uren",
                 "Soratus.Portal.Components.Pages.NotFound",
             ],
             Groep(cut => Titel(cut).Length > 0 && !string.IsNullOrWhiteSpace(cut.Markup)));

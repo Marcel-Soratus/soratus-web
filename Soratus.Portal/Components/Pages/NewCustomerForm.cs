@@ -195,19 +195,23 @@ public sealed class NewCustomerForm
             errors[nameof(CustomerId)] = slugError;
         }
 
+        // De invoer gaat mee naar de melding. Bij een duizendscheiding ("1.250") zegt hij dan wat
+        // er dubbelzinnig is in plaats van om een getal te vragen terwijl er al een getal staat.
+        // Zie ContractText.NumberError: laat je de invoer weg, dan is de melding niet onwaar maar
+        // wel minder scherp bij precies het geval waar hij het meest te zeggen heeft.
         if (!ContractText.TryNumber(BundledHours, out _))
         {
-            errors[nameof(BundledHours)] = ContractText.NumberError("8");
+            errors[nameof(BundledHours)] = ContractText.NumberError("8", BundledHours);
         }
 
         if (!ContractText.TryNumber(HourlyRate, out _))
         {
-            errors[nameof(HourlyRate)] = ContractText.NumberError("125,50");
+            errors[nameof(HourlyRate)] = ContractText.NumberError("125,50", HourlyRate);
         }
 
         if (!ContractText.TryNumber(AzureSurcharge, out _))
         {
-            errors[nameof(AzureSurcharge)] = ContractText.NumberError("8");
+            errors[nameof(AzureSurcharge)] = ContractText.NumberError("8", AzureSurcharge);
         }
 
         for (var number = 1; number <= AccessRowCount; number++)

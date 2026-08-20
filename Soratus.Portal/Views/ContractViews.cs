@@ -114,8 +114,17 @@ internal sealed class ContractViews(
             ChangedAt = contract?.ChangedAt,
             ChangedBy = contract?.ChangedBy,
             ContractETag = contract?.ETag,
+            CustomerChangedAt = customer?.ChangedAt,
+            CustomerChangedBy = customer?.ChangedBy,
             Environment = customer?.Environment ?? record?.Environment,
             EnvironmentDetail = customer?.EnvironmentDetail ?? record?.EnvironmentDetail,
+
+            // Ook deze twee komen mee, en niet omdat het scherm ze zo graag toont: het
+            // omgevingsblok stuurt ze terug bij het bewaren. SaveCustomerAsync vervangt het hele
+            // klantdocument, dus een veld dat het formulier niet draagt wordt bij het eerste
+            // bewaren leeggemaakt — en dan is de telemetrie van deze klant weg.
+            TelemetryEndpoint = customer?.TelemetryEndpoint ?? record?.TelemetryEndpoint,
+            TelemetryDatabase = customer?.TelemetryDatabase ?? record?.TelemetryDatabase,
             CustomerETag = customer?.ETag,
             IsFromConfigurationOnly = customer is null,
             Access =

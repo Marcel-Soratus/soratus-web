@@ -37,11 +37,23 @@ public class ContractZichtbaarheidTests
             "en een veld dat niemand leest is precies het veld dat later ergens opduikt."),
         ("CustomerETag",
             "Zie ContractETag: een schrijfvoorwaarde op een scherm dat niet schrijft."),
+        ("TelemetryEndpoint",
+            "§2 maakt koppelingen en infrastructuurdetails operator-only. Dit is het adres van het " +
+            "Cosmos-account van deze klant; het staat op het omgevingsblok van de operator omdat " +
+            "SaveCustomerAsync het hele klantdocument vervangt en een veld dat het formulier niet " +
+            "draagt bij het bewaren wordt leeggemaakt."),
+        ("TelemetryDatabase",
+            "Zie TelemetryEndpoint: hetzelfde veld, dezelfde reden."),
         ("ChangedAt",
             "Wanneer wij het contract hebben aangepast is onze administratie. De klant heeft het " +
             "contract, niet ons wijzigingslog."),
         ("ChangedBy",
             "Zie ChangedAt: dit is de naam van een Soratus-medewerker."),
+        ("CustomerChangedAt",
+            "Zie ChangedAt, voor het klantdocument. Een eigen paar, want het zijn twee documenten " +
+            "met elk hun eigen geschiedenis."),
+        ("CustomerChangedBy",
+            "Zie ChangedBy: dit is de naam van een Soratus-medewerker."),
         ("IsFromConfigurationOnly",
             "Dat de eenmalige migratie nog niet heeft gelopen is onze inrichting en niet de " +
             "administratie van de klant."),

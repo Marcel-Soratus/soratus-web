@@ -1,5 +1,5 @@
-@* Het bewerkbare deel van het contractscherm: de contractkaart en het toegangsblok (§3.5), voor
-   een operator.
+@* Het bewerkbare deel van het contractscherm: het omgevingsblok (§3.9), de contractkaart en het
+   toegangsblok (§3.5), voor een operator.
 
    ────────────────────────────────────────────────────────────────────────────────────────
    WAAROM DIT EEN EILAND IS EN GEEN BLOK IN Contract.razor
@@ -23,12 +23,43 @@
        en reist niet mee.
 
    ────────────────────────────────────────────────────────────────────────────────────────
+   TWEE KAARTEN DIE ELK HUN EIGEN DOCUMENT SCHRIJVEN
+   ────────────────────────────────────────────────────────────────────────────────────────
+   Het omgevingsblok schrijft het klantdocument (SaveCustomerAsync), de contractkaart het
+   contractdocument (SaveContractAsync). Twee documenten, twee etags, twee formulieren — en
+   bewust niet één kaart met één knop. Een operator die een verkeerd getypt subscription-id
+   herstelt hoort niet ook het contract opnieuw weg te schrijven; dat zou van elke correctie een
+   gelijktijdigheidsbotsing op een document maken dat hij niet heeft aangeraakt.
+
+   Ze staan wél in deze ene component en niet in twee eilanden. De reden is dezelfde als hierboven:
+   over een render-mode-grens gaat één string, en twee eilanden zouden twee keer autoriseren, twee
+   keer dezelfde drie documenten lezen en twee keer dezelfde verschillenkaart moeten bouwen.
+
+   Het omgevingsblok staat bovenaan en de contractkaart eronder, in de volgorde waarin een klant
+   ontstaat: eerst is er een omgeving, dan een contract, dan iemand die mag inloggen.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
+   WAT ER IN HET OMGEVINGSBLOK NIET TE WIJZIGEN IS
+   ────────────────────────────────────────────────────────────────────────────────────────
+   De klantslug is de partitiesleutel van élk document van deze klant en de customerId waaronder
+   zijn agents publiceren. Hem wijzigen is geen bewerking maar een migratie. Hij staat daarom als
+   platte tekst in het formulier (FieldMode.ReadOnly op dat ene veld) en niet als uitgegrijsd vak:
+   §8 zegt dat read-only platte tekst is, en een uitgegrijsd vak zou beloven dat het ooit open gaat.
+   CustomerEdit heeft het veld ook niet — zie de opmerking daar.
+
+   Of dit een interne beheerklant is staat er om dezelfde reden als tekst en niet als keuzelijst:
+   dat raakt de facturatie (§4) en is geen naamswijziging. SaveCustomerAsync houdt vast wat er op
+   het bestaande document staat; het formulier draagt de waarde alleen door voor de klant die nog
+   geen document heeft.
+
+   ────────────────────────────────────────────────────────────────────────────────────────
    GELIJKTIJDIGHEID: DE ETAG KOMT VAN HET FORMULIER
    ────────────────────────────────────────────────────────────────────────────────────────
    _etag is de versie die op het scherm stond toen de operator begon te typen, en die gaat als
    ContractEdit.BasedOnETag mee. Niet een verse lezing vlak vóór het schrijven: dan zou je de
    wijziging van de ander binnenhalen en er precies overheen schrijven, en is de controle een
-   ritueel.
+   ritueel. _customerETag doet hetzelfde voor het klantdocument, met dezelfde afhandeling
+   eronder.
 
    Bij een conflict levert de opslag het huidige document mee. Dat is het verschil tussen
    "mislukt" en een scherm dat kan tonen wát er veranderde. Wat er dan gebeurt:
@@ -65,13 +96,115 @@ else if (_scope is null || _view is null)
 else
 {
     <div class="stack">
+        @* Deze melding stond er al en beloofde iets wat geen enkele knop op dit scherm kon doen:
+           "je eerste wijziging hier legt het klantdocument alsnog aan". Een contractwijziging
+           schrijft alleen het contractdocument (zie SaveContractAsync) en een toegang alleen een
+           toegangsdocument. Nu is er één kaart die het klantdocument wél aanlegt, en de melding
+           wijst die aan in plaats van "hier" te zeggen. *@
         @if (_view.IsFromConfigurationOnly)
         {
             <p class="meta notice">
                 Deze klant staat nog alleen in de configuratie van het portaal: de eenmalige
                 migratie naar de opslag heeft voor hem nog niet gelopen. Daarom is er geen
-                wijzigingsgeschiedenis. Je eerste wijziging hier legt het klantdocument alsnog aan.
+                wijzigingsgeschiedenis. De kaart <strong>Omgeving</strong> hieronder legt het
+                klantdocument aan zodra je hem bewaart; het contract en de toegangen staan in
+                eigen documenten en doen dat niet.
             </p>
+        }
+
+        @* Het omgevingsblok (§3.9 na het aanmaken). Dit bestond als viewmodel en niet als scherm:
+           EnvironmentDetail, Environment en CustomerETag werden geprojecteerd en door niets
+           gerenderd, en SaveCustomerAsync werd nergens aangeroepen. Gevolg: een verkeerd getypt
+           subscription-id was na het aanmaken alleen met de hand in Cosmos te herstellen, en dan is
+           de acceptatie van fase 2 half gehaald — aanmaken lukt, corrigeren niet. *@
+        <FormCard Title="Omgeving"
+                  Mode="FieldMode.Edit"
+                  Layout="FieldLayout.Row"
+                  Dirty="HasCustomerChanges"
+                  State="_customerState"
+                  Error="@_customerError"
+                  FieldErrorCount="@(_nameError is null ? 0 : 1)"
+                  OnSave="SaveCustomerAsync"
+                  SaveLabel="@(_hasCustomerDocument ? "Omgeving bewaren" : "Omgeving vastleggen")"
+                  Footnote="Het klant-id en de soort omgeving staan er als tekst omdat ze niet te wijzigen zijn: het eerste is de partitiesleutel van elk document van deze klant, het tweede bepaalt of er wordt gefactureerd. De klant leest van deze kaart alleen zijn naam en de korte omgevingsaanduiding. Verander je de naam, dan volgt de kop van deze pagina zodra je hem opnieuw opent.">
+            <HeaderContent>
+                <span title="@CustomerOriginTitle">@CustomerOrigin</span>
+            </HeaderContent>
+            <Actions>
+                @if (_customerConflict is not null)
+                {
+                    <ConfirmAction Label="Versie van de ander overnemen"
+                                   Question="Jouw ingevulde omgeving vervangen door die van de ander?"
+                                   ConfirmLabel="Ja, overnemen"
+                                   BusyLabel="Overnemen…"
+                                   Destructive="false"
+                                   Small="false"
+                                   Title="zet dit blok op de waarden die nu in de opslag staan; wat je zelf had ingevuld gaat verloren"
+                                   OnConfirm="TakeTheirCustomer" />
+                }
+            </Actions>
+            <ChildContent>
+                @* Platte tekst en geen uitgegrijsd vak: §8 is daar expliciet over, en een
+                   uitgegrijsd vak belooft dat het ooit open gaat. Dit gaat niet open — de slug is
+                   de partitiesleutel van élk document van deze klant en de customerId waaronder
+                   zijn agents publiceren. Hem wijzigen is een migratie en geen bewerking, en
+                   CustomerEdit heeft het veld daarom ook niet. *@
+                <FormField Label="Klant-id"
+                           Mode="FieldMode.ReadOnly"
+                           ReadOnlyText="@_view.CustomerId"
+                           Mono="true"
+                           Title="de partitiesleutel van elk document van deze klant en de customerId waaronder zijn agents publiceren; niet te wijzigen" />
+
+                <FormField Label="Soort omgeving"
+                           Mode="FieldMode.ReadOnly"
+                           ReadOnlyText="@EnvironmentKind"
+                           Title="bepaalt of deze omgeving wordt doorbelast (§4); niet hier te wijzigen" />
+
+                <FormField Label="Klantnaam"
+                           @bind-Value="_customer.Name"
+                           Required="true"
+                           Error="@_nameError"
+                           Hint="Zoals de naam op het scherm hoort te staan. Deze staat in de kop van elk scherm van deze klant en in het overzicht."
+                           maxlength="120" />
+
+                <FormField Label="Omgeving"
+                           @bind-Value="_customer.Environment"
+                           Placeholder="West-Europa"
+                           Hint="De korte aanduiding. Dit is het enige omgevingsveld dat de klant zelf te zien krijgt."
+                           maxlength="80" />
+
+                <FormField Label="Subscription en resource group"
+                           @bind-Value="_customer.EnvironmentDetail"
+                           Mono="true"
+                           Placeholder="sub-77b2e0 · rg-soratus-bakker"
+                           Hint="Alleen voor Soratus: infrastructuurdetails zijn operator-only (§2). Dit is het veld waarin een tikfout thuishoort te worden hersteld en niet in de database."
+                           maxlength="160" />
+
+                @* Geen geheim: op de accounts staat local auth uit, dus een endpoint is een adres
+                   en geen sleutel. Zie CustomerRecord. *@
+                <FormField Label="Cosmos-endpoint"
+                           @bind-Value="_customer.TelemetryEndpoint"
+                           Mono="true"
+                           Placeholder="https://cosmos-soratus-bakker.documents.azure.com:443/"
+                           Hint="Leeg laten voor het standaardaccount. Staat hier iets verkeerd, dan is er geen telemetrie te lezen en staat deze klant op het overzicht als 'status onbekend'."
+                           maxlength="200" />
+
+                <FormField Label="Databasenaam"
+                           @bind-Value="_customer.TelemetryDatabase"
+                           Mono="true"
+                           Hint="Leeg laten voor de standaardnaam."
+                           maxlength="80" />
+            </ChildContent>
+        </FormCard>
+
+        @if (_customerConflict is not null)
+        {
+            <FormCard Title="Wat er intussen is gewijzigd aan de omgeving"
+                      Mode="FieldMode.ReadOnly"
+                      Layout="FieldLayout.Row"
+                      Footnote="@CustomerConflictHint">
+                @Differences(_customerChanges)
+            </FormCard>
         }
 
         <FormCard Title="Contract"
@@ -189,19 +322,7 @@ else
                       Mode="FieldMode.ReadOnly"
                       Layout="FieldLayout.Row"
                       Footnote="@ConflictHint">
-                @if (_changes.Count == 0)
-                {
-                    <FormField Label="Velden"
-                               ReadOnlyText="Geen enkel veld is van waarde veranderd; alleen de versie is opgeschoven." />
-                }
-                else
-                {
-                    @foreach (var change in _changes)
-                    {
-                        <FormField Label="@change.Label"
-                                   ReadOnlyText="@($"was {change.Before} · nu {change.After}")" />
-                    }
-                }
+                @Differences(_changes)
             </FormCard>
         }
 
@@ -375,8 +496,59 @@ else
         public string? Surcharge { get; set; }
     }
 
+    /// <summary>
+    /// Wat er in het omgevingsblok staat, als tekst zoals de velden het leveren.
+    /// </summary>
+    /// <remarks>
+    /// Dezelfde vorm en dezelfde reden als <see cref="ContractFields"/>: een record met settable
+    /// properties, zodat de dirty-controle één vergelijking is en niet vijf.
+    ///
+    /// <para>Wat er níet op staat: het klant-id en of dit een interne beheerklant is. Die twee zijn
+    /// geen formulierwaarden — het eerste is de partitiesleutel en het tweede raakt de facturatie —
+    /// en ze horen dus ook niet in de dirty-controle. Zie <c>CustomerEdit</c>.</para>
+    /// </remarks>
+    private sealed record CustomerFields
+    {
+        public string? Name { get; set; }
+
+        public string? Environment { get; set; }
+
+        public string? EnvironmentDetail { get; set; }
+
+        public string? TelemetryEndpoint { get; set; }
+
+        public string? TelemetryDatabase { get; set; }
+    }
+
     /// <summary>Eén veld dat door iemand anders is veranderd terwijl dit formulier openstond.</summary>
     private sealed record FieldChange(string Label, string Before, string After);
+
+    /// <summary>
+    /// De inhoud van een verschillenkaart: per gewijzigd veld het label met de oude en de nieuwe
+    /// waarde, of één regel als er niets van waarde is veranderd.
+    /// </summary>
+    /// <remarks>
+    /// Eén keer geschreven en door twee kaarten gebruikt — die van het contract en die van de
+    /// omgeving. Twee kopieën van deze lus zouden precies zo uit elkaar gaan lopen als de
+    /// gekopieerde CSS uit §6 van de afwijkingennotitie: de een krijgt een verbetering en de ander
+    /// niet, en dan meldt het ene document een verschil dat het andere verzwijgt.
+    /// </remarks>
+    private RenderFragment Differences(IReadOnlyList<FieldChange> changes) =>
+        @<text>
+            @if (changes.Count == 0)
+            {
+                <FormField Label="Velden"
+                           ReadOnlyText="Geen enkel veld is van waarde veranderd; alleen de versie is opgeschoven." />
+            }
+            else
+            {
+                @foreach (var change in changes)
+                {
+                    <FormField Label="@change.Label"
+                               ReadOnlyText="@($"was {change.Before} · nu {change.After}")" />
+                }
+            }
+        </text>;
 
     private CustomerWriteScope? _scope;
     private OperatorContractView? _view;
@@ -407,6 +579,32 @@ else
     private ContractDocument? _conflict;
     private IReadOnlyList<FieldChange> _changes = [];
 
+    private CustomerFields _customer = new();
+    private CustomerFields _customerOriginal = new();
+
+    /// <summary>
+    /// De versie van het klantdocument waarop dit blok is gebaseerd, of <c>null</c> als er nog geen
+    /// klantdocument is.
+    /// </summary>
+    /// <remarks>
+    /// Een eigen etag naast <see cref="_etag"/>, want het zijn twee documenten. Eén etag voor beide
+    /// zou betekenen dat een contractwijziging het omgevingsblok ongeldig maakt en omgekeerd — en dan
+    /// meldt het scherm botsingen die niet bestaan.
+    /// </remarks>
+    private string? _customerETag;
+
+    private bool _hasCustomerDocument;
+    private bool _isInternal;
+    private DateTimeOffset? _customerChangedAt;
+    private string? _customerChangedBy;
+
+    private FormSaveState _customerState = FormSaveState.Idle;
+    private string? _customerError;
+    private string? _nameError;
+
+    private CustomerDocument? _customerConflict;
+    private IReadOnlyList<FieldChange> _customerChanges = [];
+
     private string? _email;
     private string? _name;
     private string _designation = PortalAccessRoles.Reader;
@@ -427,6 +625,8 @@ else
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     private bool HasChanges => _fields != _original;
+
+    private bool HasCustomerChanges => _customer != _customerOriginal;
 
     /// <summary>
     /// Het e-mailadres van het toegangsformulier.
@@ -506,6 +706,50 @@ else
         + "vast te leggen — dan overschrijf je wat hier onder \"nu\" staat — of neem zijn versie "
         + "over met de knop bij het formulier.";
 
+    /// <summary>Dezelfde uitweg, voor het klantdocument.</summary>
+    /// <remarks>
+    /// Eigen tekst en niet dezelfde constante: hij verwijst naar een andere kaart, en "de knop bij
+    /// het formulier" zou anders naar het contract wijzen terwijl de botsing op de omgeving zat.
+    /// </remarks>
+    private const string CustomerConflictHint =
+        "Het omgevingsblok staat nu op de versie van de ander. Klik Omgeving bewaren om jouw "
+        + "waarden alsnog vast te leggen — dan overschrijf je wat hier onder \"nu\" staat — of neem "
+        + "zijn versie over met de knop bij dat blok.";
+
+    /// <summary>De regel rechts in de kop van het omgevingsblok: waar dit klantdocument vandaan komt.</summary>
+    private string CustomerOrigin
+    {
+        get
+        {
+            if (!_hasCustomerDocument)
+            {
+                return "nog geen klantdocument";
+            }
+
+            return _customerChangedAt is { } moment
+                ? $"gewijzigd {TimeFormat.Clock(moment)}{By(_customerChangedBy)}"
+                : "vastgelegd";
+        }
+    }
+
+    private string CustomerOriginTitle =>
+        _customerChangedAt is { } moment
+            ? TimeFormat.Absolute(moment)
+            : "er is nog geen klantdocument voor deze klant; het staat alleen in de configuratie";
+
+    /// <summary>
+    /// Of dit een klantomgeving of de interne beheeromgeving is, in woorden.
+    /// </summary>
+    /// <remarks>
+    /// Als tekst en niet als keuzelijst. Dit bepaalt of er wordt gefactureerd (§4) en is daarmee
+    /// geen naamswijziging; <c>SaveCustomerAsync</c> houdt vast wat er op het bestaande document
+    /// staat en er is dus geen bewerking waarmee deze waarde omslaat. Een keuzelijst die niets
+    /// verandert is precies de knop die dit portaal niet zet.
+    /// </remarks>
+    private string EnvironmentKind => _isInternal
+        ? "Interne beheeromgeving van Soratus — niet doorbelast"
+        : "Klantomgeving";
+
     protected override async Task OnInitializedAsync()
     {
         if (AuthenticationState is null)
@@ -543,6 +787,18 @@ else
         _changedAt = _view.ChangedAt;
         _changedBy = _view.ChangedBy;
         _designations = [.. _view.Roles.Select(role => new FieldOption(role))];
+
+        _customer = EnvironmentFields(_view);
+        _customerOriginal = _customer with { };
+        _customerETag = _view.CustomerETag;
+
+        // "Er is een klantdocument" is precies het omgekeerde van "deze klant komt alleen uit de
+        // configuratie". Twee namen voor één toestand zouden uit elkaar gaan lopen; dit is de
+        // enige plek waar de een uit de ander volgt.
+        _hasCustomerDocument = !_view.IsFromConfigurationOnly;
+        _isInternal = _view.IsInternal;
+        _customerChangedAt = _view.CustomerChangedAt;
+        _customerChangedBy = _view.CustomerChangedBy;
     }
 
     /// <summary>
@@ -570,19 +826,21 @@ else
         // Parsen hoort bij het scherm: alleen hier is bekend of "8" acht uur of acht procent is.
         // Wat níet hier hoort is de vraag of de waarde mag — dat doet ContractEdit.Validate, en
         // de store roept die aan. Eén definitie van "klopt dit".
+        // De invoer gaat mee naar de melding. Bij een duizendscheiding ("1.250") zegt hij dan wat
+        // er dubbelzinnig is in plaats van om een getal te vragen terwijl er al een getal staat.
         if (!ContractText.TryNumber(_fields.BundledHours, out var hours))
         {
-            _hoursError = ContractText.NumberError("8");
+            _hoursError = ContractText.NumberError("8", _fields.BundledHours);
         }
 
         if (!ContractText.TryNumber(_fields.HourlyRate, out var rate))
         {
-            _rateError = ContractText.NumberError("125,50");
+            _rateError = ContractText.NumberError("125,50", _fields.HourlyRate);
         }
 
         if (!ContractText.TryNumber(_fields.Surcharge, out var surcharge))
         {
-            _surchargeError = ContractText.NumberError("8");
+            _surchargeError = ContractText.NumberError("8", _fields.Surcharge);
         }
 
         if (FieldErrors > 0)
@@ -651,6 +909,110 @@ else
                 _contractState = FormSaveState.Failed;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Legt de omgeving van deze klant vast: het klantdocument.
+    /// </summary>
+    /// <remarks>
+    /// Dezelfde vorm als <see cref="SaveContractAsync"/>, en dat is opzet en geen kopieerwerk: de
+    /// afhandeling van een botsing hoort op beide kaarten hetzelfde te zijn, want een operator die de
+    /// ene heeft geleerd hoort de andere niet opnieuw te hoeven begrijpen. De etag komt van dít blok
+    /// en de verschillenkaart komt uit dezelfde <see cref="Differences"/>.
+    /// </remarks>
+    private async Task SaveCustomerAsync()
+    {
+        _customerError = null;
+        _nameError = null;
+
+        // De enige harde eis van CustomerEdit, en de melding komt onder het veld dat hem schendt in
+        // plaats van als blok boven de knop. Dezelfde functie die de schrijfkant gebruikt zou hier
+        // netter zijn, maar CustomerEdit.Validate werpt op een leeg record; de controle staat dus
+        // hier én daar, en de store weigert alsnog als deze regel ooit verdwijnt.
+        var name = NullIfBlank(_customer.Name);
+
+        if (name is null)
+        {
+            _nameError =
+                "Vul een klantnaam in. Die staat in de kop van elk scherm van deze klant en in het "
+                + "overzicht van alle klanten; leeg laten levert daar een lege regel op.";
+            _customerState = FormSaveState.Failed;
+            return;
+        }
+
+        var edit = new CustomerEdit
+        {
+            Name = name,
+
+            // Geen formulierveld: het gaat mee zodat de schrijfkant hem niet hoeft te verzinnen voor
+            // de klant die nog geen document heeft. Bij een klant die er wél een heeft wint wat er
+            // staat — zie SaveCustomerAsync in CosmosPortalDataStore.
+            IsInternal = _isInternal,
+            Environment = NullIfBlank(_customer.Environment),
+            EnvironmentDetail = NullIfBlank(_customer.EnvironmentDetail),
+            TelemetryEndpoint = NullIfBlank(_customer.TelemetryEndpoint),
+            TelemetryDatabase = NullIfBlank(_customer.TelemetryDatabase),
+            BasedOnETag = _customerETag,
+        };
+
+        _customerState = FormSaveState.Saving;
+
+        var result = await Store.SaveCustomerAsync(_scope!, edit);
+
+        switch (result.Status)
+        {
+            case PortalWriteStatus.Saved:
+                var document = result.Value!;
+
+                _customerETag = document.ETag;
+                _hasCustomerDocument = true;
+                _isInternal = document.IsInternal;
+                _customerChangedAt = document.ChangedAt;
+                _customerChangedBy = document.ChangedBy;
+
+                _customer = EnvironmentFields(document);
+                _customerOriginal = _customer with { };
+                _customerConflict = null;
+                _customerChanges = [];
+                _customerState = FormSaveState.Saved;
+                break;
+
+            case PortalWriteStatus.Conflict:
+                _customerConflict = result.Current;
+                _customerChanges = _customerConflict is null ? [] : Changes(_customerConflict);
+
+                // De etag schuift op naar die van de ander, precies zoals bij het contract: een
+                // tweede klik legt de eigen waarden alsnog vast, maar pas nadat de operator heeft
+                // gezien wat hij overschrijft.
+                _customerETag = _customerConflict?.ETag;
+                _hasCustomerDocument = _customerConflict is not null;
+                _customerChangedAt = _customerConflict?.ChangedAt;
+                _customerChangedBy = _customerConflict?.ChangedBy;
+                _customerError = result.Message;
+                _customerState = FormSaveState.Failed;
+                break;
+
+            default:
+                _customerError = result.Message;
+                _customerState = FormSaveState.Failed;
+                break;
+        }
+    }
+
+    /// <summary>Zet het omgevingsblok op de waarden die nu in de opslag staan.</summary>
+    private void TakeTheirCustomer()
+    {
+        _customer = _customerConflict is null
+            ? new CustomerFields()
+            : EnvironmentFields(_customerConflict);
+        _customerOriginal = _customer with { };
+        _customerETag = _customerConflict?.ETag;
+        _hasCustomerDocument = _customerConflict is not null;
+        _isInternal = _customerConflict?.IsInternal ?? _isInternal;
+        _customerConflict = null;
+        _customerChanges = [];
+        _customerError = null;
+        _customerState = FormSaveState.Idle;
     }
 
     /// <summary>Zet het formulier op de waarden die nu in de opslag staan.</summary>
@@ -759,6 +1121,40 @@ else
         view.ManagedBy,
         view.AzureSurchargePercentage);
 
+    // Deze twee heten EnvironmentFields en niet From: C# overlaadt niet op retourtype, en
+    // From(OperatorContractView) bestaat al voor de contractvelden.
+    //
+    // LET OP — dit is een // en geen @* *@, en dat is geen smaak. Een razorcomment binnen @code
+    // knipt het codeblok in twee stukken, en twee overloads van dezelfde methodenaam aan
+    // weerszijden van die knip zien elkaar niet meer. Concreet: met een @* *@ hier vond
+    // Changes(_customerConflict) hierboven alleen Changes(ContractDocument) en gaf CS1503 op een
+    // aanroep die klopt. Zet commentaar in een codeblok dus altijd met // of ///.
+    /// <summary>De omgevingsvelden zoals ze uit het viewmodel komen.</summary>
+    private static CustomerFields EnvironmentFields(OperatorContractView view) => new()
+    {
+        Name = view.DisplayName,
+        Environment = view.Environment,
+        EnvironmentDetail = view.EnvironmentDetail,
+        TelemetryEndpoint = view.TelemetryEndpoint,
+        TelemetryDatabase = view.TelemetryDatabase,
+    };
+
+    /// <summary>De omgevingsvelden zoals ze uit een klantdocument komen.</summary>
+    /// <remarks>
+    /// Geen getallen en geen datums, dus hier is geen tussenlaag als
+    /// <see cref="Fields(string?, string?, string?, string?, string?, string?, decimal?, decimal?, string?, string?, string?, decimal?)"/>
+    /// nodig: vijf tekstvelden gaan ongewijzigd door. Het klant-id staat er niet op — dat is geen
+    /// formulierwaarde maar de sleutel.
+    /// </remarks>
+    private static CustomerFields EnvironmentFields(CustomerDocument document) => new()
+    {
+        Name = document.Name,
+        Environment = document.Environment,
+        EnvironmentDetail = document.EnvironmentDetail,
+        TelemetryEndpoint = document.TelemetryEndpoint,
+        TelemetryDatabase = document.TelemetryDatabase,
+    };
+
     /// <summary>De contractvelden zoals ze uit een document komen.</summary>
     /// <remarks>
     /// De ingangsdatum gaat ongewijzigd door: in het document staat hij al als <c>yyyy-MM-dd</c>,
@@ -790,7 +1186,7 @@ else
     /// <para>De drie bedragen zijn <c>decimal?</c>. <c>ContractText.Editable</c> maakt van
     /// <c>null</c> een leeg veld en van nul een "0" — niet allebei leeg, want dan zou het openen en
     /// meteen bewaren van een contract met een afgesproken nul die nul stil in "niet vastgelegd"
-    /// veranderen, en zou <see cref="Changes"/> daar niets over melden.</para>
+    /// veranderen, en zou <see cref="Changes(ContractDocument)"/> daar niets over melden.</para>
     /// </remarks>
     private static ContractFields Fields(
         string? number,
@@ -846,6 +1242,45 @@ else
         Compare("Contactpersoon", _original.Contact, current.Contact);
         Compare("Beheerd door", _original.ManagedBy, current.ManagedBy);
         Compare("Opslag op Azure-kosten", _original.Surcharge, current.Surcharge);
+
+        return lijst;
+
+        void Compare(string label, string? before, string? after)
+        {
+            if (!string.Equals(before ?? string.Empty, after ?? string.Empty, StringComparison.Ordinal))
+            {
+                lijst.Add(new FieldChange(label, Readable(before), Readable(after)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Welke omgevingsvelden er zijn veranderd sinds dit blok werd opgebouwd.
+    /// </summary>
+    /// <param name="document">Het klantdocument dat de opslag bij het conflict meestuurde.</param>
+    /// <returns>Per gewijzigd veld het label, de oude en de nieuwe waarde.</returns>
+    /// <remarks>
+    /// Dezelfde vorm en dezelfde regel als bij het contract: de vergelijking gaat tegen
+    /// <c>_customerOriginal</c> en niet tegen wat de operator net heeft getypt. "Wat is er intussen
+    /// veranderd" is een vraag over de ander.
+    ///
+    /// <para>De labels zijn letterlijk die van de velden erboven. Een verschillenkaart die andere
+    /// woorden gebruikt dan het formulier laat de operator zoeken naar het veld dat hij hoort te
+    /// controleren.</para>
+    /// </remarks>
+    private IReadOnlyList<FieldChange> Changes(CustomerDocument document)
+    {
+        var current = EnvironmentFields(document);
+        var lijst = new List<FieldChange>(5);
+
+        Compare("Klantnaam", _customerOriginal.Name, current.Name);
+        Compare("Omgeving", _customerOriginal.Environment, current.Environment);
+        Compare(
+            "Subscription en resource group",
+            _customerOriginal.EnvironmentDetail,
+            current.EnvironmentDetail);
+        Compare("Cosmos-endpoint", _customerOriginal.TelemetryEndpoint, current.TelemetryEndpoint);
+        Compare("Databasenaam", _customerOriginal.TelemetryDatabase, current.TelemetryDatabase);
 
         return lijst;
 

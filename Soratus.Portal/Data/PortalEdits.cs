@@ -221,6 +221,25 @@ public sealed record CustomerEdit
     /// <summary>De klantnaam.</summary>
     public string Name { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Of dit een interne beheerklant is (§4). Geen formulierveld: het formulier draagt hem alleen
+    /// door.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dit is geen keuze die een operator hier maakt — een klant intern maken raakt de
+    /// facturatie en is geen naamswijziging — en de schrijfkant behandelt hem daarom ook niet als
+    /// keuze: <see cref="IPortalDataStore.SaveCustomerAsync"/> houdt vast wat er op het bestaande
+    /// document staat en gebruikt deze waarde alleen als er nog geen document is.</para>
+    ///
+    /// <para><strong>Waarom het veld er dan toch staat.</strong> Zonder dit veld schreef de eerste
+    /// wijziging aan een klant die alleen uit de configuratie komt <c>isInternal: false</c> weg,
+    /// ongeacht wat de configuratie zei. Bij de interne beheerklant zou die ene klik hem daarmee tot
+    /// een gewone, factureerbare klant maken — stil, en zonder dat de verschillenkaart er iets over
+    /// zegt, want het formulier heeft dat veld niet. Zie de opmerking bij <c>IsInternal</c> in
+    /// <see cref="CosmosPortalDataStore.SaveCustomerAsync"/>.</para>
+    /// </remarks>
+    public bool IsInternal { get; init; }
+
     /// <summary>Korte omgevingsaanduiding.</summary>
     public string? Environment { get; init; }
 

@@ -102,25 +102,54 @@ public class ContractTextTests
         Assert.Null(waarde);
     }
 
+    // ── Drie cijfers achter één scheidingsteken: de duizendscheiding ────────────────────────────
+
     [Theory]
-    [InlineData("1.250", 1.25)]
-    [InlineData("12.500", 12.5)]
-    public void EenPuntIsAltijdEenDecimaaltekenOokWaarIemandDuizendenBedoelde(
+    [InlineData("1.250", "de Nederlandse duizendscheiding, en het geval waar dit om begon")]
+    [InlineData("12.500", "hetzelfde, met een groep van twee ervoor")]
+    [InlineData("1.250.000", "twee groepen; werd al geweigerd, hoort geweigerd te blijven")]
+    [InlineData("1,250", "de Engelse duizendscheiding: nl-NL las dit als 1,25")]
+    [InlineData("12,500", "hetzelfde de andere kant op")]
+    [InlineData("-1.250", "een teken ervoor verandert het geval niet")]
+    public void DrieCijfersAchterEenScheidingstekenWordenGeweigerdInPlaatsVanGegokt(
         string invoer,
-        decimal gelezen)
+        string waarom)
     {
-        // Dit legt vast wat er nú gebeurt, en het is geen aanbeveling. "1.250" is voor een
-        // Nederlandse lezer twaalfhonderdvijftig en wordt hier 1,25 — een factor duizend, stil, en
-        // met true als uitkomst. De dubbele cultuur vangt "1.250,50" wél (twee scheidingstekens in
-        // één getal kan in geen van beide culturen), maar een getal met alleen een punt is niet te
-        // onderscheiden van een decimaalgetal.
+        // Hier stond de test die de oude afruil vastlegde: "1.250" werd 1,25, stil, met true als
+        // uitkomst. Een factor duizend op een uurtarief is een factuurfout die niemand ziet tot de
+        // klant belt.
         //
-        // Dat is een bewuste afruil: "125.50" moet doorkomen, want dat is wat een browser voor een
-        // type="number"-veld teruggeeft. De prijs staat hier zodat hij zichtbaar is en niet
-        // opnieuw ontdekt hoeft te worden. Zie het rapport; de melding onder het veld
-        // (ContractText.NumberError) vraagt daarom expliciet om het scheidingsteken weg te laten.
+        // Het aantal cijfers achter het laatste scheidingsteken maakt het onderscheid. Een groep van
+        // een duizendscheiding is per definitie exact drie cijfers lang, dus dit is het enige geval
+        // waarin de twee lezingen niet te scheiden zijn — en dat geval wordt niet gegokt.
+        //
+        // Beide scheidingstekens, en niet alleen de punt: één regel is beter dan twee, en bij een
+        // urenbundel, een uurtarief en een opslagpercentage is een derde decimaal zinloos. Alleen de
+        // punt afvangen zou het gat open laten voor een bedrag uit een Engelse bron.
+        Assert.False(ContractText.TryNumber(invoer, out var waarde));
+        Assert.Null(waarde);
+        Assert.False(string.IsNullOrWhiteSpace(waarom));
+    }
+
+    [Theory]
+    [InlineData("125.5", 125.5, "één cijfer: kan geen groep zijn")]
+    [InlineData("125.50", 125.50, "twee cijfers: dit is wat een browser voor type=number teruggeeft")]
+    [InlineData("1.2500", 1.25, "vier cijfers: dan had er nog een scheidingsteken tussen gestaan")]
+    [InlineData("125.", 125, "een punt zonder cijfers erachter is geen groep")]
+    [InlineData("1250", 1250, "duizend zonder scheidingsteken is nooit dubbelzinnig")]
+    [InlineData("1 250", 1250, "een spatie als scheidingsteken gaat er gewoon af")]
+    public void EenAnderAantalCijfersAchterHetScheidingstekenKomtWelDoor(
+        string invoer,
+        decimal verwacht,
+        string waarom)
+    {
+        // De spiegel, en zonder deze zegt de test hierboven niets: een parser die álles met een punt
+        // erin weigert haalt die ook, en dan verdwijnt "125.50" — precies de vorm die een browser
+        // teruggeeft voor een type="number"-veld waarin iemand 125,50 typte. Dat was de reden dat de
+        // oude afruil is verdedigd, en die reden blijft geldig.
         Assert.True(ContractText.TryNumber(invoer, out var waarde));
-        Assert.Equal(gelezen, waarde);
+        Assert.Equal(verwacht, waarde);
+        Assert.False(string.IsNullOrWhiteSpace(waarom));
     }
 
     [Fact]
@@ -132,6 +161,51 @@ public class ContractTextTests
 
         Assert.Contains("125,50", melding, StringComparison.Ordinal);
         Assert.Contains("duizend", melding, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("1.250")]
+    [InlineData("12,500")]
+    [InlineData("€ 1.250")]
+    [InlineData("12,500%")]
+    public void BijEenDuizendscheidingVraagtDeMeldingOmEenKomma(string invoer)
+    {
+        // De algemene melding vraagt om "een getal", en dat is bij deze invoer de verkeerde vraag:
+        // er staat al een getal. Wat de operator moet weten is dat wíj niet kunnen zien welk van de
+        // twee hij bedoelt, en wat hij dan moet typen.
+        //
+        // De twee met een eenheid eraan staan er omdat de melding naar dezelfde opgeschoonde tekst
+        // moet kijken als de weigering. Zou hij zijn eigen schoonmaak doen, dan weigert de één en
+        // legt de ander uit dat er geen getal staat. "12,500%" is daarvan de scherpe helft: een
+        // eenheid vóór het scheidingsteken valt buiten het cijfergedeelte en verandert niets, een
+        // eenheid erachter wél — en dat is precies de vorm die uit een spreadsheet komt.
+        var melding = ContractText.NumberError("125,50", invoer);
+
+        Assert.Contains("komma", melding, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("factor duizend", melding, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Vul een getal in", melding, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("honderd")]
+    [InlineData("12,5,5")]
+    [InlineData("1.250,50")]
+    [InlineData("1.250.000")]
+    [InlineData("1.25a")]
+    public void BijAndereOnleesbareInvoerBlijftDeAlgemeneMeldingStaan(string invoer)
+    {
+        // Twee meldingen en niet één: bij "honderd" is "bedoel je 1250 of 1,25" onzin. En niet drie:
+        // "1.250,50" en "1.250.000" zijn wél duizendscheidingen maar geen dubbelzinnige, want twee
+        // scheidingstekens in één getal kan in geen van beide culturen. Er valt daar dus niets te
+        // vragen; de algemene melding zegt precies het juiste — laat het scheidingsteken voor
+        // duizenden weg.
+        //
+        // "1.25a" heeft ook drie tekens achter de punt, maar geen drie cijfers. Zonder die controle
+        // zou de melding beweren dat hier een duizendscheiding staat.
+        var melding = ContractText.NumberError("125,50", invoer);
+
+        Assert.Contains("Vul een getal in", melding, StringComparison.Ordinal);
+        Assert.Equal(ContractText.NumberError("125,50"), melding);
     }
 
     // ── Heen en terug: wat het veld toont, leest het veld terug ─────────────────────────────────
