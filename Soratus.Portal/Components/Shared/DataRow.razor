@@ -147,11 +147,15 @@ else
             ?? throw new InvalidOperationException(
                 "DataRow vindt geen RowGrid. Zet hem in een DataCard, of geef Grid mee.");
 
+        // De rij geeft door of hij zelf activeerbaar is; RowActions weigert dan te renderen, want
+        // genest interactief is ongeldig (zie de harde regel bovenaan dit bestand).
+        var interactive = Href is not null || OnActivate.HasDelegate;
+
         // Eén context per rij: de cellen tellen zichzelf af tegen de zichtbare kolommen. Bij een
         // herrender blijft dezelfde context staan, zodat cellen hun kolomnummer houden.
-        if (_context is null || !ReferenceEquals(_context.Grid, grid))
+        if (_context is null || !ReferenceEquals(_context.Grid, grid) || _context.Interactive != interactive)
         {
-            _context = new RowContext(grid);
+            _context = new RowContext(grid, interactive);
         }
     }
 }

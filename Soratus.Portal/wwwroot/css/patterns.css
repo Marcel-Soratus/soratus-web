@@ -1063,4 +1063,274 @@
   .stale {
     color: var(--status-degraded-ink);
   }
+
+  /* ====================================================================
+     Formulieren (fase 2, §3.5) — veldindeling, formulierkaart,
+     bevestiging van een onomkeerbare actie, rij-acties
+
+     §8 geeft de veldvorm: 1px --line-field, radius 6px, focusrand --blue,
+     getallen rechts uitgelijnd in mono, en read-only als platte tekst. Die
+     regels staan al in het veldenblok bovenaan dit bestand. Wat §8 níet
+     geeft is de indeling eromheen — de labelbreedte, de voetregel van de
+     kaart, de statusregel. Die komt uit de mockup en staat hieronder per
+     geval benoemd, zodat naderhand te zien is wat merk is en wat mockup.
+
+     Dit blok staat bewust achteraan. Twee regels hieronder verslaan een
+     eerdere regel op bronvolgorde en niet op specificiteit:
+     .form-card { overflow } tegen .card, en .field--row .field__label
+     tegen .field__label. Verplaats dit blok niet naar boven.
+     ==================================================================== */
+
+  /* --- veld: label links (de contractkaart) ------------------------- */
+
+  /* De labelbreedte. De mockup gebruikt 118px in de read-only kaart en
+     132px in de bewerkbare — met twee waarden verschuift de hele kaart
+     zodra de operator op Bewerken klikt. Eén waarde, de ruimste, zodat
+     "Urenbundel per maand" niet afbreekt.
+
+     De waarde staat als fallback in var() en wordt hier niet gezet: een
+     declaratie op het element zelf verslaat alleen een geërfde waarde, en
+     dan kan een scherm hem niet meer van bovenaf bijstellen. Dezelfde les
+     als bij --row-cols op DataCard. */
+  .field--row {
+    grid-template-columns: var(--field-row-label, 132px) minmax(0, 1fr);
+    align-items: center;
+    gap: 4px var(--gap-col);
+  }
+
+  /* Hint en fout horen onder de waarde en niet onder het label; zonder dit
+     vallen ze door auto-placement in kolom 1. */
+  .field--row .field__hint,
+  .field--row .field__error,
+  .field--row .field__value,
+  .field--row .field__control {
+    grid-column: 2;
+  }
+
+  /* Gewone UI-tekst en niet de mono kolomkop van .field__label. Uit de
+     mockup (12,5px, --ink-mute), en met reden: elf mono kapitalenlabels
+     onder elkaar in één kaart lezen als een tabelkop en niet als een
+     formulier. 12,5px valt binnen de 12,5–13px die §8 voor tabelcellen
+     geeft. Staat ná .field__label en wint dus op bronvolgorde. */
+  .field--row .field__label {
+    font-family: inherit;
+    font-size: 12.5px;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink-mute);
+  }
+
+  /* De rij draagt de verticale ruimte al (zie .form-card__body--facts);
+     de 5px van .field__value zou daar bovenop komen. */
+  .field--row .field__value {
+    padding: 0;
+  }
+
+  /* --- veld: besturingselement en eenheid --------------------------- */
+
+  /* De eenheid staat naast het veld en niet erin. Een randloze input in een
+     omhulling met de rand eromheen leest hetzelfde maar kost een tweede
+     definitie van de veldrand, de focusrand en de radius — en dat is precies
+     het soort kopie dat hier al drie keer uit elkaar is gelopen. */
+  .field__control {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .field__control > input,
+  .field__control > select,
+  .field__control > textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .field__unit {
+    flex: none;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    color: var(--ink-mute);
+  }
+
+  /* Mono zonder rechts uitlijnen: een contractnummer is geen getal om op te
+     tellen. Getallen krijgen .field__input--num, dat wél rechts uitlijnt. */
+  .field__input--mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
+  }
+
+  /* "· verplicht" achter het label. Geen sterretje: dat vraagt een legenda
+     die §8 noch de mockup geeft, en een sterretje zonder legenda is een
+     teken zonder betekenis. */
+  .field__req {
+    margin-left: 4px;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    color: var(--ink-mute);
+  }
+
+  /* --- veld: read-only waarde --------------------------------------- */
+
+  /* Een lange waarde ("Reactie 8 werkuren · herstel 2 werkdagen") mag de
+     kolom niet oprekken; anders schuift de kaart. Uit de mockup. */
+  .field__value {
+    overflow-wrap: anywhere;
+  }
+
+  /* §8: getallen tabulair en in mono. Niet rechts uitgelijnd zoals in een
+     invoervak — in een read-only rij staat de waarde links tegen zijn label
+     aan, en een getal dat tegen de rechterrand van de kaart plakt hoort bij
+     niets. */
+  .field__value--num {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .field__value--mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
+  }
+
+  /* --- formulierkaart ----------------------------------------------- */
+
+  /* .card zet overflow-x: auto als vangnet voor brede tabellen. In een
+     formulier is er niets breed om te schuiven, en een scrollcontainer kapt
+     de focusring van een veld tegen de kaartrand af (2px ring op 2px
+     offset). Wint op bronvolgorde van .card; zie de kop van dit blok. */
+  .form-card {
+    overflow: visible;
+  }
+
+  .form-card__body {
+    display: grid;
+    gap: 8px;
+    padding: var(--pad-card-y) var(--pad-card-x);
+  }
+
+  /* De read-only variant: elk veld is een rij met een eigen scheidingslijn
+     over de volle kaartbreedte, dus zit de horizontale padding op de rij en
+     niet op de omhulling. Uit de mockup (8px 14px per rij).
+
+     De mockup gebruikt #f4f5f9 voor die lijn; dat staat niet in §8 en is
+     hier --line-row (#eef0f5) geworden, de rij-scheiding die §8 wél geeft.
+     Een derde lijnkleur invoeren voor een verschil van vier procent grijs is
+     precies wat §8 met "verzin geen nieuwe kleuren" bedoelt. */
+  .form-card__body--facts {
+    display: grid;
+    gap: 0;
+    padding: 0;
+  }
+
+  .form-card__body--facts > .field {
+    padding: 8px var(--pad-card-x);
+    border-bottom: 1px solid var(--line-row);
+  }
+
+  .form-card__body--facts > .field:last-child {
+    border-bottom: none;
+  }
+
+  /* De voetregel met de bewaarknop. Subtiel vlak zoals de kaartkop, zodat de
+     kaart boven- en onderaan hetzelfde is afgesloten. */
+  .form-card__foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--gap-col);
+    padding: var(--pad-card-y) var(--pad-card-x);
+    border-top: 1px solid var(--line);
+    background: var(--surface-subtle);
+  }
+
+  /* De statusregel naast de knop. Neutraal grijs in het gewone geval, ook
+     bij "Nog niet bewaard": onbewaarde wijzigingen zijn geen storing, en §8
+     houdt amber voor status. Alleen gelukt en mislukt krijgen kleur, en dan
+     altijd met een glyph en een woord erbij — nooit kleur alleen. */
+  .form-card__status {
+    margin: 0;
+    font-size: var(--text-meta);
+    color: var(--ink-dim);
+  }
+
+  .form-card__status--saved {
+    color: var(--status-live-ink);
+  }
+
+  .form-card__status--failed {
+    color: var(--status-failed-ink);
+  }
+
+  /* De fout die niet aan één veld hangt. Een blok en geen regel: hij moet op
+     te vallen zijn tussen de velden en de knop, want dat is de plek waar de
+     operator kijkt nadat hij op bewaren heeft geklikt. */
+  .form-card__error {
+    margin: 0;
+    padding: 9px var(--pad-card-x);
+    border-top: 1px solid var(--status-failed-line);
+    background: var(--status-failed-fill);
+    color: var(--status-failed-ink);
+    font-size: var(--text-cell);
+  }
+
+  /* De regel onder de kaart: "Velden zijn door Soratus te beheren; de klant
+     ziet ze read-only." Geen bovenrand — uit de mockup, en het houdt de
+     regel bij de kaart horen in plaats van een derde blok te lijken. */
+  .form-card__footnote {
+    margin: 0;
+    padding: 10px var(--pad-card-x);
+    font-size: var(--text-meta);
+    color: var(--ink-mute);
+  }
+
+  /* --- rij-acties ---------------------------------------------------- */
+
+  /* De actiecel van een rij. Rechts uitgelijnd zoals in de mockup
+     (justify-self: end op de intrekknop); onder 768px, waar de rij naar twee
+     kolommen klapt, betekent dat rechts in zijn eigen cel. */
+  .row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  /* --- bevestiging van een onomkeerbare actie ------------------------ */
+
+  /* De vraag en de twee knoppen komen op de plek van de knop die ze opriep.
+     flex-wrap staat aan omdat de vraag de naam van een e-mailadres bevat en
+     die in een smalle kolom niet naast twee knoppen past. */
+  .confirm {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* De vraag zelf is neutraal. Rood is voorbehouden aan de knop die het
+     weggooit; een rode vraag zou suggereren dat er al iets mis is. */
+  .confirm__question {
+    font-size: var(--text-meta);
+    color: var(--ink-dim);
+    text-align: right;
+  }
+
+  /* De knop die het weggooit: het failed-vlak, de failed-rand en de
+     failed-tekstkleur uit §8. Strikt genomen statuskleur voor iets dat geen
+     agentstatus is, en dus een grensgeval van de regel dat groen/amber/rood
+     alleen status zijn. Bewust wel: dit is de enige knop in het portaal die
+     iets vernietigt. De kleur is niet de enige drager — er staat een vraag
+     naast en het label zegt "Ja, intrekken". */
+  .btn--confirm {
+    border-color: var(--status-failed-line);
+    background: var(--status-failed-fill);
+    color: var(--status-failed-ink);
+  }
+
+  .btn--confirm:hover {
+    border-color: var(--status-failed-ink);
+    background: var(--status-failed-fill);
+    color: var(--status-failed-ink);
+  }
 }

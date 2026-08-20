@@ -1,0 +1,250 @@
+@* Een onomkeerbare actie in twee stappen: toegang intrekken (§3.5), en straks een urenregel
+   afwijzen of een klant afsluiten.
+
+   WAAROM GEEN DIALOOG
+
+   Een modale dialoog is het gebruikelijke antwoord en hij is hier verkeerd. Toegang intrekken zit
+   per regel in een lijst; een operator die drie adressen opruimt, opent en sluit dan drie keer een
+   venster dat de lijst waarin hij werkt afdekt. Bovendien vraagt een dialoog focusbeheer, een
+   focusval en een Escape-afhandeling — voor een vraag van één regel is dat gereedschap dat op elke
+   klik in de weg staat.
+
+   Wat er in plaats daarvan staat: de knop verandert in de vraag. De regel blijft in beeld, de
+   context blijft leesbaar, en er is geen laag over de pagina. Dat is genoeg om per ongeluk
+   intrekken te voorkomen, want per ongeluk is één klik en dit zijn er twee.
+
+   WAT DE TWEEDE KLIK ECHT VEILIG MAAKT
+
+   Twee klikken op dezelfde plek zijn geen twee besluiten maar één dubbelklik. Daarom:
+
+     • De bevestigknop staat níet waar de knop stond die hem opriep. Eerst de vraag, dan
+       "Annuleren", dan pas de bevestiging — de laatste positie in de rij, niet de eerste.
+     • De focus gaat na de eerste klik naar Annuleren en niet naar de bevestiging. Twee keer Enter
+       achter elkaar trekt dus niets in; het annuleert. Voor een omkeerbare actie zou dat
+       overdreven zijn, hier is het het hele punt.
+     • De vraag noemt wát er wordt ingetrokken. "Weet je het zeker?" is geen vraag, want de lezer
+       weet niet meer zeker waarover.
+     • Escape annuleert, zodat wegkomen geen doelbewuste muisbeweging vraagt.
+
+   RENDER MODE
+
+   Dit component vraagt een interactief eiland en werkt op static SSR niet: het wisselt van stand
+   zonder de pagina te verlaten. Dat is de juiste keuze voor deze actie, want de static-SSR-variant
+   zou twee POSTs zijn — één om de vraag te tonen en één om hem te beantwoorden — en dan verliest de
+   operator bij elke intrekking zijn plek in de lijst en zijn scrollpositie. Het toegangsblok van
+   §3.5 is toch al een eiland (de lijst verandert terwijl je erin werkt), dus dit kost niets extra.
+
+   DUBBEL INDIENEN
+
+   Zelfde slot als in FormCard: een eigen vlag vóór het await, en de bevestigknop staat uit met een
+   gewijzigd label zolang de actie loopt. Geen spinner — §8 laat alleen pulse bewegen.
+
+   KLEUR
+
+   De bevestigknop draagt het failed-vlak, de failed-rand en de failed-tekstkleur uit §8. Dat is
+   strikt gezien statuskleur voor iets dat geen agentstatus is, en dus een grensgeval van de regel
+   dat groen/amber/rood alleen voor status zijn. Bewust wel gedaan: dit is de enige knop in het
+   portaal die iets weggooit, en rood is daar het universele signaal. De kleur is niet de enige
+   drager — de vraag staat er in woorden naast en het label zegt "Ja, intrekken". *@
+
+@if (!_armed)
+{
+    <button @attributes="AdditionalAttributes"
+            type="button"
+            class="@TriggerClass"
+            title="@Title"
+            @onclick="Arm">@Label</button>
+}
+else
+{
+    <span class="confirm" @onkeydown="OnKeyDown">
+        @* role="alert" op de tekst en niet op de omhulling: een alert hoort tekst te zijn, en zo
+           wordt de vraag één keer aangekondigd op het moment dat hij verschijnt. *@
+        <span class="confirm__question" id="@_questionId" role="alert">@Question</span>
+        <button type="button"
+                class="@CancelClass"
+                @ref="_cancelButton"
+                @onclick="Cancel">@CancelLabel</button>
+        <button type="button"
+                class="@ConfirmClass"
+                disabled="@_busy"
+                aria-describedby="@_questionId"
+                @onclick="ConfirmAsync">@(_busy ? BusyLabel : ConfirmLabel)</button>
+    </span>
+}
+
+@code {
+    private ElementReference _cancelButton;
+    private string _questionId = string.Empty;
+    private bool _armed;
+    private bool _busy;
+
+    /// <summary>
+    /// Of de focus nog naar Annuleren moet. Wordt in <c>OnAfterRenderAsync</c> afgehandeld, want
+    /// vóór die render bestaat de knop niet.
+    /// </summary>
+    private bool _focusPending;
+
+    /// <summary>Het label van de knop die de vraag opent, bijvoorbeeld "Intrekken".</summary>
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// De vraag, met erin wát er gebeurt: "Toegang van planning@bakkerlogistiek.nl intrekken?".
+    /// </summary>
+    /// <remarks>
+    /// Verplicht, en de tekst komt van buiten omdat alleen de pagina weet wat er op deze regel
+    /// staat. "Weet je het zeker?" is geen vraag: de lezer weet dan niet meer waarover.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public string Question { get; set; } = string.Empty;
+
+    /// <summary>Het label van de bevestiging. Herhaalt het werkwoord, dus nooit alleen "Ja".</summary>
+    [Parameter]
+    public string ConfirmLabel { get; set; } = "Ja, intrekken";
+
+    /// <summary>Het label van de uitweg.</summary>
+    [Parameter]
+    public string CancelLabel { get; set; } = "Annuleren";
+
+    /// <summary>
+    /// Het label van de bevestiging zolang de actie loopt. Een tekstverandering en geen spinner
+    /// (§8 Motion).
+    /// </summary>
+    [Parameter]
+    public string BusyLabel { get; set; } = "Bezig…";
+
+    /// <summary>
+    /// Wordt aangeroepen als de gebruiker bevestigt. Ten hoogste één keer per bevestiging, ook bij
+    /// een dubbelklik.
+    /// </summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland; zie de toelichting bovenaan dit bestand. Wat er daarna met
+    /// de lijst gebeurt is aan de pagina — dit component weet niet of de regel verdwijnt of blijft
+    /// staan met een andere stand.
+    /// </remarks>
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    /// <summary>
+    /// De tooltip op de knop die de vraag opent. Zeg wat er gaat gebeuren, niet dat er iets gaat
+    /// gebeuren: "haalt dit adres uit Entra ID; de gebruiker verliest direct toegang".
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Of de actie iets weggooit. Standaard <c>true</c> — dit component bestaat voor onomkeerbare
+    /// acties. Zet het uit voor een actie die alleen bevestiging vraagt en niets vernietigt; de
+    /// bevestigknop is dan gewoon primair in plaats van rood.
+    /// </summary>
+    [Parameter]
+    public bool Destructive { get; set; } = true;
+
+    /// <summary>Compacte knoppen, voor gebruik in een tabelrij. Standaard aan.</summary>
+    [Parameter]
+    public bool Small { get; set; } = true;
+
+    /// <summary>Extra classnamen op de knop die de vraag opent.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landen op die knop.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string TriggerClass =>
+        string.Join(' ', new[]
+        {
+            "btn",
+            Small ? "btn--small" : null,
+            Destructive ? "btn--danger" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+
+    private string CancelClass => Small ? "btn btn--small" : "btn";
+
+    private string ConfirmClass =>
+        string.Join(' ', new[]
+        {
+            "btn",
+            Small ? "btn--small" : null,
+            Destructive ? "btn--confirm" : "btn--primary",
+        }.Where(c => c is not null));
+
+    protected override void OnInitialized() =>
+        _questionId = $"cfm-{Guid.NewGuid().ToString("N")[..8]}";
+
+    private void Arm()
+    {
+        _armed = true;
+        _focusPending = true;
+    }
+
+    private void Cancel()
+    {
+        _armed = false;
+        _focusPending = false;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        if (!OnConfirm.HasDelegate)
+        {
+            // Geen callback betekent dat dit component in een static-SSR-boom staat. Dan de vraag
+            // sluiten in plaats van hem laten staan: een openstaande vraag die niets doet is erger
+            // dan een knop die niets doet.
+            Cancel();
+            return;
+        }
+
+        _busy = true;
+
+        try
+        {
+            await OnConfirm.InvokeAsync();
+        }
+        finally
+        {
+            // Terug naar de knop, ook bij een fout: de regel kan zijn verdwenen (dan wordt dit niet
+            // meer getoond) of nog staan (dan mag de operator het opnieuw proberen). Wat niet mag,
+            // is een vraag die na een mislukte poging open blijft staan met een dode knop.
+            _busy = false;
+            _armed = false;
+        }
+    }
+
+    /// <summary>
+    /// Escape annuleert. Op de omhulling en niet op de knoppen, zodat het ook werkt als de focus op
+    /// de bevestiging staat.
+    /// </summary>
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Escape", StringComparison.Ordinal))
+        {
+            Cancel();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending)
+        {
+            return;
+        }
+
+        _focusPending = false;
+
+        // De knop die de focus had is net vervangen; zonder dit valt de focus terug naar <body> en
+        // staat de gebruiker met zijn toetsenbord aan het begin van de pagina. Focus gaat naar
+        // Annuleren en niet naar de bevestiging — zie de toelichting bovenaan dit bestand.
+        await _cancelButton.FocusAsync();
+    }
+}

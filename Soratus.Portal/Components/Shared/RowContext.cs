@@ -18,14 +18,25 @@ public sealed class RowContext
 
     /// <summary>Maakt de context van één rij.</summary>
     /// <param name="grid">De kolomindeling van de tabel waar deze rij in staat.</param>
-    public RowContext(RowGrid grid)
+    /// <param name="interactive">
+    /// Of de rij zelf een <c>&lt;a&gt;</c> of een <c>&lt;button&gt;</c> is.
+    /// </param>
+    public RowContext(RowGrid grid, bool interactive = false)
     {
         ArgumentNullException.ThrowIfNull(grid);
         Grid = grid;
+        Interactive = interactive;
     }
 
     /// <summary>De kolomindeling van de tabel.</summary>
     public RowGrid Grid { get; }
+
+    /// <summary>
+    /// Of de rij zelf activeerbaar is. <c>RowActions</c> weigert dan te renderen: genest
+    /// interactief is ongeldige HTML en met het toetsenbord onbereikbaar (fase-0-afwijkingen §5).
+    /// Zonder deze vlag was die regel alleen documentatie, en documentatie dwingt niets af.
+    /// </summary>
+    public bool Interactive { get; }
 
     /// <summary>
     /// Neemt de kolom voor de volgende cel in deze rij.

@@ -1,0 +1,408 @@
+@* Een kaart die een set velden groepeert met één bewaaractie, en die eerlijk laat zien waar het
+   bewaren staat: niets gewijzigd, bezig, gelukt, of mislukt.
+
+   De kaart zet de stand voor al zijn velden (bewerkbaar of platte tekst, label links of erboven)
+   via een gecascadeerde FieldScope. Een scherm kiest dat dus één keer op de kaart en niet per veld
+   — zie FieldMode voor waarom dat de kern van dit patroon is. In ReadOnly staat er geen knop, geen
+   formulier en geen statusregel: er is niets te bewaren. Voor een klant is het contract lezen, dus
+   dat is de hele kaart.
+
+   ANTIFORGERY EN RENDER MODE — de keuze, per geval
+
+   Er zijn twee manieren om deze kaart te laten schrijven, en de kaart ondersteunt ze allebei
+   omdat de juiste keuze per scherm verschilt.
+
+     Model gezet  → <EditForm> met een POST. Dit is de static-SSR-route. EditForm zet zelf de
+                    antiforgery-token in het formulier; er hoort dus géén losse <AntiforgeryToken>
+                    bij, en wie ooit een eigen <form method="post"> bouwt in plaats van deze kaart
+                    moet die token wél zelf zetten. De pagina bindt het model met
+                    [SupplyParameterFromForm] en geeft elk veld een Name. Werkt zonder JavaScript,
+                    is deelbaar, en de browser doet het navigeren.
+
+     Model leeg   → een gewoon <form> met @onsubmit. Alleen bruikbaar in een interactief eiland.
+                    Daar is er geen POST en dus geen antiforgery-vraag: het indienen gaat over de
+                    bestaande, geauthenticeerde circuit-verbinding en niet over een formulier dat
+                    een andere site kan afvuren. Wel nodig als het eiland geen formuliermodel heeft
+                    maar losse @bind-velden.
+
+   Onze aanbeveling voor fase 2, en waarom:
+
+     • Contractkaart (§3.5, elf velden, operator) → interactief eiland. Drie dingen die dit scherm
+       nodig heeft kunnen alleen daar: laten zien dát er niets is gewijzigd vóór er iets is
+       ingediend, een tweede klik op bewaren tegenhouden binnen dezelfde ronde, en een
+       validatiemelding onder een veld zonder de hele pagina te herbouwen. De operator is een
+       interne gebruiker op een bureaublad; JavaScript is daar geen aanname maar een gegeven.
+
+     • Klant aanmaken (§3.9, eenmalig, veel velden) → static SSR met EditForm. Dat formulier heeft
+       geen live afhankelijkheden tussen velden, wordt één keer ingevuld en daarna nooit meer, en
+       een volledige POST met server-validatie is daar de eenvoudigste en meest robuuste vorm. Geen
+       eiland, geen circuit, geen serialisatiegrens.
+
+   Let op de grens zelf: een EventCallback kan geen render-mode-grens over. OnSave wordt dus gezet
+   binnen het eiland (of op de static-SSR-pagina), niet door een static-SSR-ouder aan een
+   interactief kind. De parameters die de grens wél over gaan zijn hier allemaal serialiseerbaar:
+   string, bool, bool? en een enum.
+
+   DUBBEL INDIENEN
+
+   Twee keer klikken mag geen twee schrijfacties opleveren, en dat hoort hier te worden opgelost en
+   niet in elk scherm. Er staan drie sloten op, in aflopende dekking:
+
+     1. Een eigen vlag (_busy) die vóór het await wordt gezet en pas in de finally weer los gaat.
+        Dekt het venster tussen de klik en het moment dat de pagina State op Saving zet — precies
+        het venster waarin een tweede klik landt. Werkt alleen in een interactief eiland, want op
+        static SSR bestaat dit component per request opnieuw.
+     2. Dirty == false zet de knop uit. Na een gelukte POST rendert de pagina opnieuw met
+        Dirty = false, dus de knop kan niet nog eens worden gebruikt. Dat dekt de static-SSR-route
+        voor alles behalve één geval.
+     3. Dat ene geval: twee klikken vóór het antwoord van de eerste POST. Daar is zonder
+        JavaScript niets aan te doen in een component — dat vraagt een idempotentietoken dat de
+        schrijfkant onthoudt. Dat staat hier expliciet zodat niemand denkt dat het al gedekt is.
+
+   BEWEGING
+
+   Geen spinner. §8 laat alleen pulse bewegen, en dat is de live-tail-indicator. "Bewaren…" op de
+   knop zegt hetzelfde en werkt ook als de gebruiker prefers-reduced-motion heeft staan, of als het
+   bewaren zo snel gaat dat een spinner alleen een flikkering zou zijn.
+
+   TOEGANKELIJKHEID
+
+   De knop zegt wat hij doet ("Bewaren", "Bewaren…") en verwijst met aria-describedby naar de
+   statusregel, zodat een uitgezette knop niet stom is: wie hem niet kan focussen hoort alsnog
+   waaróm ("Geen wijzigingen"). De statusregel is de enige plek met een aria-live in dit formulier —
+   role="status" voor het gewone verloop, en een apart role="alert" voor de fout die niet aan één
+   veld hangt. De velden zelf hebben géén role="alert"; zie de toelichting in FormField. Zo is er
+   één aankondiging en staan de details waar de gebruiker ze ziet. Statuskleur is nooit de enige
+   drager: elke stand heeft een woord en een glyph. *@
+
+@{
+    // Het formulierlichaam: de velden, de fout die niet aan één veld hangt, en de voetregel met de
+    // knop. Eén keer geschreven en op beide formulierroutes gebruikt — die routes verschillen
+    // alleen in het element eromheen.
+    RenderFragment body =
+        @<text>
+            <div class="form-card__body">
+                <CascadingValue Value="_scope">@ChildContent</CascadingValue>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <p class="form-card__error" role="alert"><span aria-hidden="true">✕</span> @Error</p>
+            }
+            <div class="form-card__foot">
+                <button type="submit"
+                        class="btn btn--primary"
+                        disabled="@(!CanSave)"
+                        aria-describedby="@_statusId">@ButtonLabel</button>
+                @Actions
+                <p class="@StatusClass" id="@_statusId" role="status">@StatusText</p>
+            </div>
+        </text>;
+}
+
+<section @attributes="AdditionalAttributes" class="@CssClass" aria-label="@Title">
+    @if (Title is not null || HeaderContent is not null)
+    {
+        <div class="card-head">
+            <span class="card-head__title">@Title</span>
+            @if (HeaderContent is not null)
+            {
+                <div class="card-head__meta">@HeaderContent</div>
+            }
+        </div>
+    }
+
+    @if (Mode == FieldMode.ReadOnly)
+    {
+        @* Een definitielijst en geen reeks divs: elf labels met elf waarden zijn elf termen met
+           een waarde, en dat is wat <dl> betekent. Zonder de lijst leest een schermlezer
+           "Contractnummer SOR-2026-0142 Soort Agent-abonnement …" als één regel. Dezelfde keuze
+           als bij FactRow, en de reden dat FieldScope.InDefinitionList bestaat. *@
+        <dl class="form-card__body form-card__body--facts">
+            <CascadingValue Value="_scope">@ChildContent</CascadingValue>
+        </dl>
+    }
+    else if (Model is not null)
+    {
+        <EditForm Model="Model" FormName="@FormName" Enhance="Enhance" OnValidSubmit="SubmitAsync">
+            @body
+        </EditForm>
+    }
+    else
+    {
+        <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            @body
+        </form>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Footnote))
+    {
+        <p class="form-card__footnote">@Footnote</p>
+    }
+</section>
+
+@code {
+    private FieldScope _scope = new(FieldMode.ReadOnly);
+    private string _statusId = string.Empty;
+
+    /// <summary>
+    /// Loopt er een schrijfactie die wij zelf hebben gestart? Dit is niet hetzelfde als
+    /// <see cref="State"/>: die komt van de pagina en is er pas ná onze render. Deze vlag dekt het
+    /// venster daartussen, en dat is precies het venster waarin een tweede klik landt.
+    /// </summary>
+    private bool _busy;
+
+    /// <summary>De kaartkop, bijvoorbeeld "Contractinformatie". Wordt ook de naam van de kaart.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// De rechterkant van de kaartkop: een "Bewerken"-knop, meta-tekst, het tijdstip van ophalen.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
+
+    /// <summary>
+    /// Bewerkbaar of platte tekst. Geldt voor alle velden in de kaart; zij lezen dit uit de
+    /// gecascadeerde <see cref="FieldScope"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FieldMode.ReadOnly"/> is de standaard en laat de knop, de statusregel en het
+    /// formulier helemaal weg. Een kaart die per ongeluk zonder stand wordt neergezet is dus een
+    /// leeskaart en geen half formulier.
+    /// </remarks>
+    [Parameter]
+    public FieldMode Mode { get; set; } = FieldMode.ReadOnly;
+
+    /// <summary>
+    /// Waar de labels van de velden staan. Standaard links van de waarde: dat is de vorm van de
+    /// contractkaart, en het houdt de bewerkbare en de read-only weergave even breed zodat de kaart
+    /// niet verspringt als de operator gaat bewerken.
+    /// </summary>
+    [Parameter]
+    public FieldLayout Layout { get; set; } = FieldLayout.Row;
+
+    /// <summary>
+    /// Het formuliermodel. Gezet betekent een <c>EditForm</c> met een POST, en dus de
+    /// static-SSR-route; leeg betekent een gewoon formulier dat alleen in een interactief eiland
+    /// werkt. Zie de toelichting bovenaan dit bestand.
+    /// </summary>
+    [Parameter]
+    public object? Model { get; set; }
+
+    /// <summary>
+    /// De naam van het formulier, nodig zodra er meer dan één formulier op de pagina staat — en dat
+    /// is op het contractscherm het geval (contract én toegang geven). Alleen van betekenis met een
+    /// <see cref="Model"/>.
+    /// </summary>
+    [Parameter]
+    public string? FormName { get; set; }
+
+    /// <summary>
+    /// Of het formulier zijn POST met enhanced navigation doet: de pagina wordt dan bijgewerkt in
+    /// plaats van opnieuw geladen, met behoud van scrollpositie.
+    /// </summary>
+    /// <remarks>
+    /// Standaard uit, en dat is een keuze en geen verzuim: zonder dit werkt het formulier ook als
+    /// er geen JavaScript is. Zet het aan als het scherm ergens middenin een lange kaartstapel
+    /// staat en terugspringen naar de bovenkant hinderlijk is.
+    /// </remarks>
+    [Parameter]
+    public bool Enhance { get; set; }
+
+    /// <summary>
+    /// Of er iets is gewijzigd sinds het laatste bewaren. <c>false</c> zet de knop uit en zet
+    /// "Geen wijzigingen" in de statusregel — een knop die niets doet hoort niet bruikbaar te zijn,
+    /// en waaróm hij niet bruikbaar is hoort te blijken.
+    /// </summary>
+    /// <remarks>
+    /// <c>null</c> betekent "onbekend": op static SSR zonder eiland weet de pagina vóór de POST
+    /// niet of er iets is veranderd. De knop staat dan gewoon aan en de statusregel zwijgt. Beter
+    /// een knop die één keer voor niets naar de server gaat dan een knop die een echte wijziging
+    /// tegenhoudt.
+    /// </remarks>
+    [Parameter]
+    public bool? Dirty { get; set; }
+
+    /// <summary>Waar het bewaren staat. De pagina houdt dit bij.</summary>
+    [Parameter]
+    public FormSaveState State { get; set; } = FormSaveState.Idle;
+
+    /// <summary>
+    /// De fout die niet aan één veld hangt: de schrijfactie is mislukt, het contract is
+    /// ondertussen door iemand anders gewijzigd, de verbinding met Entra ID gaf niets terug. Komt
+    /// als blok boven de knop te staan met <c>role="alert"</c>, dus hij wordt aangekondigd.
+    /// </summary>
+    /// <remarks>
+    /// Bewust een aparte plek en niet een lijst met veldfouten bovenaan. Een fout die bij een veld
+    /// hoort staat bij dat veld (zie <c>FormField</c>); dit blok is voor wat nergens anders past.
+    /// Zeg er wat de operator nu kan doen — "probeer het opnieuw" of "haal de pagina opnieuw op" —
+    /// want een melding zonder uitweg is alleen een mededeling.
+    /// </remarks>
+    [Parameter]
+    public string? Error { get; set; }
+
+    /// <summary>
+    /// Hoeveel velden een validatiemelding hebben. Alleen nodig voor de aankondiging in de
+    /// statusregel: de meldingen zelf staan onder de velden.
+    /// </summary>
+    /// <remarks>
+    /// Waarom een getal en niet een lijst met teksten: een lijst bovenaan is een tweede vindplaats
+    /// van dezelfde tekst, en die twee gaan uit elkaar lopen. Het getal zegt wat een schermlezer
+    /// moet weten — er is iets mis, en waar het staat — zonder de melding te verdubbelen.
+    /// </remarks>
+    [Parameter]
+    public int FieldErrorCount { get; set; }
+
+    /// <summary>
+    /// Wordt aangeroepen als het formulier wordt ingediend. Werkt op beide routes: op static SSR
+    /// tijdens de POST, in een eiland direct.
+    /// </summary>
+    /// <remarks>
+    /// De kaart schrijft zelf niets en kent geen datalaag. Hij weet wanneer er is geklikt, of er
+    /// iets is gewijzigd en of er al iets loopt — de rest is aan de pagina.
+    /// </remarks>
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    /// <summary>Het label op de knop.</summary>
+    [Parameter]
+    public string SaveLabel { get; set; } = "Bewaren";
+
+    /// <summary>
+    /// Het label tijdens het bewaren. Een tekstverandering en geen spinner: §8 laat alleen
+    /// <c>pulse</c> bewegen.
+    /// </summary>
+    [Parameter]
+    public string SavingLabel { get; set; } = "Bewaren…";
+
+    /// <summary>
+    /// Extra inhoud links van de knop, bijvoorbeeld een "Annuleren"-link of een tweede actie. Staat
+    /// in de voetregel van de kaart en verschijnt alleen in <see cref="FieldMode.Edit"/>.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    /// <summary>
+    /// De regel onderaan de kaart: "Velden zijn door Soratus te beheren; de klant ziet ze
+    /// read-only." Verschijnt in beide standen — het is een eigenschap van de kaart en geen
+    /// formulierhulp.
+    /// </summary>
+    [Parameter]
+    public string? Footnote { get; set; }
+
+    /// <summary>De velden: <c>FormField</c>'s.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Extra classnamen op de kaart.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landen op de kaart zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "card form-card" : $"card form-card {Class}";
+
+    /// <summary>
+    /// Loopt er iets? De eigen vlag óf de stand van de pagina. Beide, want ze dekken verschillende
+    /// vensters — zie de opmerking bij <c>_busy</c>.
+    /// </summary>
+    private bool Busy => _busy || State == FormSaveState.Saving;
+
+    private bool CanSave => !Busy && Dirty != false;
+
+    private string ButtonLabel => Busy ? SavingLabel : SaveLabel;
+
+    /// <summary>
+    /// De statusregel. Volgorde van gewicht: wat er nú loopt, dan wat er nog niet is bewaard, dan
+    /// wat er mis ging, dan wat er is gelukt, dan dat er niets te doen is. Onbekende dirty-stand
+    /// (static SSR) zwijgt.
+    /// </summary>
+    private string? StatusText
+    {
+        get
+        {
+            if (Busy)
+            {
+                return SavingLabel;
+            }
+
+            if (State == FormSaveState.Failed)
+            {
+                return FieldErrorCount switch
+                {
+                    0 => "✕ Niet bewaard",
+                    1 => "✕ Niet bewaard — één veld heeft een fout",
+                    _ => $"✕ Niet bewaard — {FieldErrorCount} velden hebben een fout",
+                };
+            }
+
+            if (Dirty == true)
+            {
+                return "Nog niet bewaard";
+            }
+
+            if (State == FormSaveState.Saved)
+            {
+                return "✓ Bewaard";
+            }
+
+            return Dirty == false ? "Geen wijzigingen" : null;
+        }
+    }
+
+    private string StatusClass => State switch
+    {
+        FormSaveState.Failed when !Busy => "form-card__status form-card__status--failed",
+        FormSaveState.Saved when !Busy && Dirty != true => "form-card__status form-card__status--saved",
+        _ => "form-card__status",
+    };
+
+    protected override void OnInitialized() =>
+        _statusId = $"frm-{Guid.NewGuid().ToString("N")[..8]}-status";
+
+    protected override void OnParametersSet()
+    {
+        // Bewust géén IsFixed op de CascadingValue: de stand van de kaart kan omslaan terwijl de
+        // pagina staat (de operator klikt "Bewerken"), en dan moeten de velden mee. Dat is ook de
+        // reden dat FieldScope een record is — verandert er niets, dan is de nieuwe scope gelijk
+        // aan de oude, blijft dezelfde instantie staan en rendert Blazor de velden niet opnieuw.
+        var scope = new FieldScope(Mode, Layout, Mode == FieldMode.ReadOnly);
+
+        if (_scope != scope)
+        {
+            _scope = scope;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        // Slot 1 van 3 tegen dubbel indienen; zie de toelichting bovenaan dit bestand.
+        if (_busy)
+        {
+            return;
+        }
+
+        // Vangnet naast de uitgezette knop: Enter in een tekstveld dient het formulier ook in, en
+        // een disabled knop houdt dat niet tegen.
+        if (Dirty == false || !OnSave.HasDelegate)
+        {
+            return;
+        }
+
+        _busy = true;
+
+        try
+        {
+            await OnSave.InvokeAsync();
+        }
+        finally
+        {
+            // Ook bij een uitzondering weer los: anders staat de knop na één mislukte poging voor
+            // altijd uit en kan de operator niet opnieuw proberen.
+            _busy = false;
+        }
+    }
+}

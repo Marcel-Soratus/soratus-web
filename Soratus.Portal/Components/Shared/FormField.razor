@@ -1,0 +1,522 @@
+@* Eén veld: label, waarde, eenheid, uitleg en validatiemelding — in de vorm van §8 (1px
+   --line-field, radius 6px, focusrand --blue, getallen rechts uitgelijnd in mono).
+
+   READ-ONLY IS PLATTE TEKST. Dat is de harde regel uit §8 en de reden dat dit component bestaat.
+   Een uitgegrijsd veld zegt "je mag dit niet"; platte tekst zegt "dit is een feit". Voor een
+   klant is het contract een feit, dus die ziet uitsluitend de platte variant.
+
+   Het scherm kiest die stand niet per veld. De stand komt uit de FieldScope die FormCard
+   cascadeert; een veld zónder kaart om zich heen is read-only. Dat is opzet: een invoervak zonder
+   formulier heeft geen plek om naartoe te schrijven, dus is de zachtste fout de standaard. Wil je
+   één veld afwijken (een enkel bewerkbaar veld in een verder read-only kaart), dan zet je Mode
+   expliciet — maar dat is een uitzondering, niet de werkwijze.
+
+   VIER DINGEN DIE VOORAF ZIJN DOORGEDACHT
+
+   1. Antiforgery en render mode. Dit veld werkt in beide werelden en heeft daar niets voor nodig:
+      op static SSR gaat de waarde mee in de POST via het name-attribuut (model binding), in een
+      interactief eiland via ValueChanged (@bind-Value). De antiforgery-token is een zaak van het
+      formulier en niet van het veld — EditForm zet die zelf, zie FormCard. Wat het veld wél moet
+      afdwingen is dat er minstens één van de twee routes bestaat: staat er geen Name én geen
+      ValueChanged, dan kan de waarde nergens naartoe en gooit het veld dat als fout. Zo'n
+      formulier lijkt te werken en verliest stil elke wijziging.
+
+      Alle parameters zijn serialiseerbaar (string, bool, enum, record struct). Dat is nodig omdat
+      een interactief eiland zijn parameters over een render-mode-grens krijgt; een EventCallback
+      kan die grens niet over, dus ValueChanged wordt gezet ín het eiland, niet erboven.
+
+   2. Validatie waar de gebruiker hem ziet. De melding staat onder het veld en is met
+      aria-describedby aan het veld gekoppeld, plus aria-invalid. Geen enkel veld draagt hier
+      role="alert": bij een formulier met drie fouten zou een schermlezer drie meldingen door
+      elkaar heen krijgen op het moment dat de gebruiker nog niet weet dát er iets mis is. Die
+      aankondiging staat één keer, bij FormCard ("Niet bewaard: 2 velden hebben een fout"), en de
+      details staan hier waar de gebruiker ze ziet. Eén aankondiging, elf vindplaatsen.
+
+   3. Dubbel indienen. Niet iets van een veld; dat zit in FormCard.
+
+   4. Toegankelijkheid. Het label is een echt <label for>, dus klikken op het label focust het
+      veld. Statuskleur is nooit de enige drager: de foutmelding is tekst, met een ✕-glyph ervoor
+      voor wie kleur niet ziet. De eenheid ("u/mnd") staat niet alleen visueel naast het veld maar
+      ook in aria-describedby, want anders is "8" zonder eenheid.
+
+   AdditionalAttributes landen op het besturingselement en niet op de omhulling: min, max, step,
+   maxlength, autocomplete en pattern horen bij het invoervak. Voor de omhulling is er Class. *@
+
+@{
+    var mode = EffectiveMode;
+    var describedBy = DescribedBy;
+
+    // Het dt/dd-paar van de read-only weergave, één keer geschreven en op twee omhullingen
+    // gebruikt (zie FieldScope.InDefinitionList).
+    RenderFragment pair =
+        @<text>
+            <dt class="field__label">@Label</dt>
+            <dd @attributes="AdditionalAttributes" class="@ValueClass" title="@Title">
+                @if (ChildContent is not null)
+                {
+                    @ChildContent
+                }
+                else
+                {
+                    @DisplayText
+                }
+            </dd>
+        </text>;
+}
+
+@if (mode == FieldMode.ReadOnly)
+{
+    @* Geen <label>: er is niets te labelen. Een term met een waarde is een dt/dd-paar. *@
+    if (Scope?.InDefinitionList == true)
+    {
+        <div class="@CssClass">@pair</div>
+    }
+    else
+    {
+        <dl class="@CssClass">@pair</dl>
+    }
+}
+else
+{
+    <div class="@CssClass">
+        <label class="field__label" for="@ControlId">
+            @Label
+            @if (Required)
+            {
+                @* §8 en de mockup geven geen verplicht-markering. Een sterretje zou een legenda
+                   nodig hebben die er niet is, dus staat het er in woorden. *@
+                <span class="field__req">· verplicht</span>
+            }
+        </label>
+        <span class="field__control">
+            @switch (Kind)
+            {
+                case FieldKind.Select:
+                    <select @attributes="AdditionalAttributes"
+                            id="@ControlId"
+                            name="@Name"
+                            class="@ControlClass"
+                            required="@Required"
+                            aria-invalid="@AriaInvalid"
+                            aria-describedby="@describedBy"
+                            title="@Title"
+                            @onchange="OnValueChangedAsync">
+                        @if (Placeholder is not null)
+                        {
+                            @* Een lege eerste optie en geen voorgeselecteerde eerste rol: anders
+                               krijgt iedereen stil "Beheerder klant" omdat dat bovenaan stond. *@
+                            <option value="" selected="@(string.IsNullOrEmpty(Value))">@Placeholder</option>
+                        }
+                        @foreach (var option in Options ?? [])
+                        {
+                            <option value="@option.Value"
+                                    selected="@(string.Equals(option.Value, Value, StringComparison.Ordinal))">@option.Label</option>
+                        }
+                    </select>
+                    break;
+
+                case FieldKind.Multiline:
+                    @* De waarde staat als inhoud en niet als value-attribuut: een browser negeert
+                       value op een textarea, dus op static SSR zou het veld leeg terugkomen. *@
+                    <textarea @attributes="AdditionalAttributes"
+                              id="@ControlId"
+                              name="@Name"
+                              class="@ControlClass"
+                              rows="@Rows"
+                              required="@Required"
+                              placeholder="@Placeholder"
+                              aria-invalid="@AriaInvalid"
+                              aria-describedby="@describedBy"
+                              title="@Title"
+                              @oninput="OnValueChangedAsync">@Value</textarea>
+                    break;
+
+                default:
+                    <input @attributes="AdditionalAttributes"
+                           id="@ControlId"
+                           name="@Name"
+                           class="@ControlClass"
+                           type="@InputType"
+                           inputmode="@InputMode"
+                           value="@Value"
+                           required="@Required"
+                           placeholder="@Placeholder"
+                           autocomplete="@Autocomplete"
+                           aria-invalid="@AriaInvalid"
+                           aria-describedby="@describedBy"
+                           title="@Title"
+                           @oninput="OnValueChangedAsync" />
+                    break;
+            }
+            @if (!string.IsNullOrWhiteSpace(Unit))
+            {
+                <span class="field__unit" id="@UnitId" aria-hidden="true">@Unit</span>
+            }
+        </span>
+        @if (!string.IsNullOrWhiteSpace(Unit))
+        {
+            @* Dezelfde tekst nog een keer, maar alleen voor een schermlezer. Het zichtbare
+               exemplaar staat naast het veld en is aria-hidden; dit exemplaar zit via
+               aria-describedby aan het veld vast. Twee elementen, want het zichtbare mag niet
+               dubbel worden voorgelezen en het onzichtbare mag niet in beeld komen. *@
+            <span class="sr-only" id="@UnitDescriptionId">Eenheid: @Unit</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Hint))
+        {
+            <span class="field__hint" id="@HintId">@Hint</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <span class="field__error" id="@ErrorId"><span aria-hidden="true">✕</span> @Error</span>
+        }
+    </div>
+}
+
+@code {
+    private string _autoId = string.Empty;
+
+    /// <summary>
+    /// Het label, bijvoorbeeld "Urenbundel per maand". In de rij-indeling staat het links van de
+    /// waarde, gestapeld erboven.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// De waarde. In <see cref="FieldMode.Edit"/> de beginwaarde van het veld, in
+    /// <see cref="FieldMode.ReadOnly"/> de tekst die er staat.
+    /// </summary>
+    /// <remarks>
+    /// Altijd tekst. Zie <see cref="FieldKind"/> voor waarom: op static SSR komt de waarde als
+    /// tekst uit de POST terug, en parsen hoort bij de pagina die de betekenis kent.
+    /// </remarks>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// Wordt aangeroepen met de nieuwe waarde, bij elke wijziging. Samen met
+    /// <see cref="Value"/> maakt dit <c>@bind-Value</c> mogelijk.
+    /// </summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland: op static SSR wordt deze callback niet aangeroepen en
+    /// gaat de waarde via <see cref="Name"/> mee in de POST. Zet dus minstens één van de twee.
+    ///
+    /// Bij elke toetsaanslag en niet bij verlies van focus. Reden: de kaart moet weten of er iets
+    /// is gewijzigd om te kunnen laten zien dat er níets is gewijzigd, en met <c>change</c> zou
+    /// die stand pas kloppen nadat de gebruiker het veld heeft verlaten — dus precies niet op het
+    /// moment dat hij naar de bewaarknop kijkt.
+    /// </remarks>
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Het <c>name</c>-attribuut, nodig voor model binding op static SSR. Geef het pad zoals het
+    /// formulier het bindt, bijvoorbeeld <c>Invoer.Contractnummer</c> bij een pagina met
+    /// <c>[SupplyParameterFromForm] public ContractFormulier Invoer</c>.
+    /// </summary>
+    /// <remarks>
+    /// In een interactief eiland is dit niet nodig; daar doet <see cref="ValueChanged"/> het werk.
+    /// Beide leeglaten in <see cref="FieldMode.Edit"/> is een fout en wordt als zodanig gemeld.
+    /// </remarks>
+    [Parameter]
+    public string? Name { get; set; }
+
+    /// <summary>Wat voor waarde dit is. Bepaalt invoertype, toetsenbord en of de waarde mono is.</summary>
+    [Parameter]
+    public FieldKind Kind { get; set; } = FieldKind.Text;
+
+    /// <summary>De keuzes bij <see cref="FieldKind.Select"/>. Bij een ander soort veld ongebruikt.</summary>
+    [Parameter]
+    public IReadOnlyList<FieldOption>? Options { get; set; }
+
+    /// <summary>
+    /// Overschrijft de stand uit de <see cref="FieldScope"/> van de kaart. Alleen voor het
+    /// uitzonderingsgeval van één afwijkend veld; de stand van een kaart hoort op de kaart.
+    /// </summary>
+    [Parameter]
+    public FieldMode? Mode { get; set; }
+
+    /// <summary>Overschrijft de indeling uit de <see cref="FieldScope"/> van de kaart.</summary>
+    [Parameter]
+    public FieldLayout? Layout { get; set; }
+
+    /// <summary>
+    /// De validatiemelding onder dit veld. Leeg betekent geen melding, en dan is het veld ook niet
+    /// <c>aria-invalid</c>.
+    /// </summary>
+    /// <remarks>
+    /// De melding komt van buiten omdat validatie een regel van de pagina is: of een
+    /// contractnummer bestaat, of een e-mailadres al toegang heeft en of een ingangsdatum vóór de
+    /// vorige ligt, weet alleen de laag die de gegevens kent. Een veld dat zulke teksten zelf
+    /// verzint, verzint hem op een dag verkeerd.
+    /// </remarks>
+    [Parameter]
+    public string? Error { get; set; }
+
+    /// <summary>
+    /// Uitleg onder het veld, in meta-grijs: wat de operator moet weten vóór hij typt. Blijft
+    /// staan als er ook een foutmelding is — de uitleg is dan juist bruikbaar.
+    /// </summary>
+    [Parameter]
+    public string? Hint { get; set; }
+
+    /// <summary>
+    /// De eenheid naast het veld, bijvoorbeeld "u/mnd", "%" of "€". Komt ook in de toegankelijke
+    /// beschrijving terecht, want "8" zonder eenheid is geen waarde.
+    /// </summary>
+    [Parameter]
+    public string? Unit { get; set; }
+
+    /// <summary>Of het veld verplicht is. Zet <c>required</c> en zegt het in woorden in het label.</summary>
+    [Parameter]
+    public bool Required { get; set; }
+
+    /// <summary>
+    /// De placeholder. Bij <see cref="FieldKind.Select"/> de tekst van de lege eerste optie
+    /// ("Kies een rol").
+    /// </summary>
+    /// <remarks>
+    /// Een placeholder is nooit het label: hij verdwijnt zodra er iets staat. <see cref="Label"/>
+    /// is verplicht en blijft staan.
+    /// </remarks>
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// Het <c>autocomplete</c>-attribuut, bijvoorbeeld <c>email</c> of <c>off</c>. Standaard leeg,
+    /// zodat de browser zijn eigen gedrag houdt.
+    /// </summary>
+    [Parameter]
+    public string? Autocomplete { get; set; }
+
+    /// <summary>Het aantal regels bij <see cref="FieldKind.Multiline"/>.</summary>
+    [Parameter]
+    public int Rows { get; set; } = 3;
+
+    /// <summary>
+    /// Zet de waarde in monospace, ook als het geen getal is. Voor contractnummers, resource
+    /// groups en versies — §8 zet die in mono.
+    /// </summary>
+    [Parameter]
+    public bool Mono { get; set; }
+
+    /// <summary>
+    /// De tekst van de read-only weergave, als die afwijkt van <see cref="Value"/>. Voor een datum
+    /// die als <c>2026-01-01</c> wordt bewerkt en als "1 januari 2026" wordt gelezen, of een
+    /// urenbundel die als "8" wordt bewerkt en als "8 uur per maand" wordt gelezen.
+    /// </summary>
+    /// <remarks>
+    /// Het veld formatteert niet zelf. Zelfde grens als bij <c>FactTile</c>: opmaak is een besluit
+    /// van de pagina, die de eenheid en de rol van de lezer kent.
+    /// </remarks>
+    [Parameter]
+    public string? ReadOnlyText { get; set; }
+
+    /// <summary>
+    /// Wat er in de read-only weergave staat als er geen waarde is. Standaard een streepje: een
+    /// leeg vak laat de lezer denken dat de pagina niet klaar is met laden.
+    /// </summary>
+    [Parameter]
+    public string Empty { get; set; } = "—";
+
+    /// <summary>
+    /// Rijkere read-only inhoud dan tekst, bijvoorbeeld een <c>RelativeTime</c> of een link naar de
+    /// contactpersoon. Vervangt de tekst; heeft geen effect in <see cref="FieldMode.Edit"/>.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// De tooltip. Zeg wat de waarde is en niet wat er staat — "cron: 0 6 1 * *" bij een planning,
+    /// "vastgelegd op 12-03-2026" bij een tarief.
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Het id van het besturingselement. Standaard een gegenereerd id; zet dit als een andere
+    /// tekst op de pagina er met <c>aria-describedby</c> of <c>for</c> naar moet wijzen, of als een
+    /// test een vast id nodig heeft.
+    /// </summary>
+    [Parameter]
+    public string? Id { get; set; }
+
+    /// <summary>Extra classnamen op de omhulling.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>
+    /// Overige attributen. Landen op het besturingselement (of op de waarde in de read-only
+    /// weergave), want <c>min</c>, <c>maxlength</c>, <c>step</c> en <c>pattern</c> horen daar.
+    /// </summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    [CascadingParameter]
+    private FieldScope? Scope { get; set; }
+
+    private FieldMode EffectiveMode => Mode ?? Scope?.Mode ?? FieldMode.ReadOnly;
+
+    private FieldLayout EffectiveLayout => Layout ?? Scope?.Layout ?? FieldLayout.Stacked;
+
+    private string ControlId => Id ?? _autoId;
+
+    private string HintId => $"{ControlId}-hint";
+
+    private string ErrorId => $"{ControlId}-err";
+
+    private string UnitId => $"{ControlId}-unit";
+
+    private string UnitDescriptionId => $"{ControlId}-unit-sr";
+
+    /// <summary>
+    /// De tekst van de read-only weergave. <c>ReadOnlyText</c> wint, dan de waarde, dan het
+    /// streepje. Bij een keuzelijst het label van de gekozen optie: een klant leest "Beheerder
+    /// klant" en niet de sleutel die wij opslaan.
+    /// </summary>
+    private string DisplayText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ReadOnlyText))
+            {
+                return ReadOnlyText;
+            }
+
+            if (string.IsNullOrWhiteSpace(Value))
+            {
+                return Empty;
+            }
+
+            if (Kind == FieldKind.Select && Options is { Count: > 0 } options)
+            {
+                foreach (var option in options)
+                {
+                    if (string.Equals(option.Value, Value, StringComparison.Ordinal))
+                    {
+                        return option.Label;
+                    }
+                }
+            }
+
+            return Value;
+        }
+    }
+
+    private bool Numeric => Kind is FieldKind.Number or FieldKind.Amount;
+
+    private string InputType => Kind switch
+    {
+        FieldKind.Email => "email",
+        FieldKind.Date => "date",
+        FieldKind.Number => "number",
+        // Amount bewust niet type="number"; zie FieldKind.Amount.
+        _ => "text",
+    };
+
+    private string? InputMode => Kind switch
+    {
+        FieldKind.Number => "numeric",
+        FieldKind.Amount => "decimal",
+        FieldKind.Email => "email",
+        _ => null,
+    };
+
+    /// <summary>
+    /// <c>aria-invalid</c> alleen zetten als er een fout is. Een <c>aria-invalid="false"</c> op elf
+    /// velden zegt niets en maakt de HTML alleen langer.
+    /// </summary>
+    private string? AriaInvalid => string.IsNullOrWhiteSpace(Error) ? null : "true";
+
+    /// <summary>
+    /// De ids waar het veld naar verwijst, in leesvolgorde: eerst wat het veld is (eenheid), dan
+    /// wat je moet weten (uitleg), dan wat er mis is (fout). Leeg als er niets is, zodat er geen
+    /// leeg attribuut in de HTML staat.
+    /// </summary>
+    private string? DescribedBy
+    {
+        get
+        {
+            var ids = new List<string>(3);
+
+            if (!string.IsNullOrWhiteSpace(Unit))
+            {
+                ids.Add(UnitDescriptionId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(Hint))
+            {
+                ids.Add(HintId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(Error))
+            {
+                ids.Add(ErrorId);
+            }
+
+            return ids.Count == 0 ? null : string.Join(' ', ids);
+        }
+    }
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            "field",
+            EffectiveLayout == FieldLayout.Row ? "field--row" : null,
+            EffectiveMode == FieldMode.ReadOnly ? "field--readonly" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+
+    private string ControlClass =>
+        string.Join(' ', new[]
+        {
+            "field__input",
+            Numeric ? "field__input--num" : null,
+            Mono && !Numeric ? "field__input--mono" : null,
+        }.Where(c => c is not null));
+
+    private string ValueClass =>
+        string.Join(' ', new[]
+        {
+            "field__value",
+            Numeric ? "field__value--num" : null,
+            Mono && !Numeric ? "field__value--mono" : null,
+        }.Where(c => c is not null));
+
+    protected override void OnInitialized()
+    {
+        // Eén keer, zodat het id van dit veld gelijk blijft over herrenders heen: anders wijst
+        // aria-describedby na de eerste wijziging naar een element dat niet meer bestaat.
+        _autoId = $"fld-{Guid.NewGuid().ToString("N")[..8]}";
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (EffectiveMode != FieldMode.Edit)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Name) && !ValueChanged.HasDelegate)
+        {
+            throw new InvalidOperationException(
+                $"Veld '{Label}' is bewerkbaar maar heeft geen Name en geen ValueChanged. De "
+                + "waarde kan dan nergens naartoe: op static SSR gaat hij mee via Name (model "
+                + "binding), in een interactief eiland via ValueChanged. Zo'n veld lijkt te werken "
+                + "en verliest stil elke wijziging.");
+        }
+
+        if (Kind == FieldKind.Select && Options is not { Count: > 0 })
+        {
+            throw new InvalidOperationException(
+                $"Veld '{Label}' is een keuzelijst zonder opties. Een lege select is een vak "
+                + "waarin niets te kiezen valt; laat het veld weg of geef de lijst mee.");
+        }
+    }
+
+    private Task OnValueChangedAsync(ChangeEventArgs args) =>
+        ValueChanged.HasDelegate
+            ? ValueChanged.InvokeAsync(args.Value as string)
+            : Task.CompletedTask;
+}

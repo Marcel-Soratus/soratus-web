@@ -1,0 +1,67 @@
+@* De actiecel van een tabelrij: de knoppen die bij één regel horen. Toegang intrekken (§3.5) is de
+   eerste; fiatteren en afwijzen (§3.6) komen in fase 3 op hetzelfde patroon.
+
+   DE HARDE REGEL, EN HOE HIJ HIER WORDT AFGEDWONGEN
+
+   fase-0-afwijkingen §5: genest interactief is ongeldige HTML en met het toetsenbord onbereikbaar.
+   Een rij met eigen acties is daarom nooit zelf activeerbaar — geen Href, geen OnActivate. Wil je op
+   zo'n rij ook kunnen doorklikken, zet dan een link in de eerste cel en niet op de rij.
+
+   Die regel stond tot nu toe alleen in de documentatie van DataRow, en documentatie is geen
+   afdwinging. Dit component leest de rijcontext en gooit een fout zodra hij in een rij staat die
+   zelf een <a> of een <button> is. Dan valt het om in de eerste test en niet in productie, en het
+   is dezelfde soort fout als "Een DataRow is een link of een knop, niet allebei" die DataRow al
+   gooit.
+
+   WAAROM DIT GEEN EIGEN RIJTYPE IS
+
+   Er is geen ActionRow. Een DataRow zonder Href en zonder OnActivate rendert al een <div> en is al
+   precies wat hier nodig is; een tweede rijtype zou dat nabouwen en zijn eigen 768px-regel nodig
+   hebben (§6 van de afwijkingennotitie). Wat er ontbrak was de cel: de uitlijning, de afstand
+   tussen twee knoppen, en de plek waar de regel wordt afgedwongen. Dat is dit.
+
+   GEBRUIK
+
+     <DataRow>
+         <DataCell Truncate>…</DataCell>
+         <DataCell><RowActions><ConfirmAction … /></RowActions></DataCell>
+     </DataRow>
+
+   Zet de actiekolom in de RowGrid op Labelled: false. Een kolom zonder kop heeft geen label nodig,
+   en onder 768px staat "Acties Intrekken" alleen in de weg. *@
+
+<span @attributes="AdditionalAttributes" class="@CssClass">
+    @ChildContent
+</span>
+
+@code {
+    /// <summary>De knoppen: meestal één <c>ConfirmAction</c>, soms twee gewone knoppen.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Extra classnamen op de cel.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landen op de omhulling.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    [CascadingParameter]
+    private RowContext? Row { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "row-actions" : $"row-actions {Class}";
+
+    protected override void OnParametersSet()
+    {
+        if (Row is { Interactive: true })
+        {
+            throw new InvalidOperationException(
+                "RowActions staat in een DataRow die zelf activeerbaar is (Href of OnActivate). "
+                + "Genest interactief is ongeldige HTML en met het toetsenbord onbereikbaar: de "
+                + "knoppen in deze cel zijn dan niet te bereiken. Haal Href/OnActivate van de rij "
+                + "af en zet de doorklik op een link in de eerste cel.");
+        }
+    }
+}
