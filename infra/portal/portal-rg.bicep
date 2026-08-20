@@ -62,6 +62,12 @@ param customDomainVerificationId string = 'B0A04C985681566759FB301CBA01F04F671B6
 param keyVaultRoleAssignmentName string = '10284461-491b-42f1-ba68-6e927eb27c3c'
 param cosmosReaderAssignmentName string = '3ae107a3-d905-4e45-b66c-bf0c53af4717'
 
+@description('Log Analytics workspace voor het portaal. Eigen workspace, niet de gedeelde defaultworkspace.')
+param workspaceName string = 'log-soratus-prod'
+
+@description('Retentie van de workspace in dagen. Gelijk aan de logretentie van het portaal zelf.')
+param logRetentionInDays int = 30
+
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var cosmosDataReaderRoleId = '00000000-0000-0000-0000-000000000001'
 
@@ -76,6 +82,44 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2024-04-01' existing = {
 resource dnsZone 'Microsoft.Network/dnsZones@2018-05-01' existing = {
   name: dnsZoneName
 }
+
+// ---------------------------------------------------------------------------
+// Waarnemen
+//
+// Dit ontbrak. Het portaal is met losse az-commando's opgezet en had daardoor
+// nul diagnostic settings en geen Application Insights — precies het gebrek dat
+// docs/agent-portal/fase-0-afwijkingen.md §1 aan de klantomgeving MBV verwijt.
+// Een eigen workspace, niet de gedeelde DefaultWorkspace-...-WEU, want daarin
+// staat nu de telemetrie van drie klanten door elkaar.
+//
+// Let op de vorm van de diagnostic settings hieronder: losse `category`-waarden
+// en geen `categoryGroup`. Deze providers leveren geen categoryGroups, dus
+// 'allLogs' of 'audit' wordt bij het uitrollen afgewezen.
+// ---------------------------------------------------------------------------
+
+resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: workspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: logRetentionInDays
+    features: {
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+  }
+}
+
+// Bewust géén Application Insights hier. De opdracht zegt "geen tracking of
+// analytics"; platformlogs zijn operationeel en vallen daarbuiten, maar
+// Application Insights op applicatieniveau legt elk verzoek vast inclusief de
+// URL, en daarin staat de klant-slug. Dat is een besluit voor Marcel en geen
+// implementatiedetail. Wat het praktische probleem oplost — "het portaal valt
+// om, waar kijk ik dan" — zijn AppServiceAppLogs en AppServiceConsoleLogs
+// hieronder, en die raken die grens niet.
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -187,28 +231,35 @@ resource cosmosContainers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/co
     parent: telemetry
     name: c.name
     properties: {
-      resource: {
-        id: c.name
-        partitionKey: {
-          paths: ['/pk']
-          kind: 'Hash'
-        }
-        defaultTtl: c.ttl
-        conflictResolutionPolicy: {
-          mode: 'LastWriterWins'
-          conflictResolutionPath: '/_ts'
-        }
-        indexingPolicy: {
-          indexingMode: 'consistent'
-          automatic: true
-          includedPaths: [
-            { path: '/*' }
-          ]
-          excludedPaths: [
-            { path: '/"_etag"/?' }
-          ]
-        }
-      }
+      // defaultTtl moet ontbréken als er geen verval is, niet null zijn. Een
+      // expliciete null levert bij het uitrollen "One of the specified inputs is
+      // invalid" op de container `agents`, en `what-if` ziet dat niet: daar zijn
+      // "null" en "afwezig" niet van elkaar te onderscheiden. Vandaar union() met
+      // een leeg object in plaats van defaultTtl: c.ttl.
+      resource: union(
+        {
+          id: c.name
+          partitionKey: {
+            paths: ['/pk']
+            kind: 'Hash'
+          }
+          conflictResolutionPolicy: {
+            mode: 'LastWriterWins'
+            conflictResolutionPath: '/_ts'
+          }
+          indexingPolicy: {
+            indexingMode: 'consistent'
+            automatic: true
+            includedPaths: [
+              { path: '/*' }
+            ]
+            excludedPaths: [
+              { path: '/"_etag"/?' }
+            ]
+          }
+        },
+        c.ttl == null ? {} : { defaultTtl: c.ttl }
+      )
     }
   }
 ]
@@ -373,6 +424,66 @@ resource managedCertificate 'Microsoft.Web/certificates@2024-04-01' = {
     portalCname
     portalAsuid
   ]
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic settings
+//
+// Bewust niet op het App Service Plan: asp-soratus-prod draagt ook de live
+// marketingsite en app-derdehelft. Een instelling daarop raakt dus resources
+// buiten het portaal, en dat hoort een eigen besluit te zijn.
+// ---------------------------------------------------------------------------
+
+resource portalAppDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'naar-eigen-workspace'
+  scope: portalApp
+  properties: {
+    workspaceId: workspace.id
+    logs: [
+      // HTTP-verkeer en de console- en applicatielogs. Dat laatste is wat je
+      // nodig hebt als het portaal een uitzondering gooit.
+      { category: 'AppServiceHTTPLogs', enabled: true }
+      { category: 'AppServiceConsoleLogs', enabled: true }
+      { category: 'AppServiceAppLogs', enabled: true }
+      { category: 'AppServicePlatformLogs', enabled: true }
+      // Aanmeldstromen. Dit is de categorie waarmee het rolclaim-probleem uit
+      // fase 0 zichtbaar zou zijn geweest zonder een tijdelijke diagnose op een
+      // pagina te zetten.
+      { category: 'AppServiceAuthenticationLogs', enabled: true }
+      { category: 'AppServiceAuditLogs', enabled: true }
+      { category: 'AppServiceIPSecAuditLogs', enabled: true }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true }
+    ]
+  }
+}
+
+resource cosmosDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'naar-eigen-workspace'
+  scope: cosmos
+  properties: {
+    workspaceId: workspace.id
+    logs: [
+      { category: 'DataPlaneRequests', enabled: true }
+      { category: 'ControlPlaneRequests', enabled: true }
+      { category: 'QueryRuntimeStatistics', enabled: true }
+    ]
+  }
+}
+
+resource keyVaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'naar-eigen-workspace'
+  scope: keyVault
+  properties: {
+    workspaceId: workspace.id
+    logs: [
+      { category: 'AuditEvent', enabled: true }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true }
+    ]
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -271,6 +271,48 @@ de eerste plek om naar te kijken zodra het aantal agents richting de honderd loo
 
 ---
 
+## 11. Vier velden uit de read-only configuratie: drie bestaan niet, één is een echt gat
+
+**Spec:** §3.3 vraagt op het configuratietabblad van het agentdetail onder meer
+resource-limieten, image, resource group, identity en logretentie.
+
+**Aanleiding:** `AgentRegistration` publiceert vier daarvan niet, en de eerste reflex was om ze
+allemaal als "komt zodra het contract ze meestuurt" te melden. Dat is voor drie van de vier
+onwaar, en een melding die drie dingen belooft die nooit gaan komen is erger dan geen melding.
+
+**Besluit, per veld:**
+
+1. **Resource-limieten (CPU, geheugen) en image bestaan niet.** Dat zijn Container
+   Apps-begrippen. Wij draaien op App Service (zie §1): een agent heeft daar geen eigen image, en
+   limieten hangen aan het App Service-plan en niet aan de agent. Er staat dus **geen rij** voor
+   deze twee, ook niet een lege en ook niet een met een streepje. Een leeg veld belooft dat er
+   ooit een waarde komt; die komt hier niet, want de vraag zelf klopt niet op dit platform. Dit
+   is dezelfde soort correctie als `idle` in §4: de spec beschrijft een aanname die met de
+   platformkeuze is vervallen.
+2. **Resource group is er al.** `OperatorCustomerScope.EnvironmentDetail` draagt subscription en
+   resource group, en `OperatorAgentConfigurationView` geeft dat door. Het staat op het
+   configuratietabblad als "Azure-omgeving" — **alleen voor de operator**. Een klant ziet het
+   niet, en dat is geen omissie maar §2: koppeling- en infrastructuurdetails zijn operator-only.
+3. **Identity is een echt gat.** De managed identity van een agent is Azure-metadata en geen
+   telemetrie, dus hij hoort niet in het agentcontract — een agent die zijn eigen identity
+   publiceert, publiceert iets wat hij van buiten zichzelf zou moeten opvragen. De rij staat er
+   daarom niet, en er staat één regel onder het tabblad die zegt dát hij er niet staat en waar
+   hij wél te vinden is (Azure, onder de resource group erboven). Zwijgen zou het scherm korter
+   maken zonder dat iemand merkt dat er iets mist.
+
+**Gevolg voor de code:** `AgentConfigurationNotice.NotPublished` in
+`Soratus.Portal/Views/AgentConfigurationView.cs` noemt alle vier de velden in één zin en zegt
+dat ze erbij komen zodra het contract ze meestuurt. Die constante is met dit besluit onwaar
+geworden en wordt door het scherm niet gebruikt; het configuratietabblad draagt in plaats
+daarvan alleen de identity-melding. De constante hoort te verdwijnen of te worden herschreven
+door wie `Views/` beheert.
+
+**Wat er openblijft:** of identity op termijn ergens hóórt. Als het portaal hem moet tonen, dan
+haalt het portaal hem op bij Azure Resource Manager en niet bij de agent — dat is een nieuwe
+integratie (§5) en geen contractwijziging. Zolang niemand ernaar vraagt is de melding genoeg.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Uren, facturatie, sprint en support. Die komen pas als de statusweergave klopt, zoals de
