@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Soratus.Seed</RootNamespace>
+    <AssemblyName>Soratus.Seed</AssemblyName>
+    <!-- Tijdelijk gereedschap: het hoort niet in een pakket of in een uitrol terecht te komen. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.62.1" />
+    <!--
+      Dezelfde reden als in Soratus.Agents.Telemetry: de Cosmos-SDK levert Newtonsoft.Json niet
+      meer zelf mee, maar gebruikt hem intern nog wel.
+    -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Er wordt bewust geen eigen JSON geschreven. De documenten die in Cosmos belanden zijn de
+      contracttypen zelf, zodat dit gereedschap niet uit de pas kan lopen met wat de
+      telemetriebibliotheek schrijft en het portaal leest.
+    -->
+    <ProjectReference Include="..\..\Soratus.Agents.Contracts\Soratus.Agents.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

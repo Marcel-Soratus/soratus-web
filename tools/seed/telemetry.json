@@ -1,0 +1,627 @@
+{
+  "_doel": "Demodata voor het Soratus Agent Portal. Wordt door tools/Soratus.Seed omgezet naar AgentRegistration-, RunRecord- en LogRecord-documenten en in de echte Cosmos gezet. Tijdelijk: verdwijnt in fase 1.",
+  "_tijden": "Alle momenten zijn relatief aan het moment van seeden en worden als UTC weggeschreven. Vorm: '-11d4h', '-8m7s', '+12m'. Een min is verleden, een plus is toekomst. Toegestane eenheden: d, h, m, s.",
+  "_afgeleid": "finishedAt van een run = startedAt + durationMs. Een run met result 'running' heeft geen durationMs en geen finishedAt.",
+  "_namen": "agentName is de documentsleutel én de partitiesleutel in de container 'agents' en is daarmee accountbreed uniek. Klantagents dragen daarom de klant-slug als voorvoegsel; de vijf beheeragents van Soratus houden hun naam uit §4 van de spec.",
+  "_beschermd": "heartbeat-demo staat bewust niet in dit bestand. Dat document is door de telemetriebibliotheek geschreven en wordt door het seed-gereedschap nooit aangeraakt.",
+
+  "customers": [
+    {
+      "id": "bakker",
+      "name": "Bakker Logistiek",
+      "environment": "West-Europa",
+      "environmentDetail": "sub-77b2e0 · rg-soratus-bakker",
+      "_verwachteStatus": "failed — de laatste afgeronde run van voorraad-sync is mislukt",
+      "agents": [
+        {
+          "agentName": "bakker-voorraad-sync",
+          "displayType": "Sync",
+          "version": "3.2.0",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-1d6h",
+          "lastHeartbeatAt": "-19s",
+          "schedule": "*/15 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + webhook (WMS)",
+          "nextRunAt": "+4m",
+          "runs": [
+            { "runId": "r-4a91d20c", "startedAt": "-11m16s", "durationMs": 8300, "result": "failed", "itemsProcessed": 169, "itemsFailed": 41, "rolledBack": true, "trigger": "timer", "errorType": "SoratusAgent.Sync.ValidationException", "errorMessage": "Voorraadregel afgekeurd: veld \"locatieCode\" ontbreekt in de WMS-payload; 41 van 210 regels afgekeurd en de transactie is teruggedraaid." },
+            { "runId": "r-4a88f114", "startedAt": "-25m27s", "durationMs": 6400, "result": "failed", "itemsProcessed": 152, "itemsFailed": 36, "rolledBack": true, "trigger": "timer", "errorType": "SoratusAgent.Sync.ValidationException", "errorMessage": "Onbekende SKU BK-77004 in de WMS-export; de batch is niet doorgezet." },
+            { "runId": "r-4a8039b1", "startedAt": "-40m48s", "durationMs": 7100, "result": "ok", "itemsProcessed": 194, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4a74c8e2", "startedAt": "-55m51s", "durationMs": 6900, "result": "ok", "itemsProcessed": 188, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4a6807ad", "startedAt": "-1h10m58s", "durationMs": 7400, "result": "ok", "itemsProcessed": 201, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4a6155f0", "startedAt": "-1h26m", "durationMs": 5900, "result": "ok", "itemsProcessed": 176, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4a55ba36", "startedAt": "-1h40m56s", "durationMs": 6200, "result": "ok", "itemsProcessed": 181, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4a4971c9", "startedAt": "-1h56m", "durationMs": 6050, "result": "ok", "itemsProcessed": 179, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-11m8s", "level": "error", "event": "run.completed", "msg": "Run mislukt — 41 van 210 regels afgekeurd, transactie teruggedraaid", "runId": "r-4a91d20c", "extra": { "durationMs": 8300, "itemsProcessed": 169, "itemsFailed": 41, "result": "failed", "rollback": true } },
+            { "at": "-11m12s", "level": "error", "event": "validation.failed", "msg": "Voorraadregel afgekeurd: veld \"locatieCode\" ontbreekt in WMS-payload — zie stacktrace", "runId": "r-4a91d20c", "extra": { "rule": "locatieCode-required", "sku": "BK-99120-XL", "payload": "{\"orderId\":\"WMS-2026-08-19-0091\",\"lines\":[{\"sku\":\"BK-99120-XL\",\"qty\":24,\"unit\":\"stuk\",\"warehouse\":null,\"locatieCode\":null,\"batch\":\"B-2026-0812\",\"expiry\":null,\"supplier\":{\"id\":\"SUP-3391\",\"name\":\"Nordkamp Verpakkingen B.V.\",\"country\":\"DE\"},\"customsCode\":\"3923.21.00\",\"weightKg\":18.4}],\"meta\":{\"source\":\"wms-export-v3\",\"exportedAt\":\"2026-08-19T09:10:58Z\",\"checksum\":\"9f2c1b77ae4d5e08c1\"}}", "stacktrace": "SoratusAgent.Sync.ValidationException: locatieCode is required for warehouse-bound lines\n   at SoratusAgent.Sync.Validators.StockLineValidator.Validate(StockLine line) in /src/Sync/Validators/StockLineValidator.cs:line 88\n   at SoratusAgent.Sync.StockSyncRunner.ProcessBatch(IEnumerable`1 lines, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 214\n   at SoratusAgent.Sync.StockSyncRunner.RunAsync(RunContext ctx, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 121\n   at SoratusAgent.Host.AgentLoop.ExecuteAsync(CancellationToken ct) in /src/Host/AgentLoop.cs:line 76" } },
+            { "at": "-11m14s", "level": "warn", "event": "payload.dump", "msg": "Volledige WMS-respons meegeschreven omdat de validatie halverwege afbrak. Deze regel is met opzet niet ingekort: hij moet aantonen dat de logtabel van het portaal netjes afbreekt in plaats van breder te worden dan het scherm. Ruwe respons van GET /wms/v3/stock/export (HTTP 200, content-length 48213, checksum 9f2c1b77ae4d5e08c1): {\"orderId\":\"WMS-2026-08-19-0091\",\"warehouse\":\"BK-HOOFDMAGAZIJN-01\",\"exportProfile\":\"stock-full-v3\",\"lines\":[{\"sku\":\"BK-99120-XL\",\"qty\":24,\"unit\":\"stuk\",\"warehouse\":null,\"locatieCode\":null,\"batch\":\"B-2026-0812\",\"expiry\":null,\"supplier\":{\"id\":\"SUP-3391\",\"name\":\"Nordkamp Verpakkingen B.V.\",\"country\":\"DE\"},\"customsCode\":\"3923.21.00\",\"weightKg\":18.4},{\"sku\":\"BK-99121-L\",\"qty\":140,\"unit\":\"stuk\",\"warehouse\":\"HAL-C\",\"locatieCode\":\"C-14-03\",\"batch\":\"B-2026-0812\",\"expiry\":null,\"supplier\":{\"id\":\"SUP-3391\",\"name\":\"Nordkamp Verpakkingen B.V.\",\"country\":\"DE\"},\"customsCode\":\"3923.21.00\",\"weightKg\":11.2},{\"sku\":\"BK-40877-STD\",\"qty\":8,\"unit\":\"pallet\",\"warehouse\":\"HAL-A\",\"locatieCode\":null,\"batch\":\"B-2026-0731\",\"expiry\":\"2027-07-31\",\"supplier\":{\"id\":\"SUP-1180\",\"name\":\"Van Rooij Transportmiddelen\",\"country\":\"NL\"},\"customsCode\":\"4415.20.90\",\"weightKg\":312.0}],\"meta\":{\"source\":\"wms-export-v3\",\"exportedAt\":\"2026-08-19T09:10:58Z\",\"rejected\":41,\"accepted\":169,\"checksum\":\"9f2c1b77ae4d5e08c1\"}} — Stacktrace: SoratusAgent.Sync.ValidationException: locatieCode is required for warehouse-bound lines\n   at SoratusAgent.Sync.Validators.StockLineValidator.Validate(StockLine line) in /src/Sync/Validators/StockLineValidator.cs:line 88\n   at SoratusAgent.Sync.Validators.StockLineValidator.ValidateAll(IReadOnlyList`1 lines) in /src/Sync/Validators/StockLineValidator.cs:line 41\n   at SoratusAgent.Sync.StockSyncRunner.ProcessBatch(IEnumerable`1 lines, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 214\n   at SoratusAgent.Sync.StockSyncRunner.ProcessPageAsync(StockPage page, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 178\n   at SoratusAgent.Sync.StockSyncRunner.RunAsync(RunContext ctx, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 121\n   at SoratusAgent.Sync.TransactionScope.ExecuteAsync(Func`2 body, CancellationToken ct) in /src/Sync/TransactionScope.cs:line 64\n   at SoratusAgent.Host.RunScope.ExecuteAsync(IScheduledAgent agent, CancellationToken ct) in /src/Host/RunScope.cs:line 112\n   at SoratusAgent.Host.AgentLoop.ExecuteAsync(CancellationToken ct) in /src/Host/AgentLoop.cs:line 76\n--- End of stack trace from previous location ---\n   at SoratusAgent.Host.AgentLoop.TickAsync(CancellationToken ct) in /src/Host/AgentLoop.cs:line 48\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at SoratusAgent.Host.Program.<Main>$(String[] args) in /src/Host/Program.cs:line 31 — Inner exception: System.Collections.Generic.KeyNotFoundException: The given key 'locatieCode' was not present in the dictionary.\n   at System.Collections.Generic.Dictionary`2.get_Item(TKey key)\n   at SoratusAgent.Sync.Mapping.WmsLineMapper.Map(JsonElement source) in /src/Sync/Mapping/WmsLineMapper.cs:line 57\n   at SoratusAgent.Sync.Validators.StockLineValidator.Validate(StockLine line) in /src/Sync/Validators/StockLineValidator.cs:line 71 — Einde van de meegeschreven respons; de transactie is teruggedraaid en er staat geen halve voorraadstand in het WMS.", "runId": "r-4a91d20c", "extra": { "bytes": 48213, "endpoint": "GET /wms/v3/stock/export", "reason": "validatie afgebroken", "truncated": false } },
+            { "at": "-11m24s", "level": "warn", "event": "api.retry", "msg": "WMS-export gaf 503, poging 2 van 3", "runId": "r-4a91d20c", "extra": { "attempt": 2, "backoffMs": 1600, "endpoint": "GET /wms/v3/stock/export" } },
+            { "at": "-11m32s", "level": "info", "event": "run.started", "msg": "Run gestart — 210 voorraadregels", "runId": "r-4a91d20c", "extra": { "queueDepth": 210, "trigger": "timer" } },
+            { "at": "-25m19s", "level": "error", "event": "validation.failed", "msg": "Voorraadregel afgekeurd: onbekende SKU BK-77004", "runId": "r-4a88f114", "extra": { "rule": "sku-known", "sku": "BK-77004" } },
+            { "at": "-25m27s", "level": "info", "event": "run.started", "msg": "Run gestart — 188 voorraadregels", "runId": "r-4a88f114", "extra": { "queueDepth": 188, "trigger": "timer" } },
+            { "at": "-40m40s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 194 regels bijgewerkt", "runId": "r-4a8039b1", "extra": { "durationMs": 7100, "itemsProcessed": 194, "itemsFailed": 0 } },
+            { "at": "-51m55s", "level": "info", "event": "config.reloaded", "msg": "Configuratie herladen na deployment 3.2.0", "extra": { "version": "3.2.0", "changed": ["retryPolicy"] } },
+            { "at": "-1h7m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 108000, "memMb": 731 } }
+          ]
+        },
+        {
+          "agentName": "bakker-vrachtbrief-check",
+          "displayType": "Document-controle",
+          "version": "1.0.9",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-9d11h",
+          "lastHeartbeatAt": "-8s",
+          "schedule": null,
+          "triggerKind": "blob",
+          "triggerDetail": "Blob-drop (vrachtbrieven)",
+          "nextRunAt": null,
+          "runs": [
+            { "runId": "r-2c40a918", "startedAt": "-2m13s", "durationMs": 2260, "result": "ok", "itemsProcessed": 3, "itemsFailed": 0, "trigger": "blob" },
+            { "runId": "r-2c3f77b2", "startedAt": "-14m6s", "durationMs": 1980, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "blob" },
+            { "runId": "r-2c3e1d55", "startedAt": "-31m44s", "durationMs": 2410, "result": "ok", "itemsProcessed": 4, "itemsFailed": 1, "trigger": "blob" },
+            { "runId": "r-2c3cb001", "startedAt": "-48m2s", "durationMs": 1870, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "blob" },
+            { "runId": "r-2c3b64ef", "startedAt": "-1h12m", "durationMs": 2050, "result": "ok", "itemsProcessed": 3, "itemsFailed": 0, "trigger": "blob" },
+            { "runId": "r-2c3a2210", "startedAt": "-1h39m", "durationMs": 2330, "result": "ok", "itemsProcessed": 3, "itemsFailed": 0, "trigger": "blob" }
+          ],
+          "logs": [
+            { "at": "-2m10s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 3 vrachtbrieven gecontroleerd", "runId": "r-2c40a918", "extra": { "durationMs": 2260, "itemsProcessed": 3, "itemsFailed": 0 } },
+            { "at": "-2m11s", "level": "info", "event": "document.processed", "msg": "Vrachtbrief gecontroleerd", "runId": "r-2c40a918", "extra": { "docId": "VB-2026-4471", "ocrConfidence": 0.97 } },
+            { "at": "-2m13s", "level": "info", "event": "run.started", "msg": "Run gestart — 3 vrachtbrieven in de map", "runId": "r-2c40a918", "extra": { "queueDepth": 3, "trigger": "blob" } },
+            { "at": "-31m41s", "level": "warn", "event": "ocr.lowConfidence", "msg": "Vrachtbrief handmatig na te kijken: OCR onder de drempel", "runId": "r-2c3e1d55", "extra": { "docId": "VB-2026-4462", "ocrConfidence": 0.61, "threshold": 0.8 } },
+            { "at": "-48m", "level": "info", "event": "document.processed", "msg": "Vrachtbrief gecontroleerd", "runId": "r-2c3cb001", "extra": { "docId": "VB-2026-4455", "ocrConfidence": 0.94 } },
+            { "at": "-1h5m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 818400, "memMb": 384 } }
+          ]
+        },
+        {
+          "agentName": "bakker-mail-triage",
+          "displayType": "Mail-triage",
+          "version": "2.0.1",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-12d3h",
+          "lastHeartbeatAt": "-5s",
+          "schedule": "*/5 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + Graph-subscription (Inbox)",
+          "nextRunAt": "+4m",
+          "runs": [
+            { "runId": "r-6b21fa08", "startedAt": "-48s", "durationMs": 540, "result": "ok", "itemsProcessed": 4, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6b20c3d1", "startedAt": "-5m48s", "durationMs": 610, "result": "ok", "itemsProcessed": 6, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6b1f8842", "startedAt": "-10m48s", "durationMs": 500, "result": "skipped", "itemsProcessed": 0, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6b1e4419", "startedAt": "-15m48s", "durationMs": 720, "result": "ok", "itemsProcessed": 7, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6b1d0a77", "startedAt": "-20m48s", "durationMs": 580, "result": "ok", "itemsProcessed": 5, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6b1bd190", "startedAt": "-25m48s", "durationMs": 640, "result": "ok", "itemsProcessed": 6, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-47s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 4 mails getrieerd", "runId": "r-6b21fa08", "extra": { "durationMs": 540, "itemsProcessed": 4, "itemsFailed": 0 } },
+            { "at": "-48s", "level": "info", "event": "run.started", "msg": "Run gestart — delta-query", "runId": "r-6b21fa08", "extra": { "trigger": "timer" } },
+            { "at": "-5m47s", "level": "info", "event": "mail.classified", "msg": "Mail ingedeeld bij planning", "runId": "r-6b20c3d1", "extra": { "category": "planning", "confidence": 0.91 } },
+            { "at": "-10m48s", "level": "info", "event": "queue.empty", "msg": "Geen nieuwe mails — run overgeslagen", "runId": "r-6b1f8842", "extra": { "queueDepth": 0 } },
+            { "at": "-20m40s", "level": "warn", "event": "api.retry", "msg": "Graph gaf 429, opnieuw geprobeerd na 1200 ms", "runId": "r-6b1d0a77", "extra": { "attempt": 2, "backoffMs": 1200, "endpoint": "GET /v1.0/me/messages/delta" } },
+            { "at": "-37m", "level": "info", "event": "auth.refreshed", "msg": "Graph-token vernieuwd", "extra": { "scope": "Mail.ReadWrite", "expiresInSec": 3599 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "vandijk",
+      "name": "Van Dijk Installatietechniek",
+      "environment": "West-Europa",
+      "environmentDetail": "sub-a41c9f · rg-soratus-vandijk",
+      "_verwachteStatus": "degraded — mail-triage zwijgt langer dan twee minuten, geen enkele agent is failed",
+      "agents": [
+        {
+          "agentName": "vandijk-mail-triage",
+          "displayType": "Mail-triage",
+          "version": "2.0.1",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-3d19h",
+          "lastHeartbeatAt": "-8m7s",
+          "schedule": "*/5 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + Graph-subscription (Inbox)",
+          "nextRunAt": "+2m",
+          "runs": [
+            { "runId": "r-7c11ab03", "startedAt": "-19m20s", "durationMs": 620, "result": "ok", "itemsProcessed": 3, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-7c05de71", "startedAt": "-25m50s", "durationMs": 980, "result": "failed", "itemsProcessed": 1, "itemsFailed": 1, "rolledBack": false, "trigger": "timer", "errorType": "SoratusAgent.Mail.ClassificationException", "errorMessage": "Mail zonder afzender-domein kon niet geclassificeerd worden; de regel sender-domain-required staat aan." },
+            { "runId": "r-7bfa9c22", "startedAt": "-30m58s", "durationMs": 540, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-7bf1440e", "startedAt": "-36m", "durationMs": 610, "result": "ok", "itemsProcessed": 4, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-7be62187", "startedAt": "-41m", "durationMs": 700, "result": "ok", "itemsProcessed": 5, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-7bdb0f95", "startedAt": "-46m", "durationMs": 560, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-7m58s", "level": "warn", "event": "heartbeat", "msg": "Heartbeat gemist — laatste bevestiging 8 min geleden, container draait nog", "extra": { "lastHeartbeatAgeSec": 487, "containerState": "Running", "probe": "liveness" } },
+            { "at": "-12m29s", "level": "warn", "event": "api.retry", "msg": "Graph-subscription reageert langzaam (p95 4,2 s)", "runId": "r-7c11ab03", "extra": { "attempt": 3, "backoffMs": 3200, "p95Ms": 4200, "endpoint": "GET /v1.0/me/messages/delta" } },
+            { "at": "-19m19s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 3 mails getrieerd", "runId": "r-7c11ab03", "extra": { "durationMs": 620, "itemsProcessed": 3, "itemsFailed": 0 } },
+            { "at": "-19m20s", "level": "info", "event": "run.started", "msg": "Run gestart — delta-query", "runId": "r-7c11ab03", "extra": { "trigger": "graph-subscription" } },
+            { "at": "-25m42s", "level": "error", "event": "validation.failed", "msg": "Mail zonder afzender-domein kon niet geclassificeerd worden", "runId": "r-7c05de71", "extra": { "messageId": "AAMkAGI2...vQAAA", "rule": "sender-domain-required", "stacktrace": "SoratusAgent.Mail.ClassificationException: sender domain is required\n   at SoratusAgent.Mail.Rules.SenderDomainRule.Apply(MailItem item) in /src/Mail/Rules/SenderDomainRule.cs:line 34\n   at SoratusAgent.Mail.TriageRunner.ClassifyAsync(MailItem item, CancellationToken ct) in /src/Mail/TriageRunner.cs:line 96" } },
+            { "at": "-31m49s", "level": "info", "event": "auth.refreshed", "msg": "Graph-token vernieuwd", "extra": { "scope": "Mail.ReadWrite", "expiresInSec": 3599 } },
+            { "at": "-37m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 329400, "memMb": 268 } }
+          ]
+        },
+        {
+          "agentName": "vandijk-factuur-intake",
+          "displayType": "Document-intake",
+          "version": "1.4.2",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-11d4h",
+          "lastHeartbeatAt": "-12s",
+          "schedule": "*/15 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + blob-drop (inbox-facturen)",
+          "nextRunAt": "+8m",
+          "runs": [
+            { "runId": "r-8f3c11a4", "startedAt": "-3m59s", "durationMs": 23000, "result": "ok", "itemsProcessed": 6, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-8f2a70b9", "startedAt": "-19m", "durationMs": 14200, "result": "ok", "itemsProcessed": 4, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-8f18cc31", "startedAt": "-33m27s", "durationMs": 310, "result": "skipped", "itemsProcessed": 0, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-8f0742d6", "startedAt": "-48m58s", "durationMs": 11800, "result": "ok", "itemsProcessed": 3, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-8ef5a018", "startedAt": "-1h4m", "durationMs": 16400, "result": "ok", "itemsProcessed": 5, "itemsFailed": 1, "trigger": "timer" },
+            { "runId": "r-8ee3b5c7", "startedAt": "-1h19m", "durationMs": 9600, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-3m36s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 6 facturen verwerkt", "runId": "r-8f3c11a4", "extra": { "durationMs": 23000, "itemsProcessed": 6, "itemsFailed": 0 } },
+            { "at": "-3m38s", "level": "info", "event": "document.processed", "msg": "Factuur verwerkt", "runId": "r-8f3c11a4", "extra": { "durationMs": 1840, "docId": "INV-2291" } },
+            { "at": "-3m41s", "level": "info", "event": "document.processed", "msg": "Factuur verwerkt", "runId": "r-8f3c11a4", "extra": { "durationMs": 1610, "docId": "INV-2290" } },
+            { "at": "-3m49s", "level": "warn", "event": "api.retry", "msg": "Boekhoudkoppeling gaf 429, opnieuw geprobeerd na 800 ms", "runId": "r-8f3c11a4", "extra": { "attempt": 2, "backoffMs": 800, "endpoint": "POST /v2/purchase-invoices" } },
+            { "at": "-3m56s", "level": "info", "event": "document.processed", "msg": "Factuur verwerkt", "runId": "r-8f3c11a4", "extra": { "durationMs": 2040, "docId": "INV-2289" } },
+            { "at": "-3m59s", "level": "info", "event": "run.started", "msg": "Run gestart — 6 documenten in wachtrij", "runId": "r-8f3c11a4", "extra": { "queueDepth": 6, "trigger": "timer" } },
+            { "at": "-7m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 964800, "memMb": 412 } },
+            { "at": "-18m48s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 4 facturen verwerkt", "runId": "r-8f2a70b9", "extra": { "durationMs": 14200, "itemsProcessed": 4, "itemsFailed": 0 } },
+            { "at": "-19m2s", "level": "info", "event": "auth.refreshed", "msg": "Managed identity token vernieuwd", "runId": "r-8f2a70b9", "extra": { "scope": "https://storage.azure.com/.default", "expiresInSec": 3599 } },
+            { "at": "-33m27s", "level": "info", "event": "queue.empty", "msg": "Geen nieuwe documenten — run overgeslagen", "runId": "r-8f18cc31", "extra": { "queueDepth": 0 } },
+            { "at": "-51m58s", "level": "info", "event": "config.reloaded", "msg": "Configuratie herladen na deployment 1.4.2", "extra": { "version": "1.4.2", "changed": ["maxConcurrency", "timeoutSec"] } }
+          ]
+        },
+        {
+          "agentName": "vandijk-offerte-generator",
+          "displayType": "Generatie",
+          "version": "0.9.7",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-6d2h",
+          "lastHeartbeatAt": "-31s",
+          "schedule": null,
+          "triggerKind": "queue",
+          "triggerDetail": "Queue-message (offerte-aanvraag)",
+          "nextRunAt": null,
+          "runs": [
+            { "runId": "r-9d18e402", "startedAt": "-34m57s", "durationMs": 12400, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "queue" },
+            { "runId": "r-9d1749b8", "startedAt": "-1h12m", "durationMs": 10900, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "queue" },
+            { "runId": "r-9d1622a1", "startedAt": "-2h4m", "durationMs": 14300, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "queue" },
+            { "runId": "r-9d14f00d", "startedAt": "-3h41m", "durationMs": 11200, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "queue" },
+            { "runId": "r-9d13ab56", "startedAt": "-5h18m", "durationMs": 13600, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "queue" }
+          ],
+          "logs": [
+            { "at": "-34m45s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 1 offerte gegenereerd", "runId": "r-9d18e402", "extra": { "durationMs": 12400, "itemsProcessed": 1, "itemsFailed": 0 } },
+            { "at": "-34m50s", "level": "info", "event": "document.generated", "msg": "Offerte OFF-2026-0318 klaargezet ter beoordeling", "runId": "r-9d18e402", "extra": { "docId": "OFF-2026-0318", "templateSet": "installatie-standaard", "tokens": 4180 } },
+            { "at": "-34m57s", "level": "info", "event": "run.started", "msg": "Run gestart — offerte-aanvraag uit wachtrij", "runId": "r-9d18e402", "extra": { "queueDepth": 1, "trigger": "queue" } },
+            { "at": "-1h11m", "level": "warn", "event": "model.slow", "msg": "Taalmodel reageerde traag (7,8 s), offerte is wel afgerond", "runId": "r-9d1749b8", "extra": { "latencyMs": 7800, "model": "gpt-4.1", "threshold": 5000 } },
+            { "at": "-2h3m", "level": "info", "event": "document.generated", "msg": "Offerte OFF-2026-0316 klaargezet ter beoordeling", "runId": "r-9d1622a1", "extra": { "docId": "OFF-2026-0316", "templateSet": "installatie-standaard" } },
+            { "at": "-4h12m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 525600, "memMb": 602 } }
+          ]
+        },
+        {
+          "agentName": "vandijk-urenregistratie",
+          "displayType": "Sync",
+          "version": "1.1.0",
+          "environment": "prod",
+          "lifecycle": "idleWaiting",
+          "startedAt": "-27d6h",
+          "lastHeartbeatAt": "-18s",
+          "schedule": "0 23 * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer (nachtelijk)",
+          "nextRunAt": "+13h38m",
+          "runs": [
+            { "runId": "r-3a90cc14", "startedAt": "-10h17m", "durationMs": 4200, "result": "ok", "itemsProcessed": 38, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-3a8f7721", "startedAt": "-34h17m", "durationMs": 3900, "result": "ok", "itemsProcessed": 41, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-3a8e0b6a", "startedAt": "-58h17m", "durationMs": 4500, "result": "ok", "itemsProcessed": 35, "itemsFailed": 2, "trigger": "timer" },
+            { "runId": "r-3a8db3f8", "startedAt": "-82h17m", "durationMs": 4100, "result": "ok", "itemsProcessed": 40, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-2m", "level": "info", "event": "lifecycle.idle", "msg": "Niets te doen tot de nachtrun; naar nul geschaald", "extra": { "nextRun": "23:00", "reason": "buiten venster" } },
+            { "at": "-10h17m", "level": "info", "event": "run.completed", "msg": "Run afgerond — 38 urenregels gesynchroniseerd", "runId": "r-3a90cc14", "extra": { "durationMs": 4200, "itemsProcessed": 38, "itemsFailed": 0 } },
+            { "at": "-10h17m30s", "level": "info", "event": "run.started", "msg": "Run gestart — nachtelijke synchronisatie", "runId": "r-3a90cc14", "extra": { "trigger": "timer" } },
+            { "at": "-58h16m", "level": "warn", "event": "validation.skipped", "msg": "2 urenregels zonder projectcode overgeslagen", "runId": "r-3a8e0b6a", "extra": { "skipped": 2, "rule": "projectcode-required" } },
+            { "at": "-82h16m", "level": "info", "event": "run.completed", "msg": "Run afgerond — 40 urenregels gesynchroniseerd", "runId": "r-3a8db3f8", "extra": { "durationMs": 4100, "itemsProcessed": 40, "itemsFailed": 0 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "soratus",
+      "name": "Soratus — intern beheer",
+      "internal": true,
+      "environment": "West-Europa",
+      "environmentDetail": "sub-core01 · rg-soratus-platform",
+      "_verwachteStatus": "live — de beheeragents draaien; naast deze vijf staat in dezelfde container de echte registratie van heartbeat-demo",
+      "agents": [
+        {
+          "agentName": "storingsmelder",
+          "displayType": "Monitoring",
+          "version": "2.3.1",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-31d8h",
+          "lastHeartbeatAt": "-4s",
+          "schedule": "* * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + statuswijziging agent",
+          "nextRunAt": "+40s",
+          "runs": [
+            { "runId": "r-1f2a0091", "startedAt": "-20s", "durationMs": 310, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29ff12", "startedAt": "-1m20s", "durationMs": 290, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29fe03", "startedAt": "-2m20s", "durationMs": 340, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29fd88", "startedAt": "-3m20s", "durationMs": 300, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29fc41", "startedAt": "-4m20s", "durationMs": 280, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29fb0d", "startedAt": "-5m20s", "durationMs": 350, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29fa76", "startedAt": "-6m20s", "durationMs": 320, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-1f29f9b2", "startedAt": "-7m20s", "durationMs": 305, "result": "ok", "itemsProcessed": 20, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-19s", "level": "info", "event": "run.completed", "msg": "Ronde afgerond — 20 agents beoordeeld, 2 met melding", "runId": "r-1f2a0091", "extra": { "durationMs": 310, "itemsProcessed": 20, "alerts": 2 } },
+            { "at": "-20s", "level": "error", "event": "alert.sent", "msg": "Storingsmelding verstuurd: bakker-voorraad-sync staat op failed", "runId": "r-1f2a0091", "extra": { "agentName": "bakker-voorraad-sync", "status": "failed", "channel": "mail", "to": "storingen@soratus.com" } },
+            { "at": "-1m19s", "level": "warn", "event": "alert.pending", "msg": "vandijk-mail-triage is degraded maar nog onder de meldrempel van 10 minuten", "runId": "r-1f29ff12", "extra": { "agentName": "vandijk-mail-triage", "silenceSec": 427, "alertThresholdSec": 600 } },
+            { "at": "-3m19s", "level": "info", "event": "run.completed", "msg": "Ronde afgerond — 20 agents beoordeeld, alles binnen de drempel", "runId": "r-1f29fd88", "extra": { "durationMs": 300, "itemsProcessed": 20, "alerts": 0 } },
+            { "at": "-22m", "level": "info", "event": "config.reloaded", "msg": "Meldrempels herladen na deployment 2.3.1", "extra": { "version": "2.3.1", "degradedAfterSec": 600, "failedAfterSec": 0 } },
+            { "at": "-1h4m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 2707200, "memMb": 198 } }
+          ]
+        },
+        {
+          "agentName": "devops-sync",
+          "displayType": "Integratie",
+          "version": "1.1.3",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-18d1h",
+          "lastHeartbeatAt": "-11s",
+          "schedule": "*/15 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + DevOps webhook",
+          "nextRunAt": "+8m",
+          "runs": [
+            { "runId": "r-5c81ba20", "startedAt": "-6m58s", "durationMs": 2240, "result": "ok", "itemsProcessed": 17, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5c80a913", "startedAt": "-21m58s", "durationMs": 2110, "result": "ok", "itemsProcessed": 15, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5c7f6644", "startedAt": "-36m58s", "durationMs": 2390, "result": "ok", "itemsProcessed": 18, "itemsFailed": 0, "trigger": "webhook" },
+            { "runId": "r-5c7e1d02", "startedAt": "-51m58s", "durationMs": 2050, "result": "ok", "itemsProcessed": 15, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5c7cd7f1", "startedAt": "-1h6m", "durationMs": 2280, "result": "ok", "itemsProcessed": 16, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5c7b9088", "startedAt": "-1h21m", "durationMs": 1980, "result": "ok", "itemsProcessed": 14, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-6m56s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 17 work items en 4 uurregels opgehaald", "runId": "r-5c81ba20", "extra": { "durationMs": 2240, "workItems": 17, "hourEntries": 4, "sprint": "Sprint 2026-16" } },
+            { "at": "-6m57s", "level": "info", "event": "hours.imported", "msg": "Completed Work van PBI 4471 als te fiatteren urenregel klaargezet", "runId": "r-5c81ba20", "extra": { "workItemId": 4471, "hours": 1.5, "customerId": "bakker", "status": "pending" } },
+            { "at": "-6m58s", "level": "info", "event": "run.started", "msg": "Run gestart — sprint 2026-16 ophalen", "runId": "r-5c81ba20", "extra": { "trigger": "timer" } },
+            { "at": "-36m50s", "level": "info", "event": "webhook.received", "msg": "DevOps meldde een statuswijziging op work item 4507", "runId": "r-5c7f6644", "extra": { "workItemId": 4507, "state": "Active", "project": "Agents" } },
+            { "at": "-51m50s", "level": "warn", "event": "api.retry", "msg": "Azure DevOps gaf 429, opnieuw geprobeerd na 2000 ms", "runId": "r-5c7e1d02", "extra": { "attempt": 2, "backoffMs": 2000, "endpoint": "GET /_apis/wit/wiql" } },
+            { "at": "-2h9m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 1558800, "memMb": 246 } }
+          ]
+        },
+        {
+          "agentName": "kosten-collector",
+          "displayType": "Cost Management",
+          "version": "1.0.4",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-22d15h",
+          "lastHeartbeatAt": "-26s",
+          "schedule": "0 4 * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer (dagelijks 04:00)",
+          "nextRunAt": "+18h38m",
+          "runs": [
+            { "runId": "r-0b44e910", "startedAt": "-5h22m", "durationMs": 47600, "result": "ok", "itemsProcessed": 7, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-0b43d182", "startedAt": "-29h22m", "durationMs": 44300, "result": "ok", "itemsProcessed": 7, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-0b42ac35", "startedAt": "-53h22m", "durationMs": 51200, "result": "ok", "itemsProcessed": 7, "itemsFailed": 1, "trigger": "timer" },
+            { "runId": "r-0b418f74", "startedAt": "-77h22m", "durationMs": 46800, "result": "ok", "itemsProcessed": 7, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-5h21m", "level": "info", "event": "run.completed", "msg": "Run afgerond — kosten van 7 resource groups opgehaald", "runId": "r-0b44e910", "extra": { "durationMs": 47600, "resourceGroups": 7, "month": "2026-08" } },
+            { "at": "-5h21m30s", "level": "info", "event": "cost.collected", "msg": "Kosten rg-soratus-vitaal opgehaald: € 900,61 tot nu toe deze maand", "runId": "r-0b44e910", "extra": { "resourceGroup": "rg-soratus-vitaal", "amount": 900.61, "currency": "EUR" } },
+            { "at": "-5h22m", "level": "info", "event": "run.started", "msg": "Run gestart — kosten per resource group", "runId": "r-0b44e910", "extra": { "trigger": "timer", "month": "2026-08" } },
+            { "at": "-53h20m", "level": "warn", "event": "api.retry", "msg": "Cost Management gaf 429 op rg-soratus-bakker, opnieuw geprobeerd na 4000 ms", "runId": "r-0b42ac35", "extra": { "attempt": 3, "backoffMs": 4000, "resourceGroup": "rg-soratus-bakker" } },
+            { "at": "-2h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 1953000, "memMb": 174 } }
+          ]
+        },
+        {
+          "agentName": "maandfactuur-snelstart",
+          "displayType": "Facturatie",
+          "version": "1.2.0",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-54d3h",
+          "lastHeartbeatAt": "-17s",
+          "schedule": "0 6 1 * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer (1e van de maand)",
+          "nextRunAt": "+12d20h",
+          "runs": [
+            { "runId": "r-7e0100aa", "startedAt": "-18d3h", "durationMs": 21400, "result": "ok", "itemsProcessed": 5, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-7e00f3b1", "startedAt": "-49d3h", "durationMs": 19800, "result": "ok", "itemsProcessed": 5, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-7e00e207", "startedAt": "-79d3h", "durationMs": 23100, "result": "ok", "itemsProcessed": 4, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-18d3h", "level": "info", "event": "run.completed", "msg": "Run afgerond — 5 conceptfacturen klaargezet in SnelStart", "runId": "r-7e0100aa", "extra": { "durationMs": 21400, "itemsProcessed": 5, "month": "2026-07" } },
+            { "at": "-18d3h1m", "level": "info", "event": "invoice.drafted", "msg": "Conceptfactuur voor Coöperatie Vitaal klaargezet: € 972,65", "runId": "r-7e0100aa", "extra": { "customerId": "vitaal", "amount": 972.65, "invoiceNr": "F2026-0717" } },
+            { "at": "-18d3h2m", "level": "warn", "event": "hours.pending", "msg": "3 urenregels stonden nog op te fiatteren en zijn niet meegenomen", "runId": "r-7e0100aa", "extra": { "pending": 3, "customerIds": ["bakker", "meijer"] } },
+            { "at": "-18d3h3m", "level": "info", "event": "run.started", "msg": "Run gestart — maandfacturatie 2026-07", "runId": "r-7e0100aa", "extra": { "trigger": "timer", "month": "2026-07" } },
+            { "at": "-3h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 4676400, "memMb": 210 } }
+          ]
+        },
+        {
+          "agentName": "urensync-mcp",
+          "displayType": "Integratie",
+          "version": "0.8.2",
+          "environment": "prod",
+          "lifecycle": "idleWaiting",
+          "startedAt": "-9d3h",
+          "lastHeartbeatAt": "-20s",
+          "schedule": null,
+          "triggerKind": "http",
+          "triggerDetail": "MCP-tool uren.boeken",
+          "nextRunAt": null,
+          "runs": [
+            { "runId": "r-8a1140c2", "startedAt": "-8m5s", "durationMs": 420, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-8a1032e9", "startedAt": "-52m", "durationMs": 380, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-8a0f2144", "startedAt": "-2h17m", "durationMs": 460, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-8a0e1830", "startedAt": "-4h9m", "durationMs": 350, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-8a0d0f6b", "startedAt": "-6h41m", "durationMs": 400, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" }
+          ],
+          "logs": [
+            { "at": "-1m30s", "level": "info", "event": "lifecycle.idle", "msg": "Geen MCP-aanroepen; wacht op werk", "extra": { "reason": "geen aanroep" } },
+            { "at": "-8m4s", "level": "info", "event": "hours.booked", "msg": "Urenregel van Claude Code ontvangen en op te fiatteren gezet", "runId": "r-8a1140c2", "extra": { "customerId": "vandijk", "hours": 2.5, "category": "Ontwikkeling", "by": "Claude Code — Marcel", "status": "pending" } },
+            { "at": "-8m5s", "level": "info", "event": "run.started", "msg": "Run gestart — MCP-aanroep uren.boeken", "runId": "r-8a1140c2", "extra": { "trigger": "http", "tool": "uren.boeken" } },
+            { "at": "-2h16m", "level": "warn", "event": "validation.failed", "msg": "Urenregel zonder categorie ontvangen; standaard 'Ontwikkeling' toegepast", "runId": "r-8a0f2144", "extra": { "rule": "category-required", "applied": "Ontwikkeling" } },
+            { "at": "-1h30m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 788400, "memMb": 132 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "vitaal",
+      "name": "Coöperatie Vitaal",
+      "environment": "West-Europa",
+      "environmentDetail": "sub-9c3140 · rg-soratus-vitaal",
+      "_verwachteStatus": "live",
+      "agents": [
+        {
+          "agentName": "vitaal-declaratie-intake",
+          "displayType": "Document-intake",
+          "version": "2.1.4",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-17d2h",
+          "lastHeartbeatAt": "-6s",
+          "schedule": "*/5 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + mailbox (declaraties)",
+          "nextRunAt": "+3m",
+          "runs": [
+            { "runId": "r-4f7712a0", "startedAt": "-1m29s", "durationMs": 2140, "result": "ok", "itemsProcessed": 11, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4f76f318", "startedAt": "-6m29s", "durationMs": 2380, "result": "ok", "itemsProcessed": 9, "itemsFailed": 1, "trigger": "timer" },
+            { "runId": "r-4f76d221", "startedAt": "-11m29s", "durationMs": 1960, "result": "ok", "itemsProcessed": 8, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4f76b104", "startedAt": "-16m29s", "durationMs": 2270, "result": "ok", "itemsProcessed": 10, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4f769033", "startedAt": "-21m29s", "durationMs": 2050, "result": "ok", "itemsProcessed": 7, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4f766f9c", "startedAt": "-26m29s", "durationMs": 2410, "result": "ok", "itemsProcessed": 12, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4f764e58", "startedAt": "-31m29s", "durationMs": 1880, "result": "ok", "itemsProcessed": 6, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-4f762d11", "startedAt": "-36m29s", "durationMs": 2190, "result": "ok", "itemsProcessed": 9, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-1m27s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 11 declaraties verwerkt", "runId": "r-4f7712a0", "extra": { "durationMs": 2140, "itemsProcessed": 11, "itemsFailed": 0 } },
+            { "at": "-1m28s", "level": "info", "event": "document.processed", "msg": "Declaratie verwerkt", "runId": "r-4f7712a0", "extra": { "docId": "DEC-2026-8841", "amount": 148.2 } },
+            { "at": "-1m29s", "level": "info", "event": "run.started", "msg": "Run gestart — 11 declaraties in de mailbox", "runId": "r-4f7712a0", "extra": { "queueDepth": 11, "trigger": "timer" } },
+            { "at": "-6m27s", "level": "error", "event": "validation.failed", "msg": "Declaratie zonder bonnummer afgekeurd", "runId": "r-4f76f318", "extra": { "docId": "DEC-2026-8836", "rule": "bonnummer-required" } },
+            { "at": "-11m28s", "level": "info", "event": "document.processed", "msg": "Declaratie verwerkt", "runId": "r-4f76d221", "extra": { "docId": "DEC-2026-8829", "amount": 62.5 } },
+            { "at": "-26m20s", "level": "warn", "event": "scale.up", "msg": "Piek in aanbod; tijdelijk opgeschaald naar 3 replica's", "runId": "r-4f766f9c", "extra": { "replicas": 3, "queueDepth": 12 } },
+            { "at": "-52m", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 1483200, "memMb": 528 } }
+          ]
+        },
+        {
+          "agentName": "vitaal-mail-triage",
+          "displayType": "Mail-triage",
+          "version": "2.0.1",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-5d7h",
+          "lastHeartbeatAt": "-9s",
+          "schedule": "*/5 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + Graph-subscription (Inbox)",
+          "nextRunAt": "+3m",
+          "runs": [
+            { "runId": "r-6e5501f4", "startedAt": "-1m5s", "durationMs": 610, "result": "ok", "itemsProcessed": 4, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6e54e0a3", "startedAt": "-6m5s", "durationMs": 580, "result": "ok", "itemsProcessed": 5, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6e54bf12", "startedAt": "-11m5s", "durationMs": 640, "result": "ok", "itemsProcessed": 6, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6e549e70", "startedAt": "-16m5s", "durationMs": 520, "result": "skipped", "itemsProcessed": 0, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6e547d0b", "startedAt": "-21m5s", "durationMs": 700, "result": "ok", "itemsProcessed": 7, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-6e545c99", "startedAt": "-26m5s", "durationMs": 560, "result": "ok", "itemsProcessed": 4, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-1m4s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 4 mails getrieerd", "runId": "r-6e5501f4", "extra": { "durationMs": 610, "itemsProcessed": 4, "itemsFailed": 0 } },
+            { "at": "-1m5s", "level": "info", "event": "run.started", "msg": "Run gestart — delta-query", "runId": "r-6e5501f4", "extra": { "trigger": "timer" } },
+            { "at": "-6m4s", "level": "info", "event": "mail.classified", "msg": "Mail ingedeeld bij bedrijfsbureau", "runId": "r-6e54e0a3", "extra": { "category": "bedrijfsbureau", "confidence": 0.88 } },
+            { "at": "-16m5s", "level": "info", "event": "queue.empty", "msg": "Geen nieuwe mails — run overgeslagen", "runId": "r-6e549e70", "extra": { "queueDepth": 0 } },
+            { "at": "-21m", "level": "warn", "event": "mail.unclassified", "msg": "Mail kon niet met zekerheid ingedeeld worden en is naar de restbak gezet", "runId": "r-6e547d0b", "extra": { "confidence": 0.41, "threshold": 0.6 } },
+            { "at": "-46m", "level": "info", "event": "auth.refreshed", "msg": "Graph-token vernieuwd", "extra": { "scope": "Mail.ReadWrite", "expiresInSec": 3599 } }
+          ]
+        },
+        {
+          "agentName": "vitaal-rooster-bot",
+          "displayType": "Planning",
+          "version": "1.0.2",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-8d14h",
+          "lastHeartbeatAt": "-14s",
+          "schedule": "0 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer (elk uur)",
+          "nextRunAt": "+38m",
+          "runs": [
+            { "runId": "r-2d9930bc", "startedAt": "-21m52s", "durationMs": 3350, "result": "ok", "itemsProcessed": 46, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-2d992188", "startedAt": "-1h21m52s", "durationMs": 3180, "result": "ok", "itemsProcessed": 44, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-2d991204", "startedAt": "-2h21m52s", "durationMs": 3520, "result": "ok", "itemsProcessed": 47, "itemsFailed": 2, "trigger": "timer" },
+            { "runId": "r-2d990371", "startedAt": "-3h21m52s", "durationMs": 3290, "result": "ok", "itemsProcessed": 45, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-2d98f4e6", "startedAt": "-4h21m52s", "durationMs": 3410, "result": "ok", "itemsProcessed": 46, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-21m49s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 46 diensten herberekend", "runId": "r-2d9930bc", "extra": { "durationMs": 3350, "itemsProcessed": 46, "itemsFailed": 0 } },
+            { "at": "-21m52s", "level": "info", "event": "run.started", "msg": "Run gestart — rooster van vandaag", "runId": "r-2d9930bc", "extra": { "trigger": "timer" } },
+            { "at": "-2h21m49s", "level": "warn", "event": "cao.conflict", "msg": "2 diensten botsen met de cao-rusttijd en zijn gemarkeerd", "runId": "r-2d991204", "extra": { "conflicts": 2, "rule": "rusttijd-11u" } },
+            { "at": "-3h21m50s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 45 diensten herberekend", "runId": "r-2d990371", "extra": { "durationMs": 3290, "itemsProcessed": 45, "itemsFailed": 0 } },
+            { "at": "-5h", "level": "info", "event": "config.reloaded", "msg": "Cao-regels 2026 herladen", "extra": { "version": "1.0.2", "ruleSet": "cao-2026" } },
+            { "at": "-8h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 743400, "memMb": 356 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "meijer",
+      "name": "Meijer Advocaten",
+      "environment": "West-Europa",
+      "environmentDetail": "sub-05de13 · rg-soratus-meijer",
+      "_verwachteStatus": "live",
+      "agents": [
+        {
+          "agentName": "meijer-contractcheck",
+          "displayType": "Document-analyse",
+          "version": "1.2.0",
+          "environment": "prod",
+          "lifecycle": "running",
+          "startedAt": "-21d8h",
+          "lastHeartbeatAt": "-22s",
+          "schedule": null,
+          "triggerKind": "http",
+          "triggerDetail": "Upload (dossierportaal)",
+          "nextRunAt": null,
+          "runs": [
+            { "_waarom": "Een run die nog loopt. Geen durationMs en dus geen finishedAt: de kolommen duur en resultaat horen leeg te blijven, niet op nul te staan. itemsProcessed is 0 omdat de bibliotheek dit document bij het starten wegschrijft en pas bij het afronden bijwerkt. Telt niet mee voor de status — die kijkt alleen naar de laatste afgeronde run.", "runId": "r-1a672e88", "startedAt": "-40s", "result": "running", "itemsProcessed": 0, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-1a6620d5", "startedAt": "-7m5s", "durationMs": 9700, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-1a651e42", "startedAt": "-38m", "durationMs": 11200, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-1a641b90", "startedAt": "-1h47m", "durationMs": 8400, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-1a63180c", "startedAt": "-3h12m", "durationMs": 10600, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-1a621577", "startedAt": "-5h33m", "durationMs": 9100, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" }
+          ],
+          "logs": [
+            { "at": "-40s", "level": "info", "event": "run.started", "msg": "Run gestart — upload uit dossierportaal, 62 pagina's", "runId": "r-1a672e88", "extra": { "docId": "DOS-2026-1196", "pages": 62, "trigger": "http" } },
+            { "at": "-6m55s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 1 contract geanalyseerd, 3 aandachtspunten", "runId": "r-1a6620d5", "extra": { "durationMs": 9700, "itemsProcessed": 1, "findings": 3 } },
+            { "at": "-7m", "level": "warn", "event": "clause.flagged", "msg": "Clausule 7.3 wijkt af van het huismodel: opzegtermijn 6 maanden", "runId": "r-1a6620d5", "extra": { "clause": "7.3", "expected": "3 maanden", "found": "6 maanden" } },
+            { "at": "-7m5s", "level": "info", "event": "run.started", "msg": "Run gestart — upload uit dossierportaal", "runId": "r-1a6620d5", "extra": { "docId": "DOS-2026-1194", "trigger": "http" } },
+            { "at": "-37m50s", "level": "info", "event": "document.processed", "msg": "Contract geanalyseerd", "runId": "r-1a651e42", "extra": { "docId": "DOS-2026-1191", "pages": 24 } },
+            { "at": "-1h46m", "level": "warn", "event": "ocr.lowConfidence", "msg": "Gescande bijlage slecht leesbaar; alleen de hoofdtekst geanalyseerd", "runId": "r-1a641b90", "extra": { "ocrConfidence": 0.58, "threshold": 0.8 } },
+            { "at": "-4h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 1843200, "memMb": 690 } }
+          ]
+        },
+        {
+          "agentName": "meijer-dossier-indexering",
+          "displayType": "Indexering",
+          "version": "0.4.3",
+          "environment": "prod",
+          "lifecycle": "idleWaiting",
+          "startedAt": "-15d9h",
+          "lastHeartbeatAt": "-24s",
+          "schedule": "30 4 * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer (nachtelijk)",
+          "nextRunAt": "+19h8m",
+          "runs": [
+            { "runId": "r-3b2201ea", "startedAt": "-4h52m", "durationMs": 61400, "result": "ok", "itemsProcessed": 1284, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-3b21f0c3", "startedAt": "-28h52m", "durationMs": 58900, "result": "ok", "itemsProcessed": 1261, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-3b21df41", "startedAt": "-52h52m", "durationMs": 63200, "result": "ok", "itemsProcessed": 1298, "itemsFailed": 4, "trigger": "timer" },
+            { "runId": "r-3b21ce08", "startedAt": "-76h52m", "durationMs": 57100, "result": "ok", "itemsProcessed": 1240, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-3m", "level": "info", "event": "lifecycle.idle", "msg": "Niets te doen tot de nachtrun van 04:30", "extra": { "nextRun": "04:30" } },
+            { "at": "-4h51m", "level": "info", "event": "run.completed", "msg": "Run afgerond — 1284 documenten geïndexeerd", "runId": "r-3b2201ea", "extra": { "durationMs": 61400, "itemsProcessed": 1284, "itemsFailed": 0 } },
+            { "at": "-4h52m", "level": "info", "event": "run.started", "msg": "Run gestart — nachtelijke indexering", "runId": "r-3b2201ea", "extra": { "trigger": "timer" } },
+            { "at": "-52h51m", "level": "warn", "event": "index.skipped", "msg": "4 documenten met wachtwoord overgeslagen", "runId": "r-3b21df41", "extra": { "skipped": 4, "reason": "beveiligde PDF" } },
+            { "at": "-76h51m", "level": "info", "event": "run.completed", "msg": "Run afgerond — 1240 documenten geïndexeerd", "runId": "r-3b21ce08", "extra": { "durationMs": 57100, "itemsProcessed": 1240, "itemsFailed": 0 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "kroon",
+      "name": "Kroon Techniek BV",
+      "environment": "West-Europa",
+      "environmentDetail": "sub-e820a7 · rg-soratus-kroon",
+      "_verwachteStatus": "idle — beide agents melden zich netjes maar hebben niets te doen; dit is de klant tussen de live klanten en de klant zonder agents",
+      "agents": [
+        {
+          "agentName": "kroon-factuur-intake",
+          "displayType": "Document-intake",
+          "version": "1.4.2",
+          "environment": "prod",
+          "lifecycle": "idleWaiting",
+          "startedAt": "-4d9h",
+          "lastHeartbeatAt": "-27s",
+          "schedule": "0,30 * * * *",
+          "triggerKind": "timer",
+          "triggerDetail": "Timer + blob-drop (inbox-facturen)",
+          "nextRunAt": "+6m",
+          "runs": [
+            { "runId": "r-5f31a2c0", "startedAt": "-23m41s", "durationMs": 290, "result": "skipped", "itemsProcessed": 0, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5f3091b4", "startedAt": "-53m41s", "durationMs": 1620, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5f2f8033", "startedAt": "-1h23m41s", "durationMs": 1480, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5f2e7f12", "startedAt": "-1h53m41s", "durationMs": 310, "result": "skipped", "itemsProcessed": 0, "itemsFailed": 0, "trigger": "timer" },
+            { "runId": "r-5f2d6e88", "startedAt": "-2h23m41s", "durationMs": 1710, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "timer" }
+          ],
+          "logs": [
+            { "at": "-2m30s", "level": "info", "event": "lifecycle.idle", "msg": "Geen nieuwe facturen; wacht op de volgende ronde", "extra": { "queueDepth": 0 } },
+            { "at": "-23m41s", "level": "info", "event": "queue.empty", "msg": "Geen nieuwe documenten — run overgeslagen", "runId": "r-5f31a2c0", "extra": { "queueDepth": 0 } },
+            { "at": "-53m38s", "level": "info", "event": "run.completed", "msg": "Run afgerond — 2 facturen verwerkt", "runId": "r-5f3091b4", "extra": { "durationMs": 1620, "itemsProcessed": 2, "itemsFailed": 0 } },
+            { "at": "-53m40s", "level": "info", "event": "document.processed", "msg": "Factuur verwerkt", "runId": "r-5f3091b4", "extra": { "docId": "INV-0442", "supplier": "Rensink Elektro" } },
+            { "at": "-1h23m38s", "level": "warn", "event": "supplier.unknown", "msg": "Leverancier niet in de regels gevonden; factuur op de handmatige stapel gezet", "runId": "r-5f2f8033", "extra": { "supplier": "De Vries Techniek", "docId": "INV-0441" } },
+            { "at": "-3h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 378000, "memMb": 288 } }
+          ]
+        },
+        {
+          "agentName": "kroon-onderdelen-lookup",
+          "displayType": "Lookup-API",
+          "version": "0.3.1",
+          "environment": "prod",
+          "lifecycle": "idleWaiting",
+          "startedAt": "-2d17h",
+          "lastHeartbeatAt": "-21s",
+          "schedule": null,
+          "triggerKind": "http",
+          "triggerDetail": "HTTP (intern portaal)",
+          "nextRunAt": null,
+          "runs": [
+            { "runId": "r-0e44b312", "startedAt": "-1h40m", "durationMs": 380, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-0e43a1f7", "startedAt": "-2h9m", "durationMs": 420, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-0e429044", "startedAt": "-2h51m", "durationMs": 350, "result": "ok", "itemsProcessed": 2, "itemsFailed": 0, "trigger": "http" },
+            { "runId": "r-0e417e90", "startedAt": "-3h38m", "durationMs": 390, "result": "ok", "itemsProcessed": 1, "itemsFailed": 0, "trigger": "http" }
+          ],
+          "logs": [
+            { "at": "-4m", "level": "info", "event": "lifecycle.idle", "msg": "Geen aanvragen uit het interne portaal; wacht op werk", "extra": { "reason": "geen aanroep" } },
+            { "at": "-1h39m", "level": "info", "event": "run.completed", "msg": "Run afgerond — 1 onderdeel opgezocht", "runId": "r-0e44b312", "extra": { "durationMs": 380, "itemsProcessed": 1 } },
+            { "at": "-1h40m", "level": "info", "event": "run.started", "msg": "Run gestart — lookup op artikelnummer", "runId": "r-0e44b312", "extra": { "trigger": "http", "sku": "KR-1180-A" } },
+            { "at": "-2h50m", "level": "warn", "event": "cache.miss", "msg": "Twee opzoekingen buiten de cache; leveranciers-API geraadpleegd", "runId": "r-0e429044", "extra": { "misses": 2, "cacheTtlSec": 900 } },
+            { "at": "-6h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 234000, "memMb": 96 } }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "nieuw",
+      "name": "Nieuwe klant (onboarding)",
+      "environment": "West-Europa",
+      "environmentDetail": "sub-1f04bd · rg-soratus-nieuw",
+      "_verwachteStatus": "geen agents — dit is de lege staat en die hoort er expliciet in te staan",
+      "agents": []
+    }
+  ]
+}
