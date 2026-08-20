@@ -12,6 +12,8 @@ met een klikbare mockup ernaast. Deze map bevat wat er tijdens het bouwen is bes
 | [`agent-contract.md`](agent-contract.md) | **Lees dit als je een agent bouwt.** De drie documenttypen, de veldbetekenissen, en wat je zelf moet zetten |
 | [`fase-0-afwijkingen.md`](fase-0-afwijkingen.md) | Waar we van de spec afwijken, en waarom |
 | [`deploy.md`](deploy.md) | Welke workflow wanneer draait, en hoe je terugrolt |
+| [`infra.md`](infra.md) | De Bicep-templates, en hoe je een klantomgeving uitrolt |
+| [`stand-van-zaken.md`](stand-van-zaken.md) | Werkdocument: wat er open staat |
 
 ## De onderdelen
 

@@ -1,0 +1,13 @@
+{
+  "web": {
+    "logoutUrl": "https://portal.soratus.com/signout-oidc",
+    "redirectUris": [
+      "https://portal.soratus.com/signin-oidc",
+      "https://localhost:7221/signin-oidc"
+    ],
+    "implicitGrantSettings": {
+      "enableIdTokenIssuance": true,
+      "enableAccessTokenIssuance": false
+    }
+  }
+}

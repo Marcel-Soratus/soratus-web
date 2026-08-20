@@ -1,0 +1,18 @@
+[
+  {
+    "allowedMemberTypes": [ "User" ],
+    "description": "Soratus-medewerker. Ziet alle klanten, mag urenregels fiatteren en koppelingen inzien.",
+    "displayName": "Operator",
+    "id": "e9290944-a9f0-4390-a69d-fb4ab0e5b7e0",
+    "isEnabled": true,
+    "value": "Operator"
+  },
+  {
+    "allowedMemberTypes": [ "User" ],
+    "description": "Klantgebruiker. Ziet uitsluitend de eigen omgeving, altijd read-only.",
+    "displayName": "Klant",
+    "id": "c254bf6c-f40b-4d9f-b27b-7ba473dd82dd",
+    "isEnabled": true,
+    "value": "Klant"
+  }
+]
