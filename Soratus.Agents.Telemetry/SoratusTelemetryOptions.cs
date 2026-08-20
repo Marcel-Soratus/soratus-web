@@ -1,3 +1,5 @@
+using Soratus.Agents.Contracts;
+
 namespace Soratus.Agents.Telemetry;
 
 /// <summary>
@@ -76,10 +78,18 @@ public sealed class SoratusTelemetryOptions
     public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Maximale lengte van een logbericht. Langere berichten worden afgekapt met een
-    /// duidelijke markering, zodat één regel nooit een document laat klappen.
+    /// Ruime hygiënegrens op de lengte van <c>msg</c>, tegen één absurd lange ononderbroken regel.
     /// </summary>
-    public int MaxMessageLength { get; set; } = 16_384;
+    /// <remarks>
+    /// Dit is <em>niet</em> het mechanisme dat interne details uit <c>msg</c> houdt. Dat doet de
+    /// knip op de eerste regelovergang: <c>msg</c> is één zin en een zin bevat geen
+    /// regelafbreking. Een lengtegrens is daar gemeten ongeschikt voor — de langste legitieme
+    /// eerste regel in de opslag was 1417 tekens, dus elke grens die een stacktrace tegenhoudt
+    /// verminkt ook geldig proza. Deze grens staat daarom ruim en gaat in de praktijk nooit af.
+    /// Slaat hij toch toe, dan wordt er op een grafeemgrens geknipt en gaat de rest naar dezelfde
+    /// sleutel in <c>extra</c>.
+    /// </remarks>
+    public int MaxMessageLength { get; set; } = MessageTruncation.DefaultMaxLength;
 
     /// <summary>Maximale lengte van de geserialiseerde <c>extra</c>-JSON.</summary>
     public int MaxExtraLength { get; set; } = 131_072;

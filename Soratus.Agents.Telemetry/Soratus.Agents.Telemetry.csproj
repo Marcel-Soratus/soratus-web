@@ -29,4 +29,13 @@
     <ProjectReference Include="..\Soratus.Agents.Contracts\Soratus.Agents.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      De knip op msg en de UTC-normalisatie zitten in internal typen, omdat ze geen deel van de
+      publieke API zijn. Ze zijn wel precies wat getest moet worden: het zijn de twee dingen die
+      stil fout kunnen gaan. Het testproject mag er daarom bij.
+    -->
+    <InternalsVisibleTo Include="Soratus.Agents.Telemetry.Tests" />
+  </ItemGroup>
+
 </Project>

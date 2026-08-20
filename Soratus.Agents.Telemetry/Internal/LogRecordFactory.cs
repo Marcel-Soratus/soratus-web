@@ -15,6 +15,20 @@ internal sealed class LogRecordFactory(AgentIdentity identity, IOptions<SoratusT
     /// <summary>De maximale lengte van de <c>extra</c>-JSON.</summary>
     internal int MaxExtraLength => _options.MaxExtraLength;
 
+    /// <summary>
+    /// Bouwt één logregel.
+    /// </summary>
+    /// <remarks>
+    /// Dit is de enige plek waar een <see cref="LogRecord"/> ontstaat, en daarom de enige plek waar
+    /// de knip op <c>msg</c> wordt aangeroepen — de knip zelf staat in
+    /// <see cref="MessageTruncation"/> in <c>Soratus.Agents.Contracts</c>, zodat het portaal bij het
+    /// projecteren naar de klant dezelfde definitie gebruikt. Beide schrijfpaden komen hier langs: de
+    /// <c>ILoggerProvider</c> — waarlangs een bestaande agent met gewone <c>ILogger</c>-aanroepen
+    /// logt — en <see cref="AgentRun.Fail(Exception)"/>, dat de foutboodschap van een uitzondering
+    /// in <c>msg</c> zet. Dat tweede pad is niet theoretisch: de boodschap van een
+    /// <c>CosmosException</c> is een halve pagina met diagnostiek, en die zou zonder deze knip
+    /// rechtstreeks in het veld belanden dat de klant leest.
+    /// </remarks>
     internal LogRecord Create(
         Contracts.LogLevel level,
         string eventName,
@@ -22,6 +36,18 @@ internal sealed class LogRecordFactory(AgentIdentity identity, IOptions<SoratusT
         JsonElement? extra,
         DateTimeOffset timestamp)
     {
+        (string msg, string? overflow) = MessageTruncation.Cut(message, _options.MaxMessageLength);
+
+        if (overflow is not null)
+        {
+            extra = ExtraJson.WithField(
+                extra,
+                MessageTruncation.OverflowKey,
+                overflow.Length <= _options.MaxExtraLength
+                    ? overflow
+                    : overflow[.._options.MaxExtraLength]);
+        }
+
         return new LogRecord
         {
             Id = UlidGenerator.NewUlid(timestamp),
@@ -29,23 +55,11 @@ internal sealed class LogRecordFactory(AgentIdentity identity, IOptions<SoratusT
             Timestamp = timestamp,
             Level = level,
             Event = string.IsNullOrWhiteSpace(eventName) ? "log" : eventName,
-            Message = Truncate(message),
+            Message = msg,
             RunId = RunScope.Current?.RunId,
             Extra = extra,
             CustomerId = identity.CustomerId,
             AgentName = identity.AgentName,
         };
-    }
-
-    private string Truncate(string message)
-    {
-        if (string.IsNullOrEmpty(message))
-        {
-            return "(geen bericht)";
-        }
-
-        return message.Length <= _options.MaxMessageLength
-            ? message
-            : string.Concat(message.AsSpan(0, _options.MaxMessageLength), " … (afgekapt)");
     }
 }

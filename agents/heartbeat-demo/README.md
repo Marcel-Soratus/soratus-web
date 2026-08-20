@@ -97,8 +97,18 @@ De `error`-regels zijn uit te klappen naar de volledige JSON, met de stacktrace 
 `_exception.stackTrace`. Bij `document.processed` zit onder `extra` het veld `docId` — dat komt
 letterlijk uit `logger.AgentEvent("document.processed", …, new { docId })`.
 
-Ongeveer elke zevende run staat er een `payload.dump`-regel van een paar duizend tekens tussen.
-Die is er om te controleren dat de logtabel netjes afbreekt in plaats van uit te lopen.
+Ongeveer elke zevende run staan er twee bijzondere regels tussen, en ze testen tegengestelde
+dingen:
+
+- **`payload.dump`** — ruim duizend tekens op **één** regel. Die moet de knip op `msg`
+  **overleven** en volledig in `msg` staan, zonder markering en zonder `msgOverflow`. Hij is er om
+  te controleren dat de logtabel netjes afbreekt in plaats van uit te lopen.
+- **`payload.trace`** — één zin, daarna zestien regels die op een stacktrace lijken. Die moet
+  **geknipt** worden: in `msg` staat alleen de eerste zin plus `" … (ingekort)"`, en de zestien
+  regels staan onder `extra.msgOverflow` en zijn dus alleen voor de operator.
+
+Zonder dat eerste geval zou de afbreektest zijn onderwerp kwijt zijn zodra de knip er is; zonder
+het tweede zou niemand merken als de knip stopt met werken.
 
 **Wat je níet moet zien** zijn `debug`- en `trace`-regels. Die worden door de bibliotheek
 volledig weggefilterd; ze horen in Application Insights en niet in een scherm dat een operator

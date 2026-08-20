@@ -64,10 +64,22 @@ public sealed class HeartbeatDemoAgent(
 
         if (_options.LongLineRate > 0 && minute % _options.LongLineRate == 0)
         {
-            // Voor het uitklappaneel van het portaal: één regel die niet in een tabelcel past.
+            // Twee gevallen, en ze testen tegengestelde dingen. Deze moet de knip overléven: één
+            // ononderbroken regel van ruim duizend tekens, zodat de logtabel op afbreken getest
+            // blijft worden. Zou hij geknipt worden, dan is de afbreektest zijn onderwerp kwijt.
             logger.AgentEvent("payload.dump", string.Join(' ',
-                    Enumerable.Repeat("Deze regel is met opzet belachelijk lang zodat het portaal kan bewijzen dat hij netjes afbreekt.", 40)),
-                new { lines = 40, purpose = "test van de uitklapbare JSON" });
+                    Enumerable.Repeat("Deze regel is met opzet belachelijk lang zodat het portaal kan bewijzen dat hij netjes afbreekt.", 14)),
+                new { lines = 1, purpose = "afbreektest van de logtabel — moet heel blijven" });
+
+            // En deze moet juist geknipt worden: één zin, daarna regelafbrekingen met wat op een
+            // stacktrace lijkt. In msg hoort alleen de eerste regel te overleven; de rest hoort
+            // onder msgOverflow te staan en is dus operator-only.
+            logger.AgentEvent("payload.trace", string.Join('\n',
+                    ["De voorraadregels van deze batch konden niet volledig worden gevalideerd.",
+                     .. Enumerable.Repeat(
+                        "   at Soratus.Demo.Validators.StockLineValidator.Validate(StockLine line) in /src/Demo/Validators/StockLineValidator.cs:line 42",
+                        16)]),
+                new { lines = 17, purpose = "kniptest op de regelovergang — moet geknipt worden" });
         }
 
         if (_options.FailureRate > 0 && minute % _options.FailureRate == 0)

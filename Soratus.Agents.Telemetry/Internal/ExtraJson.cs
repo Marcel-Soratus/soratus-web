@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -62,6 +63,50 @@ internal static class ExtraJson
         }
 
         return Serialize(fields, maxLength);
+    }
+
+    /// <summary>
+    /// Geeft <paramref name="extra"/> terug met <paramref name="name"/> erin gezet.
+    /// </summary>
+    /// <remarks>
+    /// Een bestaande sleutel met dezelfde naam wordt overschreven. Dat is de enige consistente
+    /// uitkomst voor een gereserveerde naam: een tweede sleutel ernaast zou betekenen dat het
+    /// portaal twee vormen moet kennen.
+    /// </remarks>
+    internal static JsonElement WithField(JsonElement? extra, string name, string value)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+
+            switch (extra)
+            {
+                case { ValueKind: JsonValueKind.Object } existing:
+                    foreach (JsonProperty property in existing.EnumerateObject())
+                    {
+                        if (!property.NameEquals(name))
+                        {
+                            property.WriteTo(writer);
+                        }
+                    }
+
+                    break;
+
+                // extra was geen object — dat komt hier niet voor, maar weggooien van context is
+                // nooit het juiste antwoord.
+                case { ValueKind: not JsonValueKind.Null and not JsonValueKind.Undefined } other:
+                    writer.WritePropertyName("_payload");
+                    other.WriteTo(writer);
+                    break;
+            }
+
+            writer.WriteString(name, value);
+            writer.WriteEndObject();
+        }
+
+        return JsonSerializer.Deserialize<JsonElement>(buffer.WrittenSpan);
     }
 
     private static void AppendPayload(Dictionary<string, object?> fields, object? payload)

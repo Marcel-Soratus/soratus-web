@@ -60,9 +60,11 @@ public static class SoratusAgentBuilderExtensions
             return builder;
         }
 
-        // Vóór alles: bewijzen dat tijden nog steeds als UTC met vaste precisie de deur uit gaan.
-        // Zonder die eigenschap sorteert het portaal logregels en runs stil verkeerd.
+        // Vóór alles: de twee eigenschappen bewijzen die stil fout kunnen gaan. Tijden moeten als
+        // UTC met vaste precisie de deur uit, anders sorteert het portaal verkeerd; en msg moet op
+        // de eerste regelovergang geknipt worden, anders leest een klant onze stacktraces.
         TelemetryJson.AssertCanonicalUtc();
+        MessageTruncation.AssertContract();
 
         AgentIdentity identity = ResolveIdentity(builder.Configuration, builder.Environment);
         SoratusTelemetryOptions options = ResolveOptions(builder.Configuration, configure);
@@ -216,6 +218,14 @@ public static class SoratusAgentBuilderExtensions
         {
             throw new InvalidOperationException(
                 $"{EndpointKey} moet een absolute https-URL zijn, maar is '{options.Endpoint}'.");
+        }
+
+        if (options.MaxMessageLength < MessageTruncation.MinimumLength)
+        {
+            throw new InvalidOperationException(
+                $"MaxMessageLength staat op {options.MaxMessageLength}, en onder " +
+                $"{MessageTruncation.MinimumLength} past de markering '{MessageTruncation.Marker}' zelf niet meer. " +
+                "Let op dat deze grens alleen hygiëne is; de knip op de eerste regelovergang doet het werk.");
         }
 
         if (options.Endpoint.Contains("AccountKey", StringComparison.OrdinalIgnoreCase))
