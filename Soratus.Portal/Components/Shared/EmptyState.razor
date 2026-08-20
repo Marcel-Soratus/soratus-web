@@ -1,0 +1,76 @@
+@* De lege staat: glyphtegel, kop, uitleg, en optioneel een feitenregel.
+
+   §8 geeft hier geen patroon voor terwijl §3.2 er wel om vraagt (een net aangesloten klant zonder
+   agents). Vorm en maten komen daarom uit de mockup: gestippelde rand, 30px glyphtegel, tekst tot
+   62ch en een mono feitenregel.
+
+   De uitleg zegt wat er wél is en wat er gaat gebeuren. Een lege staat die alleen "geen
+   resultaten" meldt, laat de lezer denken dat er iets stuk is. *@
+
+<div @attributes="AdditionalAttributes" class="@CssClass">
+    <span class="empty-state__glyph" aria-hidden="true">@Glyph</span>
+    <div class="empty-state__content">
+        <h2 class="empty-state__title">@Title</h2>
+        @if (ChildContent is not null)
+        {
+            <div class="empty-state__text">@ChildContent</div>
+        }
+        else if (!string.IsNullOrWhiteSpace(Text))
+        {
+            <p class="empty-state__text">@Text</p>
+        }
+        @if (Facts is { Count: > 0 })
+        {
+            <div class="empty-state__facts">
+                @foreach (var fact in Facts)
+                {
+                    <span>@fact</span>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// De kop, bijvoorbeeld "Nog geen agents in deze omgeving". Rendert als <c>h2</c> en hoort
+    /// dus onder de <c>h1</c> van de pagina te staan.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>De uitleg eronder: wat er wél is en wat er gaat gebeuren.</summary>
+    [Parameter]
+    public string? Text { get; set; }
+
+    /// <summary>
+    /// Rijkere uitleg dan één alinea, bijvoorbeeld met een link. Vervangt <see cref="Text"/>.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// De feitenregel onderaan, mono en klein: "omgeving aangemaakt: 18-08-2026", "agents: 0".
+    /// Feiten, geen aansporingen.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string>? Facts { get; set; }
+
+    /// <summary>
+    /// De glyph in de tegel. Tekstglyph, geen icoonlettertype. Standaard de lege verzameling.
+    /// </summary>
+    [Parameter]
+    public string Glyph { get; set; } = "∅";
+
+    /// <summary>Extra classnamen.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de buitenste laag.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "empty-state" : $"empty-state {Class}";
+}

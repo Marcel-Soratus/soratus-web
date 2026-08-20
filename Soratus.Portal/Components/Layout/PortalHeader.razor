@@ -1,0 +1,92 @@
+@* Sticky header van 52px: woordmerk, hoofdnavigatie, rol als tekst, gebruikerschip.
+
+   Geen rolwisselaar. Die staat wel in de mockup, maar is daar expliciet
+   gemarkeerd als demo-hulpmiddel; in productie volgt de rol uit Entra ID
+   (spec §2). De rol is hier dus tekst, geen knop.
+
+   Naam en rol komen uit de cascading AuthenticationState, niet uit een
+   parameter: een header die een rol toont die niet uit het token komt, liegt.
+
+   De styling staat in wwwroot/css/layout.css en niet in een .razor.css,
+   omdat de [data-hide-md] / [data-hide-sm] regels van de display-declaraties
+   op dezelfde elementen moeten kunnen winnen. *@
+
+<header class="portal-header">
+    <a class="portal-header__brand" href="/" aria-label="Soratus Agent Portal">
+        <BrandMark Size="20" />
+        <span class="wordmark">soratus</span>
+    </a>
+    @* De navigatie staat binnen <Authorized>: zeven links tonen aan iemand die
+       op geen enkele daarvan kan klikken is ruis, en elke klik levert een
+       aanmeldscherm op in plaats van waar het item heen belooft te gaan.
+       Dezelfde regel als "geen knoppen die niets doen", maar dan voor links.
+       Voor een niet-aangemelde bezoeker blijft het woordmerk en de
+       Aanmelden-knop over, en verder niets. *@
+    <AuthorizeView>
+        <Authorized>
+            <span class="portal-header__divider" data-hide-md aria-hidden="true"></span>
+            <span class="portal-header__label" data-hide-md>Agent Portal</span>
+
+            @* De globale header houdt alleen wat bestaat zónder klant in beeld.
+               Dat is nu uitsluitend het operator-overzicht: de zes klantschermen
+               hebben een slug nodig en staan daarom in CustomerNav, op de
+               klantpagina's zelf. Een klantgebruiker houdt hier dus geen
+               navigatie over; het woordmerk brengt hem via Start.razor terug
+               naar zijn eigen omgeving.
+
+               Prefix en niet All: "/" is van Start.razor, dat alleen doorstuurt. *@
+            <AuthorizeView Policy="@PortalPolicies.Operator">
+                @* "operator" kan hier niet: dat is een C#-sleutelwoord en de
+                   generator maakt er een lambdaparameter van. *@
+                <Authorized Context="operatorUser">
+                    <nav class="portal-nav" aria-label="Hoofdmenu">
+                        <NavLink class="portal-nav__item" href="/overzicht" Match="NavLinkMatch.Prefix">
+                            Overzicht
+                        </NavLink>
+                    </nav>
+                </Authorized>
+            </AuthorizeView>
+
+            <div class="portal-header__spacer"></div>
+
+            <span class="portal-header__role" data-hide-md>Rol: @RoleLabel(context.User)</span>
+
+            <div class="portal-header__user" data-hide-sm>
+                <span class="portal-header__who" data-hide-md>@DisplayName(context.User)</span>
+                <span class="portal-header__avatar" aria-hidden="true">@Initials(context.User)</span>
+            </div>
+
+            <a class="btn btn--small" href="MicrosoftIdentity/Account/SignOut">Afmelden</a>
+        </Authorized>
+        <NotAuthorized>
+            <div class="portal-header__spacer"></div>
+
+            <a class="btn btn--small" href="MicrosoftIdentity/Account/SignIn">Aanmelden</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</header>
+
+@code {
+    // De registratie heeft appRoleAssignmentRequired aan, dus er hoort altijd een rol te zijn.
+    // Staat er toch geen, dan zeggen we dat in plaats van een rol te verzinnen.
+    private static string RoleLabel(System.Security.Claims.ClaimsPrincipal user) =>
+        user.IsInRole(PortalRoles.Operator) ? "Soratus-operator"
+        : user.IsInRole(PortalRoles.Customer) ? "Klant"
+        : "geen rol";
+
+    private static string DisplayName(System.Security.Claims.ClaimsPrincipal user) =>
+        user.Identity?.Name is { Length: > 0 } name ? name : "onbekend";
+
+    private static string Initials(System.Security.Claims.ClaimsPrincipal user)
+    {
+        var parts = DisplayName(user)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
+        };
+    }
+}

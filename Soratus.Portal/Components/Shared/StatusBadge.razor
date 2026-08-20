@@ -1,0 +1,59 @@
+@* Status-badge: rand + vlak + glyph + woordlabel (§8).
+
+   Status is nooit alleen kleur. Elke badge draagt drie dingen: een glyph, een woordlabel en een
+   kleurvlak. Zet het scherm in grijstinten en de informatie is nog compleet.
+
+   De glyph is aria-hidden: een schermlezer zou bij ✕ "vermenigvuldigingsteken" voorlezen, en dat
+   is verwarrender dan behulpzaam. Het woordlabel is echte tekst en geen aria-label, zodat het
+   meetelt in de toegankelijke naam van de rij waar de badge in staat. *@
+
+@using Soratus.Agents.Contracts
+
+<span @attributes="AdditionalAttributes"
+      class="@CssClass">
+    <span class="badge__glyph" aria-hidden="true">@StatusVisuals.Glyph(Status)</span>@StatusVisuals.Label(Status, UnknownLabel)
+</span>
+
+@code {
+    /// <summary>De status die de badge toont.</summary>
+    [Parameter]
+    [EditorRequired]
+    public AgentStatus Status { get; set; }
+
+    /// <summary>
+    /// Het woordlabel voor <see cref="AgentStatus.Unknown"/>. Laat leeg op een agentrij — dan
+    /// staat er "Geen telemetrie". Geef op een klantrij
+    /// <see cref="StatusVisuals.UnknownCustomerLabel"/> mee: daar betekent rang 0 "Geen agents".
+    /// </summary>
+    /// <remarks>
+    /// De standaard is de agentvariant, omdat <see cref="AgentStatus"/> een agentbegrip is.
+    /// "Geen agents" op een agentrij zou een onwaarheid zijn; "Geen telemetrie" op een klantrij is
+    /// alleen onhandig. De zachtste fout is dus de standaard.
+    /// </remarks>
+    [Parameter]
+    public string? UnknownLabel { get; set; }
+
+    /// <summary>
+    /// Kleinere variant voor de statuslegenda, waar de badge naast een uitlegregel staat.
+    /// </summary>
+    [Parameter]
+    public bool Small { get; set; }
+
+    /// <summary>Extra classnamen, bijvoorbeeld voor uitlijning in een grid.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>
+    /// Overige attributen, zoals <c>title</c>. Landt op de badge zelf.
+    /// </summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            StatusVisuals.BadgeClass(Status),
+            Small ? "badge--sm" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+}

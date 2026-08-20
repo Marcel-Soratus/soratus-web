@@ -1,0 +1,12 @@
+/* Onder 768px klappen rijen naar twee kolommen en draagt elke cel zijn eigen label (§8).
+   Een kolomkop boven een lijst die geen kolommen meer heeft, is dan onzin — dus weg.
+
+   Dit staat hier en niet als [data-hide-sm] in layout.css: patterns.css zet
+   .data-row-head { display: grid } in een latere laag en zou van die regel winnen. Isolatie-CSS
+   is ongelaagd en wint wel. */
+
+@media (max-width: 768px) {
+  .data-row-head {
+    display: none;
+  }
+}

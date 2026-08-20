@@ -1,0 +1,41 @@
+/* Klantweergave — agents.
+
+   Tabel, rijen, badges en de lege staat komen uit patterns.css; hier staat
+   alleen wat dit scherm zelf toevoegt. Geen hexwaarden: alles uit tokens.css. */
+
+.stack {
+  display: grid;
+  gap: var(--gap-card);
+}
+
+/* Rij met de terugknop boven de paginakop. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-col);
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.notice {
+  margin: 0;
+  max-width: 78ch;
+}
+
+/* §8: agentnamen zijn mono. */
+.agent-name {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-cell);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tweede regel in de versiekolom: deze agent staat op een oudere contractvorm.
+   Alleen zichtbaar voor de operator — de klant heeft geen contractversie op zijn
+   viewmodel. Woordlabel, geen kleurvlek: de mededeling staat er als tekst. */
+.stale {
+  display: block;
+  color: var(--status-degraded-ink);
+}

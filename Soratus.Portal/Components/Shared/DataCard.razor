@@ -1,0 +1,78 @@
+@* De kaart om een tabel: kop, kolomindeling, rijen.
+
+   De kolomindeling staat als custom property op de kaart en niet op elke rij. Dat is geen
+   cosmetiek: de responsieve regel in layout.css overschrijft --row-cols op de rij zelf, en een
+   declaratie op het element verslaat alleen een geërfde waarde — geen inline gezette. Staat de
+   basiswaarde op de rij, dan klapt de tabel onder 768px niet in.
+
+   De kaart draagt daarom ook data-rowgrid: dat attribuut is de haak waar die regel op zoekt. *@
+
+<section @attributes="AdditionalAttributes"
+         class="@CssClass"
+         data-rowgrid
+         style="@Style"
+         aria-label="@Title">
+    @if (Title is not null || HeaderContent is not null)
+    {
+        <div class="card-head">
+            <span class="card-head__title">@Title</span>
+            @if (HeaderContent is not null)
+            {
+                <div class="card-head__meta">@HeaderContent</div>
+            }
+        </div>
+    }
+    <CascadingValue Value="Grid" IsFixed="true">
+        @ChildContent
+    </CascadingValue>
+</section>
+
+@code {
+    /// <summary>
+    /// De kolomindeling van deze tabel. <c>DataRowHeader</c>, <c>DataRow</c> en <c>DataCell</c>
+    /// krijgen hem hiervandaan doorgegeven; je hoeft hem daar niet te herhalen.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public RowGrid Grid { get; set; } = default!;
+
+    /// <summary>
+    /// De kaartkop, bijvoorbeeld "Klanten". Verschijnt mono en in kapitalen, en wordt de
+    /// toegankelijke naam van de kaart. Laat leeg voor een kaart zonder kop.
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// De rechterkant van de kaartkop: meta-tekst, filters, een knop. Alleen zichtbaar als er
+    /// een kop is.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
+
+    /// <summary>De rijen: een <c>DataRowHeader</c> en daarna de <c>DataRow</c>'s.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Extra classnamen op de kaart.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de kaart zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => string.IsNullOrWhiteSpace(Class) ? "card" : $"card {Class}";
+
+    private string Style => $"--row-cols: {Grid.Template}; --row-gap: {Grid.Gap};";
+
+    protected override void OnParametersSet()
+    {
+        if (Grid is null)
+        {
+            throw new InvalidOperationException(
+                "DataCard heeft een RowGrid nodig: zonder kolomindeling kan de tabel zijn kolommen "
+                + "niet zetten en krijgen cellen geen label onder 768px.");
+        }
+    }
+}

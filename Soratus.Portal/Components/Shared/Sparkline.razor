@@ -1,0 +1,80 @@
+@* Twaalf blokjes van 5px, elk twee uur, samen 24 uur (§8). De hoogte is geschaald op het
+   maximum van de reeks: de sparkline vergelijkt de agent met zichzelf, niet met andere agents.
+
+   Twaalf gekleurde blokjes zeggen een schermlezer niets, dus de hele reeks is één afbeelding met
+   een tekstbeschrijving. Diezelfde tekst staat in de tooltip, want ook met muis is een blokje
+   zonder uitleg niet te lezen. *@
+
+<span @attributes="AdditionalAttributes"
+      class="@CssClass"
+      role="img"
+      aria-label="@Text"
+      title="@Text">
+    @foreach (var block in Blocks)
+    {
+        <span class="@BarClass(block)" style="height: @(Height(block))px"></span>
+    }
+</span>
+
+@code {
+    /// <summary>De hoogte van het hoogste blokje in pixels.</summary>
+    /// <remarks>Uit de mockup; §8 geeft alleen de breedte van 5px.</remarks>
+    private const int MaxHeight = 22;
+
+    /// <summary>Een blokje dat wél runs telt is minstens zo hoog, anders zie je het niet.</summary>
+    private const int MinHeight = 2;
+
+    /// <summary>
+    /// De blokken, oudste eerst. Twaalf stuks van elk twee uur. Een lege lijst rendert niets.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<SparkBlock> Blocks { get; set; } = [];
+
+    /// <summary>
+    /// Overschrijft de tekstbeschrijving. Laat leeg voor de standaard: "12 runs in 24 u,
+    /// 1 mislukt (2-uursblokken)".
+    /// </summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>Extra classnamen.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de sparkline zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "sparkline" : $"sparkline {Class}";
+
+    private int Peak => Math.Max(1, Blocks.Count == 0 ? 1 : Blocks.Max(b => b.Runs));
+
+    private string Text
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Description))
+            {
+                return Description;
+            }
+
+            var runs = Blocks.Sum(b => b.Runs);
+            var failed = Blocks.Sum(b => b.Failed);
+
+            return $"{runs} runs in 24 u, {failed} mislukt (2-uursblokken)";
+        }
+    }
+
+    private int Height(SparkBlock block) => block.Runs == 0
+        ? MinHeight
+        : Math.Max(MinHeight, (int)Math.Round(block.Runs / (double)Peak * MaxHeight));
+
+    private static string BarClass(SparkBlock block) => block switch
+    {
+        { Failed: > 0 } => "spark spark--failed",
+        { Runs: 0 } => "spark spark--empty",
+        _ => "spark",
+    };
+}

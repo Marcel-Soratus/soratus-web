@@ -1,0 +1,61 @@
+@* "11 min geleden" in beeld, de absolute tijd in title en datetime (§1).
+
+   Het referentiemoment is een parameter. Binnenin staat nergens DateTimeOffset.Now: dan zou de
+   uitkomst niet te testen zijn en bij elke render verschuiven, ook als er niets is gebeurd. De
+   pagina bepaalt één "nu" voor het hele scherm, zodat alle tijden op dezelfde klok staan.
+
+   De tooltip toont Nederlandse tijd, het datetime-attribuut blijft UTC. Het eerste is voor de
+   lezer, het tweede voor de machine. *@
+
+@if (Value is { } value)
+{
+    <time @attributes="AdditionalAttributes"
+          class="@Class"
+          datetime="@TimeFormat.Iso(value)"
+          title="@TimeFormat.Absolute(value, TimeZone)">@TimeFormat.Relative(value, Now)</time>
+}
+else
+{
+    <span @attributes="AdditionalAttributes" class="@Class" title="@EmptyTitle">@EmptyText</span>
+}
+
+@code {
+    /// <summary>Het moment. <c>null</c> toont <see cref="EmptyText"/>.</summary>
+    [Parameter]
+    [EditorRequired]
+    public DateTimeOffset? Value { get; set; }
+
+    /// <summary>
+    /// Het referentiemoment waartegen wordt gerekend — het "nu" van deze paginaweergave.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public DateTimeOffset Now { get; set; }
+
+    /// <summary>
+    /// De zone waarin de tooltip de absolute tijd toont. Standaard Europe/Amsterdam; laat leeg
+    /// tenzij een scherm bewust een andere klok laat zien.
+    /// </summary>
+    /// <remarks>
+    /// Raakt alleen de tooltip. Het <c>datetime</c>-attribuut blijft UTC en de relatieve tekst
+    /// is zone-onafhankelijk.
+    /// </remarks>
+    [Parameter]
+    public TimeZoneInfo? TimeZone { get; set; }
+
+    /// <summary>Wat er staat als er geen moment is.</summary>
+    [Parameter]
+    public string EmptyText { get; set; } = "—";
+
+    /// <summary>De tooltip als er geen moment is. Zeg waaróm er niets staat.</summary>
+    [Parameter]
+    public string EmptyTitle { get; set; } = "nog geen activiteit";
+
+    /// <summary>Extra classnamen, bijvoorbeeld <c>mono-meta</c>.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op het tijdelement zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+}

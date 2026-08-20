@@ -1,0 +1,70 @@
+@* "Wat de statussen betekenen": de vijf badges met elk één zin uitleg.
+
+   Een klant kent "degraded" niet vanzelf (§3.2). De uitleg staat daarom in gewone taal en zegt
+   ook wat de klant eraan moet doen — meestal niets.
+
+   De tekst bij Idle zegt niet "geschaald naar nul". Dat is op ons platform onwaar, en we zetten
+   niets op het scherm dat niet klopt. *@
+
+@using Soratus.Agents.Contracts
+
+<section @attributes="AdditionalAttributes" class="@CssClass" aria-label="@Title">
+    <h2 class="colhead legend__title">@Title</h2>
+    <div class="legend__grid">
+        @foreach (var status in StatusVisuals.All)
+        {
+            <div class="legend__item">
+                <span class="legend__badge">
+                    <StatusBadge Status="status" Small="true" UnknownLabel="@UnknownLabel" />
+                </span>
+                <span class="legend__text">@Explanation(status)</span>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    /// <summary>De kop van de legenda.</summary>
+    [Parameter]
+    public string Title { get; set; } = "Wat de statussen betekenen";
+
+    /// <summary>
+    /// Het woordlabel voor <see cref="AgentStatus.Unknown"/>. Laat leeg onder een agentlijst;
+    /// geef op het klantoverzicht <see cref="StatusVisuals.UnknownCustomerLabel"/> mee.
+    /// </summary>
+    [Parameter]
+    public string? UnknownLabel { get; set; }
+
+    /// <summary>Extra classnamen.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de legenda zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => string.IsNullOrWhiteSpace(Class) ? "legend" : $"legend {Class}";
+
+    private string Explanation(AgentStatus status) => status switch
+    {
+        AgentStatus.Live =>
+            "De agent draait en heeft recent werk afgerond. Geen actie nodig.",
+        // Bewust "de agent" en niet "de container": wij draaien op App Service, dus er is
+        // geen container. Dat woord komt uit §8, dat nog van Container Apps uitging.
+        AgentStatus.Degraded =>
+            "De agent draait, maar meldt zich niet op tijd of is traag. Werk kan vertragen; "
+            + "Soratus kijkt ernaar.",
+        AgentStatus.Failed =>
+            "De laatste run is niet afgerond. Werk blijft liggen tot dit is opgelost.",
+        AgentStatus.Idle =>
+            "De agent draait en heeft niets te doen — dit is normaal en geen storing.",
+        // Eén tekst voor alle drie de labels van rang 0: "Geen agents" op een klantrij,
+        // "Geen telemetrie" op een agentrij, "Geen in productie" bij een klant die alleen
+        // buiten productie draait. "Agents die hier meetellen" dekt die drie, waar
+        // "geen agents ingericht" in het derde geval onwaar is — daar staan wél agents.
+        // Niet opsplitsen per label: een tweede vertakking werkt iemand later half bij.
+        _ =>
+            "Er is niets gemeten: er zijn geen agents die hier meetellen, of ze melden zich "
+            + "niet. In beide gevallen weten wij niet hoe het ervoor staat.",
+    };
+}

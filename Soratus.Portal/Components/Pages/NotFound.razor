@@ -1,0 +1,42 @@
+@page "/not-found"
+@layout PortalLayout
+@attribute [AllowAnonymous]
+
+@* De 404, en ook het antwoord op elke URL waar de bezoeker niet bij mag.
+
+   Anoniem bereikbaar. Program.cs zet een fallback-beleid waarmee alles
+   aanmeldplichtig is; zonder AllowAnonymous krijgt een niet-aangemelde bezoeker
+   hier een Entra-challenge in plaats van deze pagina, en dat is een lus: je bent
+   niet ingelogd, je vraagt een pagina op die niet bestaat, en je krijgt een
+   inlogscherm.
+
+   De tekst zegt niet of de pagina bestaat maar verboden is, of helemaal niet
+   bestaat. Dat is precies de bedoeling: de scope-resolver geeft 404 en geen 403,
+   zodat het bestaan van een klant niet uit een statuscode volgt. Deze pagina mag
+   dat onderscheid dus ook niet in woorden maken.
+
+   De link wijst naar "/" en niet naar het overzicht. "/" is de landingsroute:
+   die stuurt een operator door naar /overzicht en een klantgebruiker naar zijn
+   eigen omgeving. Eén link die voor beide rollen werkt is beter dan twee links
+   achter een rolvergelijking. Hij staat wel achter AuthorizeView, want voor een
+   niet-aangemelde bezoeker leidt hij naar een aanmeldscherm en niet naar iets
+   wat hij hier zocht. *@
+
+<PageTitle>Pagina niet gevonden · Agent Portal</PageTitle>
+
+<div class="page-head">
+    <h1 class="page-title">Deze pagina bestaat niet</h1>
+    <span class="page-meta">404</span>
+</div>
+
+<EmptyState Title="Niets gevonden op dit adres">
+    <p>
+        Het adres klopt niet, of het is niet voor deze account bedoeld. Er is niets stukgegaan en
+        er is niets weggegooid — er staat hier gewoon niets.
+    </p>
+    <AuthorizeView>
+        <Authorized>
+            <p><a href="/">Terug naar het begin</a></p>
+        </Authorized>
+    </AuthorizeView>
+</EmptyState>

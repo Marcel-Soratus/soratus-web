@@ -1,0 +1,35 @@
+@* Alleen het bolletje, voor dichte rijen waar een volledige badge te veel ruimte kost. *@
+
+@using Soratus.Agents.Contracts
+
+<span @attributes="AdditionalAttributes"
+      class="@CssClass"
+      aria-hidden="true"></span>
+
+@code {
+    /// <summary>
+    /// De status die de stip toont.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Zet nooit een stip zonder tekst op het scherm.</strong> Dit is kleur en niets
+    /// anders: geen glyph, geen label, en voor een schermlezer bestaat hij niet
+    /// (<c>aria-hidden</c>). Hij mag alleen naast tekst staan die dezelfde status óók noemt — de
+    /// agentnaam met verderop in de rij een <c>StatusBadge</c>, of een verdeling in woorden.
+    /// Staat die tekst er niet, gebruik dan <c>StatusBadge</c>.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public AgentStatus Status { get; set; }
+
+    /// <summary>Extra classnamen.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de stip zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => string.IsNullOrWhiteSpace(Class)
+        ? StatusVisuals.DotClass(Status)
+        : $"{StatusVisuals.DotClass(Status)} {Class}";
+}

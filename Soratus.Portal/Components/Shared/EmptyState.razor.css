@@ -1,0 +1,53 @@
+/* Overgenomen uit de mockup (§8 beschrijft dit patroon niet): gestippelde rand in de veldlijn,
+   een 30px glyphtegel op het paginacanvas, tekst tot 62ch en een mono feitenregel.
+   Alle kleuren, radii en typografie zijn wel gewoon tokens uit §8. */
+
+.empty-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 26px 22px;
+  border: 1px dashed var(--line-field);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.empty-state__glyph {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-cell);
+  color: var(--ink-mute);
+}
+
+.empty-state__content {
+  min-width: 0;
+}
+
+.empty-state__title {
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  letter-spacing: var(--tracking-title);
+}
+
+.empty-state__text {
+  margin-top: 6px;
+  max-width: 62ch;
+  color: var(--ink-dim);
+}
+
+.empty-state__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-mono-meta);
+  color: var(--ink-mute);
+}

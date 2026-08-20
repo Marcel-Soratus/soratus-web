@@ -1,0 +1,157 @@
+@* Eén rij van een tabel. De rij kiest zelf welk element hij is:
+
+     Href gezet      → <a>. Enter werkt native, de rij is deep-linkbaar, middelklik opent een
+                       nieuw tabblad en een schermlezer zegt "link" — wat hier klopt.
+     OnActivate      → <button type="button">. Enter én Space werken native.
+     geen van beide  → <div>.
+
+   §8 schrijft role="button" tabindex="0" met een eigen Enter/Space-handler voor. Dat doen we
+   bewust niet. In Blazor kun je preventDefault op de spatiebalk niet per toetsaanslag regelen
+   zonder JavaScript, dus scrolt de pagina bij elke Space die de rij activeert. Een echt element
+   levert hetzelfde gedrag zonder handler en zonder die bijwerking.
+
+   HARDE REGEL: een rij die zelf een <a> of <button> is, mag geen knop of link bevatten —
+   genest interactief is ongeldige HTML en onbereikbaar met het toetsenbord. Een rij met
+   rij-acties (fiatteren, afwijzen, mailen) is dus nooit zelf activeerbaar; zet de doorklik dan
+   op een link in de eerste cel. *@
+
+@using Microsoft.AspNetCore.Components.Web
+@using Soratus.Agents.Contracts
+
+@if (Href is not null)
+{
+    <a @attributes="AdditionalAttributes"
+       class="@CssClass"
+       href="@Href"
+       aria-expanded="@AriaExpanded"
+       aria-controls="@Controls">
+        <CascadingValue Value="_context" IsFixed="true">@ChildContent</CascadingValue>
+    </a>
+}
+else if (OnActivate.HasDelegate)
+{
+    <button @attributes="AdditionalAttributes"
+            type="button"
+            class="@CssClass"
+            aria-expanded="@AriaExpanded"
+            aria-controls="@Controls"
+            @onclick="OnActivate">
+        <CascadingValue Value="_context" IsFixed="true">@ChildContent</CascadingValue>
+    </button>
+}
+else
+{
+    <div @attributes="AdditionalAttributes"
+         class="@CssClass"
+         aria-expanded="@AriaExpanded"
+         aria-controls="@Controls">
+        <CascadingValue Value="_context" IsFixed="true">@ChildContent</CascadingValue>
+    </div>
+}
+
+@code {
+    private RowContext _context = default!;
+
+    /// <summary>
+    /// De kolomindeling. Laat leeg binnen een <c>DataCard</c>: die geeft hem door.
+    /// </summary>
+    [Parameter]
+    public RowGrid? Grid { get; set; }
+
+    /// <summary>
+    /// Waar de rij naartoe leidt. Maakt de rij een link. Gebruik dit voor doorklikken naar een
+    /// klant of een agent: dat is navigatie, geen actie.
+    /// </summary>
+    [Parameter]
+    public string? Href { get; set; }
+
+    /// <summary>
+    /// Wat de rij doet als hij wordt geactiveerd. Maakt de rij een knop. Gebruik dit voor
+    /// uitklappen of selecteren binnen dezelfde pagina.
+    /// </summary>
+    /// <remarks>
+    /// Vraagt om een interactief eiland: op static SSR wordt deze callback niet aangeroepen.
+    /// </remarks>
+    [Parameter]
+    public EventCallback<MouseEventArgs> OnActivate { get; set; }
+
+    /// <summary>
+    /// Of het paneel dat deze rij uitklapt open staat. Alleen zetten als de rij daadwerkelijk
+    /// iets uitklapt; laat anders leeg, dan komt er geen <c>aria-expanded</c> in de HTML.
+    /// </summary>
+    [Parameter]
+    public bool? Expanded { get; set; }
+
+    /// <summary>Het id van het paneel dat deze rij uitklapt, voor <c>aria-controls</c>.</summary>
+    [Parameter]
+    public string? Controls { get; set; }
+
+    /// <summary>
+    /// De status die de rijtint bepaalt. Alleen <see cref="AgentStatus.Failed"/> kleurt de rij
+    /// (§8); de rest blijft wit.
+    /// </summary>
+    /// <remarks>
+    /// De tint is een herhaling, nooit de enige drager: de rij hoort ook een badge of een
+    /// woordlabel te bevatten dat dezelfde status noemt.
+    /// </remarks>
+    [Parameter]
+    public AgentStatus? Tint { get; set; }
+
+    /// <summary>Of dit de totaalrij is: subtiel vlak, geen onderlijn.</summary>
+    [Parameter]
+    public bool Total { get; set; }
+
+    /// <summary>De cellen. Gebruik <c>DataCell</c>, anders krijgen ze geen label.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Extra classnamen op de rij.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen, zoals <c>title</c>. Landt op de rij zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    [CascadingParameter]
+    private RowGrid? CascadedGrid { get; set; }
+
+    private string? AriaExpanded => Expanded switch
+    {
+        // Blazor rendert een bool-attribuut als aanwezig/afwezig; aria-expanded heeft juist de
+        // tekst "true" of "false" nodig.
+        true => "true",
+        false => "false",
+        null => null,
+    };
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            "data-row",
+            Tint is { } tint ? StatusVisuals.RowClass(tint) : null,
+            Total ? "data-row--total" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+
+    protected override void OnParametersSet()
+    {
+        if (Href is not null && OnActivate.HasDelegate)
+        {
+            throw new InvalidOperationException(
+                "Een DataRow is een link of een knop, niet allebei. Kies Href voor navigatie en "
+                + "OnActivate voor een actie binnen de pagina.");
+        }
+
+        var grid = Grid ?? CascadedGrid
+            ?? throw new InvalidOperationException(
+                "DataRow vindt geen RowGrid. Zet hem in een DataCard, of geef Grid mee.");
+
+        // Eén context per rij: de cellen tellen zichzelf af tegen de zichtbare kolommen. Bij een
+        // herrender blijft dezelfde context staan, zodat cellen hun kolomnummer houden.
+        if (_context is null || !ReferenceEquals(_context.Grid, grid))
+        {
+            _context = new RowContext(grid);
+        }
+    }
+}

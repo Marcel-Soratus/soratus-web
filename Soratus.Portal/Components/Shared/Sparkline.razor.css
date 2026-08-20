@@ -1,0 +1,24 @@
+/* Geometrie van de sparkline. De kleuren zijn tokens (§8); de hoogte van 22px, de tussenruimte
+   van 2px en de radius van 1px komen uit de mockup. */
+
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+}
+
+.spark {
+  width: var(--spark-bar-width);
+  border-radius: 1px;
+  background: var(--spark-bar);
+  flex: none;
+}
+
+.spark--empty {
+  background: var(--spark-empty);
+}
+
+.spark--failed {
+  background: var(--spark-failed);
+}

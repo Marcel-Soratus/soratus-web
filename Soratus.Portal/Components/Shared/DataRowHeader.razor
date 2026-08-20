@@ -1,0 +1,43 @@
+@* De kolomkoprij: mono, uppercase, één cel per zichtbare kolom.
+
+   De koppen komen uit de RowGrid, dus een scherm herhaalt ze niet. Onder 768px verdwijnt de rij
+   (zie DataRowHeader.razor.css) en toont elke cel zijn eigen label. *@
+
+<div @attributes="AdditionalAttributes"
+     class="@CssClass">
+    @foreach (var column in Columns)
+    {
+        <span class="@CellClass(column)">@column.Header</span>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomindeling. Laat leeg binnen een <c>DataCard</c>: die geeft hem door.
+    /// </summary>
+    [Parameter]
+    public RowGrid? Grid { get; set; }
+
+    /// <summary>Extra classnamen op de koprij.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen. Landt op de koprij zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    [CascadingParameter]
+    private RowGrid? CascadedGrid { get; set; }
+
+    private RowGrid Effective => Grid ?? CascadedGrid
+        ?? throw new InvalidOperationException(
+            "DataRowHeader vindt geen RowGrid. Zet hem in een DataCard, of geef Grid mee.");
+
+    private IReadOnlyList<GridColumn> Columns => Effective.Visible;
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "data-row-head" : $"data-row-head {Class}";
+
+    private static string CellClass(GridColumn column) =>
+        column.Align == CellAlign.End ? "data-cell data-cell--right" : "data-cell";
+}

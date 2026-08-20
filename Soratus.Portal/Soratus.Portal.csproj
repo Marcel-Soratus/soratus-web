@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <UserSecretsId>soratus-portal</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.62.1" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="4.10.0" />
+    <PackageReference Include="Microsoft.Identity.Web.UI" Version="4.10.0" />
+    <!--
+      De Cosmos-SDK levert Newtonsoft.Json sinds 3.6x niet meer zelf mee en eist een expliciete
+      verwijzing. Wij serialiseren met System.Text.Json (zie CosmosAgentTelemetryStore), maar de
+      SDK gebruikt Newtonsoft nog op interne paden.
+    -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Soratus.Agents.Contracts\Soratus.Agents.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      De store, de scope-resolver en de viewmodelbouwer zijn internal, en dat blijven ze: buiten het
+      portaal hoort niemand een scope te kunnen maken. Het testproject moet ze wel kunnen aanroepen,
+      anders zijn juist de klassen waar de autorisatie in zit de enige die niet getest worden.
+    -->
+    <InternalsVisibleTo Include="Soratus.Portal.Tests" />
+  </ItemGroup>
+
+</Project>

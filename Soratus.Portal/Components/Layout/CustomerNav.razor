@@ -1,0 +1,58 @@
+@* Contextuele navigatie binnen één klant. Hoort onder de klantnaam, boven de
+   inhoud van het scherm.
+
+   Waarom hier en niet in de globale header: deze zes schermen bestaan alleen
+   als er een klant in beeld is. De slug staat in de route omdat
+   ICustomerScopeResolver hem als parameter neemt — zou de pagina de klant zelf
+   afleiden, dan is er een tweede plek waar bepaald wordt wiens gegevens je
+   ziet. Zie ook Components/Layout/PortalHeader.razor.
+
+   Vorm: gewone tekstlinks, geen tabs. §8 reserveert de tabs-vorm (2px
+   onderlijn in --blue) voor de tabs binnen het agentdetail. Drie
+   navigatieniveaus horen aflopend in sterkte te zijn — header (vlak bij
+   actief), subnav (alleen gewicht en kleur), tabs (onderlijn). Styling in
+   wwwroot/css/patterns.css onder .customer-nav. *@
+
+<nav class="customer-nav" aria-label="Klantmenu">
+    @foreach (var screen in Screens)
+    {
+        @* Prefix is hier veilig: alle zes paden beginnen met /klant/{slug}/ en
+           geen enkel laatste segment is een prefix van een ander, dus "Agents"
+           licht niet op als je op /klant/x/uren staat. NavLink vergelijkt op
+           padsegmenten, niet op tekens. *@
+        <NavLink class="customer-nav__item"
+                 href="@($"/klant/{Slug}/{screen.Segment}")"
+                 Match="NavLinkMatch.Prefix">
+            @screen.Label
+        </NavLink>
+    }
+</nav>
+
+@code {
+    /// <summary>
+    /// De slug van de klant, zoals hij in de route <c>/klant/{Slug}/...</c> staat.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string Slug { get; set; } = default!;
+
+    private sealed record Screen(string Segment, string Label);
+
+    // Vijf van de zes routes bestaan nog niet en geven een 404. Dat zijn geen
+    // vergeten links: elk scherm komt in de fase die erachter staat (spec §7).
+    private static readonly Screen[] Screens =
+    [
+        new("agents", "Agents"),          // fase 0 en 1 — bestaat
+        new("sprint", "Sprint"),          // fase 5 — sprint en support
+        new("contract", "Contract"),      // fase 2 — contract en toegang
+        new("uren", "Uren"),              // fase 3 — uren
+        new("facturatie", "Facturatie"),  // fase 4 — kosten en facturatie
+        new("support", "Support")         // fase 5 — sprint en support
+    ];
+
+    protected override void OnParametersSet() =>
+        // Een leeg slug zou "/klant//agents" opleveren: een link die er goed
+        // uitziet en nergens heen gaat. Dat is een programmeerfout, geen
+        // gebruikersfout, en die hoort hard te vallen.
+        ArgumentException.ThrowIfNullOrWhiteSpace(Slug);
+}

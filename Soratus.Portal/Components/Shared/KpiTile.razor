@@ -1,0 +1,64 @@
+@* KPI-tegel: mono label in kapitalen, groot mono getal, subregel (§8).
+   Zet ze naast elkaar in een <div class="kpi-grid"> — dat 1px-raster staat in patterns.css. *@
+
+<div @attributes="AdditionalAttributes" class="@CssClass">
+    <div class="kpi-tile__label">@Label</div>
+    @if (ChildContent is not null)
+    {
+        <div class="kpi-tile__body">@ChildContent</div>
+    }
+    else
+    {
+        <div class="@ValueClass">@Value</div>
+        @if (!string.IsNullOrWhiteSpace(Sub))
+        {
+            <div class="kpi-tile__sub">@Sub</div>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Het label boven het getal, bijvoorbeeld "Runs vandaag".</summary>
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Het getal, al opgemaakt als tekst — inclusief eenheid en Nederlands decimaalteken
+    /// ("0,8 %"). De tegel rekent niet en formatteert niet.
+    /// </summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>De subregel onder het getal, bijvoorbeeld "10 mislukt".</summary>
+    [Parameter]
+    public string? Sub { get; set; }
+
+    /// <summary>
+    /// Kleurt het getal rood. Alleen gebruiken als het getal zelf een storing meldt, en alleen
+    /// naast een subregel die dat in woorden herhaalt ("1 klant met gefaalde run").
+    /// </summary>
+    [Parameter]
+    public bool Alarm { get; set; }
+
+    /// <summary>
+    /// Vervangt getal en subregel door eigen inhoud, voor een tegel die geen enkel getal toont —
+    /// de statusverdeling met vier stippen en tellingen.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Extra classnamen op de tegel.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen, zoals <c>title</c>. Landt op de tegel zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass =>
+        string.IsNullOrWhiteSpace(Class) ? "kpi-tile" : $"kpi-tile {Class}";
+
+    private string ValueClass =>
+        Alarm ? "kpi-tile__value kpi-tile__value--alarm" : "kpi-tile__value";
+}

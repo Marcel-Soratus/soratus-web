@@ -1,0 +1,578 @@
+/* Soratus Agent Portal — patterns
+   De gedeelde componentpatronen uit agent-portal-spec.md §8.
+   Statuskleuren zijn functioneel: nooit kleur zonder label + glyph. */
+
+@layer patterns {
+  /* ====================================================================
+     Kaart
+     §8: 1px rand doet het werk, geen schaduw op kaarten.
+     ==================================================================== */
+  .card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    /* vangnet voor brede tabellen: schuiven, niet clippen (§8 Responsief) */
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .card + .card {
+    margin-top: var(--gap-card);
+  }
+
+  .card__body {
+    padding: var(--pad-card-y) var(--pad-card-x);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-col);
+    padding: 9px var(--pad-card-x);
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-subtle);
+  }
+
+  .card-head__title {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .card-head__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-col);
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: 0.06em;
+    color: var(--ink-mute);
+  }
+
+  /* Kaarttitel in gewone UI-tekst (§8: kaartkop 15px/600). */
+  .card-title {
+    font-size: var(--text-card-title);
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+  }
+
+  /* ====================================================================
+     Datarij
+     Een scherm zet alleen --row-cols (op de kaart met [data-rowgrid]);
+     onder 768px overschrijft layout.css die naar 1fr 1fr.
+     ==================================================================== */
+  .data-row,
+  .data-row-head {
+    display: grid;
+    grid-template-columns: var(--row-cols);
+    column-gap: var(--row-gap, var(--gap-col));
+    align-items: center;
+  }
+
+  .data-row-head {
+    padding: var(--pad-row-y-tight) var(--pad-row-x);
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-subtle);
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .data-row {
+    padding: var(--pad-row-y) var(--pad-row-x);
+    border-bottom: 1px solid var(--line-row);
+    background: var(--surface);
+    font-size: var(--text-cell);
+    color: var(--ink);
+  }
+
+  .data-row:last-child {
+    border-bottom: none;
+  }
+
+  /* Zonder min-width: 0 groeit een grid-track mee met de langste
+     ononderbroken tekenreeks. Eén stacktrace maakt de tabel dan breder dan
+     het scherm. Dit is dus geen cosmetiek. */
+  .data-cell {
+    min-width: 0;
+  }
+
+  .data-cell--truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .data-cell--right {
+    text-align: right;
+  }
+
+  /* Klikbare rij: een echte <a> of <button> met class="data-row".
+     Geen role="button" — dan hoef je Enter/Space niet zelf af te vangen. */
+  a.data-row,
+  button.data-row {
+    width: 100%;
+    font: inherit;
+    /* longhand ná de shorthand: font:inherit zou de celgrootte terugzetten
+       naar 14px, terwijl een datacel 13px is (§8). */
+    font-size: var(--text-cell);
+    text-align: inherit;
+    color: inherit;
+    text-decoration: none;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    cursor: pointer;
+  }
+
+  a.data-row:hover,
+  button.data-row:hover {
+    background: var(--surface-hover);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Ring naar binnen, zodat hij niet buiten de kaartrand valt. */
+  a.data-row:focus-visible,
+  button.data-row:focus-visible {
+    outline: var(--focus-width) solid var(--blue);
+    outline-offset: -2px;
+  }
+
+  /* Rij van een gefaalde run krijgt een eigen achtergrond (§8). */
+  .data-row--failed {
+    background: var(--status-failed-row);
+  }
+
+  /* Totaal-/subtotaalrij. */
+  .data-row--total {
+    background: var(--surface-subtle);
+    border-bottom: none;
+  }
+
+  /* ====================================================================
+     Knoppen
+     §8: primair #0a0d1a vlak met wit label, hover blauw. Secundair wit met
+     veldlijn, hover merkblauwe rand. Geen transform bij klik.
+     ==================================================================== */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--line-field);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--ink-dim);
+    padding: 7px 14px;
+    font-size: var(--text-cell);
+    font-weight: 500;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .btn:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    text-decoration: none;
+  }
+
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    color: var(--ink-mute);
+    border-color: var(--line);
+    background: var(--fill-neutral);
+    cursor: not-allowed;
+  }
+
+  .btn--primary {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--ink-inverse);
+  }
+
+  .btn--primary:hover {
+    border-color: var(--blue);
+    background: var(--blue);
+    color: var(--ink-inverse);
+  }
+
+  .btn--danger:hover {
+    border-color: var(--status-failed-ink);
+    color: var(--status-failed-ink);
+  }
+
+  /* Compacte variant voor kaartkoppen. */
+  .btn--small {
+    padding: 3px 10px;
+    font-size: var(--text-meta);
+    font-weight: 400;
+  }
+
+  /* ====================================================================
+     Velden
+     §8: 1px veldlijn, radius 6px, focusrand merkblauw. Getallen rechts in
+     mono. Read-only is platte tekst, geen uitgegrijsd veld.
+     ==================================================================== */
+  .field {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .field__label {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .field__input,
+  .field input,
+  .field select,
+  .field textarea {
+    border: 1px solid var(--line-field);
+    border-radius: var(--radius-control);
+    padding: 5px 8px;
+    font-size: var(--text-cell);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .field textarea {
+    padding: 8px 10px;
+  }
+
+  .field__input:focus,
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus {
+    border-color: var(--blue);
+  }
+
+  .field__input--num {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* Read-only variant: platte tekst. */
+  .field__value {
+    font-size: var(--text-cell);
+    color: var(--ink);
+    padding: 5px 0;
+  }
+
+  .field__hint {
+    font-size: var(--text-meta);
+    color: var(--ink-mute);
+  }
+
+  .field__error {
+    font-size: var(--text-meta);
+    color: var(--status-failed-ink);
+  }
+
+  /* ====================================================================
+     Chip — suggestie/filter, radius 999px (§8)
+     ==================================================================== */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--line-field);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--ink-dim);
+    padding: 4px 11px;
+    font-size: var(--text-meta);
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .chip:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    text-decoration: none;
+  }
+
+  .chip--neutral {
+    background: var(--fill-neutral);
+    border-color: var(--fill-neutral-line);
+  }
+
+  .chip--brand {
+    background: var(--brand-fill);
+    border-color: var(--brand-fill-line);
+    color: var(--navy);
+  }
+
+  /* ====================================================================
+     Contextuele klantnavigatie (CustomerNav)
+
+     §8 geeft voor dit niveau geen vorm. Besluit van Marcel: gewone
+     tekstlinks, ruim uit elkaar, geen vulling en geen onderlijn. Reden: de
+     drie navigatieniveaus horen aflopend in sterkte te zijn.
+
+       header  — vlak (--fill-neutral) achter het actieve item
+       subnav  — alleen kleur en gewicht                        (hier)
+       tabs    — 2px onderlijn, binnen één scherm
+
+     Zonder dat verschil staan er op het agentdetail twee identiek ogende
+     rijen boven elkaar die iets anders doen.
+     ==================================================================== */
+  .customer-nav {
+    display: flex;
+    align-items: center;
+    /* 20px is niet gekozen maar afgeleid: in de header staat tussen twee
+       labels 2px gap + 2×9px padding = 20px. Zo houden de twee navigaties
+       hetzelfde ritme. */
+    gap: 20px;
+    /* Schuiven in plaats van wrappen, net als de header-nav: een tweede
+       regel zou onder de klantkop wegvallen. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin-bottom: var(--gap-card);
+  }
+
+  .customer-nav__item {
+    flex: none;
+    padding: 5px 0;
+    font-size: var(--text-cell);
+    /* 500 inactief, 600 actief: hetzelfde gewicht als de header-nav, zodat
+       het één familie blijft. Het actieve label wordt daardoor een paar
+       pixels breder; dat schuift alleen binnen deze rij en niet de inhoud. */
+    font-weight: 500;
+    color: var(--ink-dim);
+    white-space: nowrap;
+    text-decoration: none;
+    background: none;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Overschrijft de onderstreping van a:hover uit de base-laag. */
+  .customer-nav__item:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .customer-nav__item.active {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* ====================================================================
+     Tabs — tekstknoppen met 2px onderlijn merkblauw als actief (§8)
+     ==================================================================== */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: var(--gap-card);
+  }
+
+  .tab {
+    padding: 8px 14px;
+    font-size: var(--text-cell);
+    font-weight: 500;
+    color: var(--ink-dim);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    text-decoration: none;
+  }
+
+  .tab:hover {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .tab.active,
+  .tab[aria-selected='true'] {
+    color: var(--ink);
+    border-bottom-color: var(--blue);
+  }
+
+  /* ====================================================================
+     KPI-tegels — 1px raster, mono label, groot mono getal (§8)
+     ==================================================================== */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+
+  .kpi-tile {
+    background: var(--surface);
+    padding: var(--pad-card-y) var(--pad-card-x);
+  }
+
+  .kpi-tile__label {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .kpi-tile__value {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-kpi);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-title);
+    margin-top: 4px;
+  }
+
+  .kpi-tile__sub {
+    font-size: var(--text-meta);
+    color: var(--ink-dim);
+  }
+
+  /* ====================================================================
+     Tekst-helpers
+     ==================================================================== */
+  .mono {
+    font-family: var(--font-mono), ui-monospace, monospace;
+  }
+
+  .num {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .meta {
+    font-size: var(--text-meta);
+    color: var(--ink-dim);
+  }
+
+  .mono-meta {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    color: var(--ink-mute);
+  }
+
+  .colhead {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  /* ====================================================================
+     Status-badge — rand + vlak + glyph + woordlabel (§8)
+     Nooit kleur zonder label.
+     ==================================================================== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px 2px 6px;
+    border-radius: var(--radius-badge);
+    border: 1px solid var(--status-none-line);
+    background: var(--status-none-fill);
+    color: var(--status-none-ink);
+    font-size: var(--text-meta);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .badge__glyph {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+  }
+
+  .badge--live {
+    border-color: var(--status-live-line);
+    background: var(--status-live-fill);
+    color: var(--status-live-ink);
+  }
+
+  .badge--degraded {
+    border-color: var(--status-degraded-line);
+    background: var(--status-degraded-fill);
+    color: var(--status-degraded-ink);
+  }
+
+  .badge--failed {
+    border-color: var(--status-failed-line);
+    background: var(--status-failed-fill);
+    color: var(--status-failed-ink);
+  }
+
+  .badge--idle {
+    border-color: var(--status-idle-line);
+    background: var(--status-idle-fill);
+    color: var(--status-idle-ink);
+  }
+
+  .badge--brand {
+    border-color: var(--brand-fill-line);
+    background: var(--brand-fill);
+    color: var(--navy);
+  }
+
+  /* Statusdot naast een naam. */
+  .status-dot {
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+    flex: none;
+    background: var(--status-none-dot);
+  }
+
+  .status-dot--live {
+    background: var(--status-live-ink);
+  }
+
+  .status-dot--degraded {
+    background: var(--status-degraded-ink);
+  }
+
+  .status-dot--failed {
+    background: var(--status-failed-ink);
+  }
+
+  .status-dot--idle {
+    background: var(--status-idle-dot);
+  }
+
+  /* ====================================================================
+     Dropdownmenu — het enige element met een schaduw (§8)
+     ==================================================================== */
+  .menu {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-menu);
+    padding: 4px;
+  }
+
+  /* ====================================================================
+     Live-tail-indicator — de enige animatie in het portaal (§8 Motion)
+     ==================================================================== */
+  .pulse-dot {
+    display: block;
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+    flex: none;
+    background: var(--status-live-ink);
+    animation: pulse var(--pulse-duration) ease-in-out infinite;
+  }
+}

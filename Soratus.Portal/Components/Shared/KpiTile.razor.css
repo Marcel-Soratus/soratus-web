@@ -1,0 +1,11 @@
+/* De tegel zelf staat in patterns.css. Hier alleen wat §8 niet geeft:
+   - de rode variant van het getal (mockup: foutpercentage 24u kleurt rood boven de drempel);
+   - de ruimte onder het label bij een tegel met eigen inhoud (mockup: 6px). */
+
+.kpi-tile__value--alarm {
+  color: var(--status-failed-ink);
+}
+
+.kpi-tile__body {
+  margin-top: 6px;
+}

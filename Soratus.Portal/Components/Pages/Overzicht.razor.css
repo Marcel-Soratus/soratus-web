@@ -1,0 +1,118 @@
+/* Soratus-overzicht — alleen wat dit scherm zelf tekent.
+
+   De kaart, de rijen, de badges en de KPI-tegels staan al in patterns.css; die
+   worden hier niet overgeschreven. Wat hier wél staat is de statusverdelingsbalk
+   (§8 heeft er geen patroon voor, alleen kleuren) en de paar uitlijningen die
+   binnen een cel of een tegel nodig zijn.
+
+   Alle kleuren komen uit tokens.css. Er staat hier geen enkele hexwaarde. */
+
+/* Verticale ritmiek tussen KPI-rij, melding, kaart en legenda. */
+.stack {
+  display: grid;
+  gap: var(--gap-card);
+}
+
+/* Melding boven de lijst wanneer een klantopslag niet antwoordde. */
+.notice {
+  margin: 0;
+  max-width: 78ch;
+}
+
+/* --- klantnaam met statusstip ---------------------------------------- */
+.row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.row-name__text {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- statusverdeling in de klantrij ---------------------------------- */
+/* De balk is decoratie bovenop de tekst eronder; hij is aria-hidden en draagt
+   dus nooit in zijn eentje de status. De segmenten schalen met flex-grow op de
+   tellingen, zodat er geen percentage hoeft te worden uitgerekend. */
+.dist {
+  display: flex;
+  height: 6px;
+  gap: 1px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--line-row);
+}
+
+.dist__seg {
+  display: block;
+  min-width: 2px;
+}
+
+.dist__text {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-colhead);
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+
+/* Wat er buiten productie draait. Staat onder de verdeling, in dezelfde mono-meta
+   maar zonder statuskleur: acceptatie en ontwikkeling tellen niet mee in de ernst,
+   dus mogen ze de rij ook niet kleuren. */
+.dist__aside {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-colhead);
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  opacity: 0.85;
+}
+
+/* Meerdere zinnen in de voetnoot onder de KPI-rij, elk als eigen span zodat ze
+   los van elkaar kunnen verschijnen. */
+.notice span + span {
+  margin-left: 0.35em;
+}
+
+/* Een getal dat we niet weten: zelfde plek, zichtbaar zachter. Het streepje
+   staat er met een title die zegt waarom er niets staat. */
+.muted {
+  color: var(--ink-mute);
+}
+
+/* --- statusverdeling in de KPI-tegel --------------------------------- */
+.kpi-statuses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 2px 10px;
+  margin-top: 6px;
+}
+
+.kpi-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kpi-status__count {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-cell);
+  text-align: right;
+  min-width: 2ch;
+}
+
+.kpi-status__label {
+  font-size: var(--text-meta);
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

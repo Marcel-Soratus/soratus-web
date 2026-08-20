@@ -1,0 +1,158 @@
+/* Soratus Agent Portal — base
+   Lichte reset, body-typografie, focus en de enige animatie in het portaal.
+   Waarden uit agent-portal-spec.md §8 (Typografie, Focus, Motion). */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100vh;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  figure,
+  blockquote,
+  dl,
+  dd {
+    margin: 0;
+  }
+
+  ul,
+  ol {
+    margin: 0;
+    padding: 0;
+  }
+
+  img,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* --- links ---------------------------------------------------------- */
+  a {
+    color: var(--blue);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--navy);
+    text-decoration: underline;
+  }
+
+  /* --- formulierelementen erven de UI-font ---------------------------- */
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+    margin: 0;
+  }
+
+  button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: inherit;
+  }
+
+  input,
+  select,
+  textarea {
+    background: var(--surface);
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  /* --- focus: overal hetzelfde, §8 ------------------------------------ */
+  :focus-visible {
+    outline: var(--focus-width) solid var(--blue);
+    outline-offset: var(--focus-offset);
+  }
+
+  /* --- tabellen: alle getallen tabulair ------------------------------- */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th,
+  td {
+    text-align: left;
+    font-weight: inherit;
+  }
+
+  th[data-num],
+  td[data-num],
+  [data-num] {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /* --- alleen voor schermlezers --------------------------------------- */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* --- de enige animatie in het portaal: pulse op de live-tail-dot ---- */
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

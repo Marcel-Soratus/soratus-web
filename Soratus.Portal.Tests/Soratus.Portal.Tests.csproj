@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- De testnamen zijn Nederlands en bevatten geen underscores; de analyzers van het
+         SDK-project hoeven daar niets van te vinden. -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Dezelfde versies als Soratus.Web.Tests. 2.8.6+ brengt AngleSharp 1.5.2 mee;
+         2.7.2 hing nog op 1.4.0 met GHSA-pgww-w46g-26qg (NU1902). -->
+    <PackageReference Include="bunit" Version="2.8.6" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Nodig omdat dit een gewoon consoleproject is en Soratus.Portal een webproject. Een webproject
+      heeft deze frameworkverwijzing zelf, waardoor pakketten die in het gedeelde
+      Microsoft.AspNetCore.App-framework zitten bij het restoren worden weggesnoeid. Zonder deze
+      regel haalt het testproject ze wél als losse pakketten binnen — met via
+      Microsoft.Identity.Web een kwetsbare System.Security.Cryptography.Xml (NU1903) tot gevolg.
+      Een gepinde pakketversie zou het symptoom bestrijden; de ontbrekende frameworkverwijzing is
+      de oorzaak. Bijkomend voordeel: hiermee zijn de authenticatietypen beschikbaar die bUnit
+      nodig heeft om componenten met een principal te renderen.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Soratus.Agents.Contracts\Soratus.Agents.Contracts.csproj" />
+    <ProjectReference Include="..\Soratus.Portal\Soratus.Portal.csproj" />
+  </ItemGroup>
+
+</Project>

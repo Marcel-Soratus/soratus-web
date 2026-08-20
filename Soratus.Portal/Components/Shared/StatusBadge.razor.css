@@ -1,0 +1,13 @@
+/* Alleen de kleinere legendavariant. De badge zelf staat in patterns.css.
+   Maten uit de mockup (legenda-badge: 11px tekst, 10px glyph, padding 1px 7px 1px 5px);
+   §8 geeft alleen de normale badge. */
+
+.badge--sm {
+  padding: 1px 7px 1px 5px;
+  gap: 5px;
+  font-size: var(--text-mono-meta);
+}
+
+.badge--sm .badge__glyph {
+  font-size: var(--text-colhead);
+}

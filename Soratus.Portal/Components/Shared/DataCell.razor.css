@@ -1,0 +1,22 @@
+/* Het cellabel is standaard .sr-only (base.css). Onder 768px klapt de rij naar twee kolommen en
+   verdwijnt de kolomkop; dan komt hetzelfde element in beeld als kopje boven de waarde.
+
+   De regel geldt alleen binnen [data-rowgrid], want alleen daar klapt de rij ook echt in.
+   Isolatie-CSS is ongelaagd en wint daarmee van de .sr-only-regel in de base-laag. */
+
+@media (max-width: 768px) {
+  [data-rowgrid] .data-cell__label {
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    margin: 0 0 2px;
+    overflow: visible;
+    clip: auto;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+}

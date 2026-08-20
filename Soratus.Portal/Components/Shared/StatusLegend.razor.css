@@ -1,0 +1,38 @@
+/* Uit de mockup: een subtiel vlak met 1px rand, kolommen van minstens 230px.
+   Geen .card, want de legenda staat bewust op het subtiele oppervlak en niet op wit — hij is
+   uitleg naast de tabel, geen tabel. */
+
+.legend {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-subtle);
+  padding: var(--pad-card-y) var(--pad-card-x);
+}
+
+.legend__title {
+  margin-bottom: 8px;
+  font-weight: 400;
+}
+
+.legend__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px 20px;
+}
+
+.legend__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* De badge mag niet meerekken met de uitlegtekst. De wrapper is van dit component; StatusBadge
+   stylen we niet van buitenaf. */
+.legend__badge {
+  flex: none;
+}
+
+.legend__text {
+  font-size: var(--text-meta);
+  color: var(--ink-dim);
+}

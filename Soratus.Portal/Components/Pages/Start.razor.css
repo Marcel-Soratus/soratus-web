@@ -1,0 +1,19 @@
+/* Landingsroute — de keuzelijst en de "nog geen omgeving"-pagina.
+   Alles uit tokens.css; geen hexwaarden. */
+
+.stack {
+  display: grid;
+  gap: var(--gap-card);
+}
+
+.notice {
+  margin: 0;
+  max-width: 78ch;
+}
+
+.choice-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

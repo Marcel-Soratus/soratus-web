@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+
+    @* Space Grotesk (UI), JetBrains Mono (logs/getallen/meta), Sora 200 (woordmerk).
+       Instrument Serif is een marketingdevice en wordt in het portaal niet gebruikt (§8). *@
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Sora:wght@200;300;400&display=swap" />
+
+    @* Volgorde is bindend: tokens, base, layout, patterns, en als laatste de
+       isolatie-bundel. De eerste vier zitten in @@layer, de bundel niet, zodat
+       componentspecifieke stijl altijd wint zonder !important. *@
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["css/tokens.css"]" />
+    <link rel="stylesheet" href="@Assets["css/base.css"]" />
+    <link rel="stylesheet" href="@Assets["css/layout.css"]" />
+    <link rel="stylesheet" href="@Assets["css/patterns.css"]" />
+    <link rel="stylesheet" href="@Assets["Soratus.Portal.styles.css"]" />
+
+    <ImportMap />
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>

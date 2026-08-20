@@ -1,0 +1,210 @@
+/* Soratus Agent Portal — layout
+   De shell: sticky header, contentkolom, paginakop, responsieve grenzen.
+   Waarden uit agent-portal-spec.md §8 (Ruimte/radii/elevatie, Responsief).
+
+   De header staat hier en niet in CSS-isolatie van PortalHeader.razor.
+   Reden: de [data-hide-md] / [data-hide-sm] regels onderaan dit bestand
+   moeten van display-declaraties op dezelfde elementen kunnen winnen.
+   Isolatie-CSS is ongelaagd en zou dat verhinderen. Alles wat een
+   data-hide-attribuut draagt, wordt dus uitsluitend hier gestyled. */
+
+@layer layout {
+  /* --- shell ---------------------------------------------------------- */
+  .portal-shell {
+    min-height: 100vh;
+    background: var(--canvas);
+  }
+
+  /* --- header --------------------------------------------------------- */
+  .portal-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--header-height);
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .portal-header__brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: none;
+  }
+
+  .portal-header__brand:hover {
+    text-decoration: none;
+  }
+
+  .wordmark {
+    font-family: var(--font-wordmark), sans-serif;
+    font-weight: 200;
+    font-size: var(--text-wordmark);
+    letter-spacing: var(--tracking-wordmark);
+    color: var(--ink);
+  }
+
+  .portal-header__divider {
+    display: block;
+    width: 1px;
+    height: 18px;
+    background: var(--line-field);
+    margin: 0 4px;
+    flex: none;
+  }
+
+  .portal-header__label {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    letter-spacing: var(--tracking-colhead);
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+
+  /* --- hoofdnavigatie ------------------------------------------------- */
+  .portal-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+    min-width: 0;
+    flex-shrink: 1;
+    /* De mockup laat de nav wrappen, maar de header is 52px hoog: op smalle
+       schermen valt de eerste rij dan buiten beeld. In lijn met §8
+       ("tabellen schuiven horizontaal in plaats van te clippen") schuift de
+       nav horizontaal; er verdwijnt zo geen enkel menu-item. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .portal-nav__item {
+    border-radius: var(--radius-control);
+    padding: 5px 9px;
+    font-size: var(--text-cell);
+    font-weight: 500;
+    white-space: nowrap;
+    flex: none;
+    color: var(--ink-dim);
+    background: transparent;
+  }
+
+  .portal-nav__item:hover {
+    background: var(--fill-neutral);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .portal-nav__item.active {
+    background: var(--fill-neutral);
+    color: var(--ink);
+  }
+
+  .portal-header__spacer {
+    flex: 1;
+  }
+
+  /* --- rol en gebruiker ---------------------------------------------- */
+  .portal-header__role {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
+    white-space: nowrap;
+    flex: none;
+  }
+
+  /* display staat hier bewust: de [data-hide-sm]-regel verderop in dezelfde
+     laag heeft gelijke specificiteit en wint dus op bronvolgorde. */
+  .portal-header__user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+
+  .portal-header__who {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    color: var(--ink-dim);
+    white-space: nowrap;
+  }
+
+  /* Aan-/afmeldknop mag niet meekrimpen; de nav schuift al. */
+  .portal-header .btn {
+    flex: none;
+  }
+
+  .portal-header__avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-pill);
+    background: var(--line-row);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-colhead);
+    color: var(--ink-dim);
+    flex: none;
+  }
+
+  /* --- contentkolom --------------------------------------------------- */
+  .portal-main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 18px 20px 56px;
+  }
+
+  /* --- paginakop ------------------------------------------------------ */
+  .page-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--gap-card);
+    flex-wrap: wrap;
+    margin-bottom: var(--gap-card);
+  }
+
+  .page-title {
+    font-size: var(--text-page-title);
+    font-weight: 600;
+    letter-spacing: var(--tracking-title);
+  }
+
+  .page-meta {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: var(--text-mono-meta);
+    color: var(--ink-mute);
+  }
+
+  /* --- responsief: de twee grenzen uit §8 ("Responsief") -------------- */
+
+  /* §8: onder 1180px verdwijnen het "Agent Portal"-label en het rol-label. */
+  @media (max-width: 1180px) {
+    [data-hide-md] {
+      display: none;
+    }
+  }
+
+  /* §8: onder 768px verdwijnt de gebruikersnaam en klappen datarijen naar
+     een tweekoloms lijstweergave. De regel staat één keer en geldt voor elke
+     tabel in het portaal: een scherm zet alleen --row-cols op de kaart, hier
+     wordt --row-cols op de rij zelf gezet. Een declaratie op het element
+     verslaat altijd een geërfde waarde, ook een inline gezette. */
+  @media (max-width: 768px) {
+    [data-hide-sm] {
+      display: none;
+    }
+
+    [data-rowgrid] .data-row,
+    [data-rowgrid] .data-row-head {
+      --row-cols: 1fr 1fr;
+      row-gap: 6px;
+    }
+  }
+}

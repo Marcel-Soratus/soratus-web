@@ -1,0 +1,22 @@
+/* Blazor's eigen foutbalk, in de tokens van het portaal (§8: degraded-vlak). */
+#blazor-error-ui {
+    color-scheme: light only;
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    background: var(--status-degraded-fill);
+    border-top: 1px solid var(--status-degraded-line);
+    color: var(--status-degraded-ink);
+    font-size: var(--text-cell);
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }

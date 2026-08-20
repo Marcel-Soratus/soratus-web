@@ -1,0 +1,128 @@
+@page "/"
+@attribute [Authorize]
+
+@* De landingsroute. Toont in het normale geval niets: hij stuurt door.
+
+   Waarom deze pagina bestaat: het overzicht is operator-only, maar "/" is waar
+   iedereen binnenkomt — het woordmerk in de header linkt hierheen, en het is het
+   adres dat mensen in hun bladwijzers zetten. Zou het overzicht zelf op "/"
+   staan, dan loopt de helft van de gebruikers tegen een 403 aan op de enige URL
+   die ze kennen.
+
+   Aanmeldplichtig, niet anoniem. Zonder aangemelde gebruiker valt er niets te
+   kiezen: we weten dan niet welke omgeving van wie is.
+
+   De volgorde is dezelfde als op de klantweergave: eerst het operatorrecht.
+   ResolveOwnAsync geeft een operator bewust géén klanten terug, maar dan nog
+   staat het operatorbeleid vooraan, zodat er één plek is waar de rangorde
+   tussen de rollen wordt vastgelegd.
+
+   Twee gevallen komen niet als doorstuur uit deze pagina, en die worden hier
+   uitgeschreven in plaats van weggeraden:
+
+     meer dan één klant  → een keuze. Gokken welke omgeving iemand bedoelde is
+                           erger dan één klik vragen.
+     nul klanten         → een eerlijke pagina, geen 404. De gebruiker bestáát en
+                           is aangemeld; er hangt alleen nog geen omgeving aan
+                           zijn account. Dat is een inrichtingsstap van Soratus
+                           en geen fout van hem. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject NavigationManager Navigation
+
+<PageTitle>@_title · Agent Portal</PageTitle>
+
+@if (_choices is { Count: > 1 } choices)
+{
+    <div class="page-head">
+        <h1 class="page-title">Kies een omgeving</h1>
+        <span class="page-meta">@choices.Count omgevingen op dit account</span>
+    </div>
+
+    <div class="stack">
+        <p class="meta notice">
+            Aan uw account hangen meerdere omgevingen. Kies er een; u kunt daarna via dit adres
+            altijd terug naar deze lijst.
+        </p>
+
+        <DataCard Grid="ChoiceGrid" Title="Uw omgevingen">
+            <ChildContent>
+                <DataRowHeader />
+                @foreach (var choice in choices)
+                {
+                    <DataRow Href="@($"/klant/{Uri.EscapeDataString(choice.CustomerId)}/agents")">
+                        <DataCell Truncate="true">
+                            <span class="choice-name">@choice.DisplayName</span>
+                        </DataCell>
+                        <DataCell Truncate="true">
+                            <span class="mono-meta">@(choice.Environment ?? "—")</span>
+                        </DataCell>
+                    </DataRow>
+                }
+            </ChildContent>
+        </DataCard>
+    </div>
+}
+else if (_choices is { Count: 0 })
+{
+    <div class="page-head">
+        <h1 class="page-title">Nog geen omgeving op dit account</h1>
+        <span class="page-meta">@_who</span>
+    </div>
+
+    <EmptyState Title="Er is nog geen omgeving aan uw account gekoppeld">
+        <p>
+            U bent aangemeld, maar aan dit account hangt nog geen klantomgeving. Dat is geen
+            storing en er is niets misgegaan: Soratus koppelt uw e-mailadres aan de omgeving
+            waar u bij hoort, en tot dat gebeurd is valt hier niets te tonen.
+        </p>
+        <p>
+            Klopt dit niet, neem dan contact op met Soratus en geef het e-mailadres door waarmee
+            u bent aangemeld.
+        </p>
+    </EmptyState>
+}
+
+@code {
+    /// <summary>De keuzelijst: klantnaam en de korte omgevingsaanduiding.</summary>
+    private static readonly RowGrid ChoiceGrid = new(
+        new GridColumn("Omgeving", "minmax(180px, 1.6fr)", Labelled: false),
+        new GridColumn("Regio", "140px"));
+
+    private IReadOnlyList<CustomerScope>? _choices;
+
+    private string _title = "Agent Portal";
+
+    private string? _who;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        if (await Scopes.ResolveOperatorAsync(user) is not null)
+        {
+            Navigation.NavigateTo("/overzicht");
+            return;
+        }
+
+        var own = await Scopes.ResolveOwnAsync(user);
+
+        if (own.Count == 1)
+        {
+            Navigation.NavigateTo($"/klant/{Uri.EscapeDataString(own[0].CustomerId)}/agents");
+            return;
+        }
+
+        _choices = own;
+        _title = own.Count == 0 ? "Nog geen omgeving" : "Kies een omgeving";
+        _who = user.Identity?.Name;
+    }
+}

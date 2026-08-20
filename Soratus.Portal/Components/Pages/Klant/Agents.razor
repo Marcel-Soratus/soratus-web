@@ -1,0 +1,377 @@
+@page "/klant/{Slug}/agents"
+@attribute [Authorize]
+
+@* De klantweergave van de agentlijst (spec §3.2).
+
+   Twee rollen, twee viewmodels, twee blokken markup. Er staat hier bewust geen
+   @if (isOperator) om een gevoelig veld heen: de klantweergave krijgt een type
+   dat EnvironmentDetail, AgentEnvironment en ContractVersion niet hoort te
+   hebben — het hééft ze niet. Een veld dat er niet is kan niet lekken, ook niet
+   als iemand hier over een half jaar een kolom bij zet.
+
+   De scope komt van de ICustomerScopeResolver, en de volgorde is belangrijk:
+   eerst het operatorrecht, want een operator krijgt óók een gewone klantscope
+   voor elke klant. Krijgen we geen van beide, dan 404 en geen 403 — we
+   bevestigen niet dat een klant bestaat aan iemand die er niet bij hoort.
+
+   Er staat geen doorklik op een agentrij. Het agentdetail (§3.3) komt in fase 1;
+   tot die tijd zou de rij naar een route leiden die niet bestaat, en een dode
+   link is net zo goed een dode knop. *@
+
+@using System.Globalization
+@inject ICustomerScopeResolver Scopes
+@inject IPortalViews Views
+@inject NavigationManager Navigation
+
+<PageTitle>@_title · Agent Portal</PageTitle>
+
+@if (_operatorView is { } operatorView)
+{
+    <div class="toolbar">
+        <a class="btn btn--small" href="/overzicht"><span class="mono" aria-hidden="true">←</span>Alle klanten</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title">@operatorView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(operatorView.GeneratedAt)">
+            laatst bijgewerkt @TimeFormat.Clock(operatorView.GeneratedAt)@Suffix(operatorView.EnvironmentDetail ?? operatorView.Environment)
+        </span>
+    </div>
+
+    @* De slug komt uit het viewmodel en niet uit de routeparameter. Het viewmodel
+       draagt de slug zoals de resolver hem heeft geaccepteerd; de URL kan er in
+       andere letters staan, want de opzoektabel vergelijkt case-insensitive. Zo
+       staat er in de subnav altijd de canonieke vorm. *@
+    <CustomerNav Slug="@operatorView.CustomerId" />
+
+    <div class="stack">
+        <p class="meta notice">
+            @operatorView.Statuses.Total agents over alle omgevingen, waarvan
+            @operatorView.ProductionStatuses.Total in productie. De klant zelf ziet uitsluitend die
+            productie-agents.@(operatorView.IsInternal ? " Dit is de interne beheerklant." : string.Empty)
+        </p>
+
+        @if (operatorView.IsEmpty)
+        {
+            <EmptyState Title="Nog geen agents voor deze klant"
+                        Text="De omgeving staat er, maar er is in geen enkele omgeving een agent uitgerold. Zodra de eerste uitrol draait verschijnt hij hier, met logs vanaf de eerste run."
+                        Facts="OperatorEmptyFacts" />
+        }
+        else
+        {
+            <DataCard Grid="OperatorGrid" Title="Agents">
+                <HeaderContent>
+                    <span>alle omgevingen · gesorteerd op ernst</span>
+                </HeaderContent>
+                <ChildContent>
+                    <DataRowHeader />
+                    @foreach (var agent in operatorView.Agents)
+                    {
+                        <DataRow Tint="agent.Status">
+                            <DataCell Truncate="true">
+                                <span class="agent-name">@agent.AgentName</span>
+                            </DataCell>
+
+                            <DataCell Truncate="true">@agent.DisplayType</DataCell>
+
+                            <DataCell Truncate="true">
+                                <span class="mono-meta">@EnvironmentLabel(agent.AgentEnvironment)</span>
+                            </DataCell>
+
+                            <DataCell>
+                                <StatusBadge Status="agent.Status"
+                                             title="@Heartbeat(agent.LastHeartbeatAt, operatorView.GeneratedAt)" />
+                            </DataCell>
+
+                            <DataCell>
+                                <RelativeTime Value="agent.LastActivityAt"
+                                              Now="operatorView.GeneratedAt"
+                                              Class="mono-meta" />
+                            </DataCell>
+
+                            <DataCell>
+                                <span class="num">@Duration(agent.LastRun?.Duration)</span>
+                            </DataCell>
+
+                            @* Altijd twaalf blokken, ook bij een agent die niets deed.
+                               De reeks is één role="img" met een tekstbeschrijving, dus
+                               twaalf kleurvlakjes zijn nooit de enige drager. *@
+                            <DataCell>
+                                <Sparkline Blocks="agent.Runs24Hours" />
+                            </DataCell>
+
+                            <DataCell Truncate="true">
+                                @if (agent.NextRunAt is { } next)
+                                {
+                                    <time class="mono-meta"
+                                          datetime="@TimeFormat.Iso(next)"
+                                          title="@TimeFormat.Absolute(next)">@TimeFormat.Clock(next)</time>
+                                }
+                                else
+                                {
+                                    <span class="mono-meta"
+                                          title="@(agent.TriggerDetail ?? "draait alleen op een trigger")">op trigger · @TriggerLabel(agent.TriggerKind)</span>
+                                }
+                            </DataCell>
+
+                            <DataCell>
+                                <span class="mono-meta">@agent.Version</span>
+                                @if (agent.IsContractVersionStale)
+                                {
+                                    <span class="mono-meta stale"
+                                          title="Deze agent publiceert contractversie @agent.ContractVersion; de huidige is @AgentRegistration.CurrentContractVersion. Hij mist dus een uitrol van de telemetriebibliotheek.">contract v@agent.ContractVersion</span>
+                                }
+                            </DataCell>
+                        </DataRow>
+                    }
+                </ChildContent>
+            </DataCard>
+        }
+
+        <StatusLegend />
+    </div>
+}
+else if (_customerView is { } customerView)
+{
+    @* Een klantgebruiker met meer dan één omgeving is via Start.razor binnengekomen
+       op een keuzescherm. Zonder deze knop is de enige weg terug het woordmerk, en
+       dat weet niemand. De operator heeft "Alle klanten"; dit is dezelfde knop voor
+       wie meerdere omgevingen heeft. Wie er één heeft ziet hem niet: dan zou hij
+       naar een keuze leiden die niet bestaat. *@
+    @if (_hasMultipleEnvironments)
+    {
+        <div class="toolbar">
+            <a class="btn btn--small" href="/"><span class="mono" aria-hidden="true">←</span>Mijn omgevingen</a>
+        </div>
+    }
+
+    <div class="page-head">
+        <h1 class="page-title">@customerView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(customerView.GeneratedAt)">
+            laatst bijgewerkt @TimeFormat.Clock(customerView.GeneratedAt)@Suffix(customerView.Environment)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@customerView.CustomerId" />
+
+    <div class="stack">
+        @if (customerView.IsEmpty)
+        {
+            <EmptyState Title="Nog geen agents in deze omgeving"
+                        Text="De Azure-omgeving is aangemaakt en geïsoleerd; er is nog niets uitgerold. Zodra Soratus de eerste agent uitrolt verschijnt hij hier, met logs vanaf de eerste run."
+                        Facts="CustomerEmptyFacts" />
+        }
+        else
+        {
+            <DataCard Grid="CustomerGrid" Title="Agents">
+                <HeaderContent>
+                    <span>gesorteerd op ernst, dan laatste activiteit</span>
+                </HeaderContent>
+                <ChildContent>
+                    <DataRowHeader />
+                    @foreach (var agent in customerView.Agents)
+                    {
+                        <DataRow Tint="agent.Status">
+                            <DataCell Truncate="true">
+                                <span class="agent-name">@agent.AgentName</span>
+                            </DataCell>
+
+                            <DataCell Truncate="true">@agent.DisplayType</DataCell>
+
+                            <DataCell>
+                                <StatusBadge Status="agent.Status"
+                                             title="@Heartbeat(agent.LastHeartbeatAt, customerView.GeneratedAt)" />
+                            </DataCell>
+
+                            <DataCell>
+                                <RelativeTime Value="agent.LastActivityAt"
+                                              Now="customerView.GeneratedAt"
+                                              Class="mono-meta" />
+                            </DataCell>
+
+                            <DataCell>
+                                <span class="num">@Duration(agent.LastRun?.Duration)</span>
+                            </DataCell>
+
+                            @* Altijd twaalf blokken, ook bij een agent die niets deed.
+                               De reeks is één role="img" met een tekstbeschrijving, dus
+                               twaalf kleurvlakjes zijn nooit de enige drager. *@
+                            <DataCell>
+                                <Sparkline Blocks="agent.Runs24Hours" />
+                            </DataCell>
+
+                            <DataCell Truncate="true">
+                                @if (agent.NextRunAt is { } next)
+                                {
+                                    <time class="mono-meta"
+                                          datetime="@TimeFormat.Iso(next)"
+                                          title="@TimeFormat.Absolute(next)">@TimeFormat.Clock(next)</time>
+                                }
+                                else
+                                {
+                                    <span class="mono-meta"
+                                          title="@(agent.TriggerDetail ?? "draait alleen op een trigger")">op trigger · @TriggerLabel(agent.TriggerKind)</span>
+                                }
+                            </DataCell>
+
+                            <DataCell>
+                                <span class="mono-meta">@agent.Version</span>
+                            </DataCell>
+                        </DataRow>
+                    }
+                </ChildContent>
+            </DataCard>
+        }
+
+        <StatusLegend />
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// De kolomsporen van de klantweergave, letterlijk de variant met sparkline uit
+    /// de mockup: agent, type, status, laatste run, duur, runs 24 u, volgende run,
+    /// versie.
+    /// </summary>
+    private static readonly RowGrid CustomerGrid = new(
+        new GridColumn("Agent", "minmax(150px, 1.4fr)", Labelled: false),
+        new GridColumn("Type", "108px"),
+        new GridColumn("Status", "96px"),
+        new GridColumn("Laatste run", "96px", Align: CellAlign.End),
+        new GridColumn("Duur", "66px", Align: CellAlign.End),
+        new GridColumn("Runs 24 u", "74px"),
+        new GridColumn("Volgende run", "112px"),
+        new GridColumn("Versie", "54px", Align: CellAlign.End));
+
+    /// <summary>
+    /// Dezelfde tabel voor de operator, met de omgevingskolom erbij en een bredere
+    /// versiekolom voor de melding dat een agent op een oude contractvorm staat.
+    /// </summary>
+    /// <remarks>
+    /// De mockup heeft geen operatorvariant met sparkline; deze sporen zijn die van
+    /// de klantvariant met twee kolommen erbij, binnen dezelfde reeks vaste breedtes.
+    /// De kaart schuift horizontaal als het niet past (§8), dus hij clipt niet.
+    /// </remarks>
+    private static readonly RowGrid OperatorGrid = new(
+        new GridColumn("Agent", "minmax(150px, 1.4fr)", Labelled: false),
+        new GridColumn("Type", "100px"),
+        new GridColumn("Omgeving", "74px"),
+        new GridColumn("Status", "96px"),
+        new GridColumn("Laatste run", "96px", Align: CellAlign.End),
+        new GridColumn("Duur", "66px", Align: CellAlign.End),
+        new GridColumn("Runs 24 u", "74px"),
+        new GridColumn("Volgende run", "112px"),
+        new GridColumn("Versie", "74px", Align: CellAlign.End));
+
+    private static readonly CultureInfo Nl = CultureInfo.GetCultureInfo("nl-NL");
+
+    private static readonly string[] CustomerEmptyFacts = ["agents in productie: 0"];
+
+    private static readonly string[] OperatorEmptyFacts = ["agents: 0"];
+
+    private OperatorCustomerAgentsView? _operatorView;
+
+    private CustomerAgentsView? _customerView;
+
+    private string _title = "Agents";
+
+    private bool _hasMultipleEnvironments;
+
+    /// <summary>De slug uit de URL.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Eerst het operatorrecht: een operator krijgt óók een gewone klantscope,
+        // en dan zou hij ten onrechte de smalle klantweergave te zien krijgen.
+        if (await Scopes.ResolveOperatorAsync(user, Slug) is { } operatorScope)
+        {
+            _operatorView = await Views.BuildAgentsAsync(operatorScope);
+            _title = _operatorView.DisplayName;
+            return;
+        }
+
+        if (await Scopes.ResolveAsync(user, Slug) is { } customerScope)
+        {
+            _customerView = await Views.BuildAgentsAsync(customerScope);
+            _title = _customerView.DisplayName;
+
+            // Alleen in deze tak, en alleen om te bepalen of er een weg terug naar
+            // het keuzescherm hoort te staan. ResolveOwnAsync leest de klantenlijst
+            // uit de configuratie en raakt geen opslag aan, dus dit kost niets. Voor
+            // een operator wordt hij niet aangeroepen: die heeft "Alle klanten", en
+            // ResolveOwnAsync geeft hem bewust een lege lijst terug.
+            _hasMultipleEnvironments = (await Scopes.ResolveOwnAsync(user)).Count > 1;
+            return;
+        }
+
+        // Geen recht óf de klant bestaat niet. Van buitenaf hetzelfde antwoord:
+        // 404, zodat het bestaan van een klant niet uit de statuscode volgt.
+        Navigation.NotFound();
+    }
+
+    private static string Suffix(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : $" · {value}";
+
+    private static string EnvironmentLabel(AgentEnvironment environment) => environment switch
+    {
+        AgentEnvironment.Production => "productie",
+        AgentEnvironment.Acceptance => "acceptatie",
+        _ => "ontwikkeling",
+    };
+
+    private static string TriggerLabel(TriggerKind kind) => kind switch
+    {
+        TriggerKind.Timer => "timer",
+        TriggerKind.Queue => "queue",
+        TriggerKind.Http => "HTTP",
+        TriggerKind.Webhook => "webhook",
+        TriggerKind.Blob => "blob",
+        _ => "handmatig",
+    };
+
+    /// <summary>
+    /// De tooltip bij de statusbadge: wanneer deze agent zich voor het laatst meldde.
+    /// Daarmee is een degraded of onbekende status meteen te plaatsen.
+    /// </summary>
+    private static string Heartbeat(DateTimeOffset heartbeat, DateTimeOffset now) =>
+        $"laatste hartslag {TimeFormat.Relative(heartbeat, now)} ({TimeFormat.Absolute(heartbeat)})";
+
+    /// <summary>
+    /// De duur van de laatste run. Geen afgeronde run is een streepje en geen nul:
+    /// nul milliseconden zou beweren dat er iets draaide.
+    /// </summary>
+    private static string Duration(TimeSpan? duration)
+    {
+        if (duration is not { } value)
+        {
+            return "—";
+        }
+
+        if (value.TotalSeconds < 1)
+        {
+            return $"{value.TotalMilliseconds.ToString("0", Nl)} ms";
+        }
+
+        if (value.TotalSeconds < 60)
+        {
+            return $"{value.TotalSeconds.ToString("0.00", Nl)} s";
+        }
+
+        return value.TotalMinutes < 60
+            ? $"{(int)value.TotalMinutes} m {value.Seconds} s"
+            : $"{(int)value.TotalHours} u {value.Minutes} m";
+    }
+}

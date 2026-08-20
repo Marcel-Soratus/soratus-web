@@ -1,0 +1,97 @@
+@* Eén cel. Weet zelf bij welke kolom hij hoort: de i-de cel in een rij hoort bij de i-de
+   zichtbare kolom van de RowGrid. Daaruit volgen de uitlijning én het label.
+
+   Het label doet twee dingen met één element. Normaal staat het in .sr-only, zodat een
+   schermlezer "agents 3, verdeling 2 live · 1 failed, status Failed" hoort in plaats van
+   "Bakker Logistiek, 3, 2 live · 1 failed, Failed". Onder 768px, waar de rij naar twee kolommen
+   klapt en de kolomkop verdwijnt, wordt datzelfde element zichtbaar boven de waarde. Eén
+   element, dus een schermlezer leest het nooit dubbel.
+
+   De cel is een <span> en geen <div>: een rij kan een <button> zijn, en daar mag alleen
+   phrasing content in. Als grid-item gedraagt een span zich verder als een blok. *@
+
+<span @attributes="AdditionalAttributes"
+      class="@CssClass"
+      data-label="@LabelText">
+    @if (LabelText is not null)
+    {
+        <span class="sr-only data-cell__label">@LabelText</span>
+    }
+    @ChildContent
+</span>
+
+@code {
+    private GridColumn? _column;
+
+    /// <summary>De inhoud van de cel.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Kapt te lange inhoud af met een beletselteken in plaats van de rij hoger te maken.
+    /// Voor namen, omgevingen en berichten.
+    /// </summary>
+    [Parameter]
+    public bool Truncate { get; set; }
+
+    /// <summary>
+    /// Overschrijft de uitlijning uit de kolomdefinitie. Nodig als één rij afwijkt — bij een
+    /// hele kolom hoort de uitlijning in de <see cref="GridColumn"/>.
+    /// </summary>
+    [Parameter]
+    public CellAlign? Align { get; set; }
+
+    /// <summary>
+    /// Overschrijft het label uit de kolomkop. Geef een lege tekst om het label voor deze cel
+    /// weg te laten.
+    /// </summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Extra classnamen op de cel.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Overige attributen, zoals <c>title</c>. Landt op de cel zelf.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    [CascadingParameter]
+    private RowContext? Row { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // Eén keer, bij het initialiseren: daarmee ligt het kolomnummer vast voor de levensduur
+        // van deze cel en verschuift het niet bij een herrender.
+        _column = Row?.TakeColumn();
+    }
+
+    private string? LabelText
+    {
+        get
+        {
+            if (Label is not null)
+            {
+                return Label.Length == 0 ? null : Label;
+            }
+
+            if (_column is not { Labelled: true } column || string.IsNullOrWhiteSpace(column.Header))
+            {
+                return null;
+            }
+
+            return column.Header;
+        }
+    }
+
+    private CellAlign EffectiveAlign => Align ?? _column?.Align ?? CellAlign.Start;
+
+    private string CssClass =>
+        string.Join(' ', new[]
+        {
+            "data-cell",
+            EffectiveAlign == CellAlign.End ? "data-cell--right" : null,
+            Truncate ? "data-cell--truncate" : null,
+            Class,
+        }.Where(c => !string.IsNullOrWhiteSpace(c)));
+}

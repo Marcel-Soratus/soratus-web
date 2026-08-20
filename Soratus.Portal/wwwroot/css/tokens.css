@@ -1,0 +1,129 @@
+/* Soratus Agent Portal — tokens
+   Bron van waarheid: handoff/agent-portal/agent-portal-spec.md §8.
+   Neem hier niets op wat niet in §8 staat.
+
+   De laagvolgorde staat bewust in dit bestand, omdat tokens.css als eerste
+   geladen wordt. Alle gedeelde CSS zit in een laag; de door Blazor
+   gegenereerde isolatie-CSS (Soratus.Portal.styles.css) is ongelaagd en wint
+   daardoor altijd — zonder !important en zonder specificiteitsgevechten. */
+
+@layer tokens, base, layout, patterns;
+
+@layer tokens {
+  :root {
+    /* --- oppervlakken ------------------------------------------------ */
+    --canvas: #f6f7fb;
+    --surface: #ffffff;
+    --surface-subtle: #fbfbfd;
+    --surface-hover: #f6f7fb;
+
+    /* --- tekst ------------------------------------------------------- */
+    --ink: #0a0d1a;
+    --ink-dim: #575d75;
+    --ink-mute: #767c94;
+    --ink-inverse: #ffffff;
+
+    /* --- lijnen ------------------------------------------------------ */
+    --line: #e3e5ee;
+    --line-row: #eef0f5;
+    --line-field: #cfd3e0;
+
+    /* --- neutraal vlak (chip, idle) ---------------------------------- */
+    --fill-neutral: #f1f2f6;
+    --fill-neutral-line: #dcdfe9;
+
+    /* --- merk -------------------------------------------------------- */
+    --blue: #2B5BFF;
+    --navy: #1B1F8C;
+    --brand-fill: #eef2ff;
+    --brand-fill-line: #ccd6ff;
+
+    --mark-1: #2A2FCC;
+    --mark-2: #5C82FF;
+    --mark-3: #34E27A;
+
+    /* --- status: functioneel, nooit decoratief ----------------------- */
+    --status-live-ink: #0f7a4a;
+    --status-live-fill: #eaf6ef;
+    --status-live-line: #bfe3cd;
+
+    --status-degraded-ink: #8a5a00;
+    --status-degraded-fill: #fdf4e0;
+    --status-degraded-line: #ecd7a6;
+
+    --status-failed-ink: #b3261e;
+    --status-failed-fill: #fdeceb;
+    --status-failed-line: #f0c4bf;
+    --status-failed-row: #fefaf9;
+
+    --status-idle-ink: #575d75;
+    --status-idle-dot: #767c94;
+    --status-idle-fill: #f1f2f6;
+    --status-idle-line: #dcdfe9;
+
+    --status-none-ink: #767c94;
+    --status-none-dot: #cfd3e0;
+    --status-none-fill: #f6f7fb;
+    --status-none-line: #e3e5ee;
+
+    /* --- logniveaus -------------------------------------------------- */
+    --log-info: #575d75;
+    --log-warn: #8a5a00;
+    --log-warn-row: #fefcf6;
+    --log-error: #b3261e;
+    --log-error-row: #fefaf9;
+
+    /* --- sparkline --------------------------------------------------- */
+    --spark-empty: #e3e5ee;
+    --spark-bar: #a9b0c6;
+    --spark-failed: #b3261e;
+    --spark-bar-width: 5px;
+
+    /* --- typografie -------------------------------------------------- */
+    --font-ui: 'Space Grotesk';
+    --font-mono: 'JetBrains Mono';
+    --font-wordmark: 'Sora';
+
+    --text-body: 14px;
+    --leading-body: 1.45;
+    --text-page-title: 20px;
+    --text-card-title: 15px;
+    --text-cell: 13px;
+    --text-meta: 12px;
+    --text-mono-meta: 11px;
+    --text-colhead: 10px;
+    --text-kpi: 26px;
+    --text-wordmark: 19px;
+
+    --tracking-title: -0.02em;
+    --tracking-wordmark: -0.04em;
+    --tracking-colhead: 0.1em;
+
+    /* --- ruimte ------------------------------------------------------ */
+    --pad-card-x: 14px;
+    --pad-card-y: 12px;
+    --pad-row-x: 14px;
+    --pad-row-y: 11px;
+    --pad-row-y-tight: 7px;
+
+    --gap-col: 10px;
+    --gap-card: 14px;
+
+    /* --- radii en elevatie ------------------------------------------- */
+    --radius-badge: 4px;
+    --radius-control: 6px;
+    --radius-card: 8px;
+    --radius-pill: 999px;
+
+    --shadow-menu: 0 8px 24px rgba(10, 13, 26, 0.12);
+
+    /* --- shell ------------------------------------------------------- */
+    --header-height: 52px;
+    --content-max: 1280px;
+
+    /* --- focus en motion --------------------------------------------- */
+    --focus-width: 2px;
+    --focus-offset: 2px;
+    --pulse-duration: 1.6s;
+  }
+}

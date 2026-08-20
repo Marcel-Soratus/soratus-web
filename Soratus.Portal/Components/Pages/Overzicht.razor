@@ -1,0 +1,330 @@
+@page "/overzicht"
+@attribute [Authorize(Policy = PortalPolicies.Operator)]
+
+@* Het Soratus-overzicht over alle klanten (spec §3.1).
+
+   Operator-only. Het beleid staat op de pagina en niet in de markup: een
+   klantgebruiker heeft hier niets te zoeken, en dan hoort de hele pagina dicht
+   te zitten in plaats van dat er blokken wegvallen.
+
+   Deze pagina rekent niets uit. Elk getal komt uit OperatorOverviewView, en de
+   KPI-rij is daar de som van precies de rijen die eronder staan — ze kunnen
+   elkaar dus niet tegenspreken. Wat hier wél gebeurt is opmaak: een label, een
+   glyph, een relatieve tijd, en een balk waarvan de segmenten met flex-grow
+   meeschalen op de tellingen (geen percentage, dus ook geen tweede berekening).
+
+   De knop "Nieuwe klant" uit de mockup staat er bewust niet. Een klant
+   vastleggen kan pas in fase 2; een knop die niets doet is erger dan geen knop. *@
+
+@using System.Globalization
+@inject ICustomerScopeResolver Scopes
+@inject IPortalViews Views
+@inject NavigationManager Navigation
+
+<PageTitle>Soratus-overzicht · Agent Portal</PageTitle>
+
+@if (_view is { } view)
+{
+    <div class="page-head">
+        <h1 class="page-title">Soratus-overzicht</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(view.GeneratedAt)">
+            alle klanten · bijgewerkt @TimeFormat.Clock(view.GeneratedAt)
+        </span>
+    </div>
+
+    <div class="stack">
+        <div class="kpi-grid">
+            <KpiTile Label="Klanten"
+                     Value="@view.Kpis.CustomerCount.ToString(Nl)"
+                     Sub="@($"{view.Kpis.OnboardingCount} in onboarding")" />
+
+            @* "in productie" klopt nu: Kpis.Statuses gaat uitsluitend over
+               productie-agents, net als de ernst en de sortering. Wat buiten
+               productie draait staat in de voetnoot onder deze rij — een teller,
+               geen alarm. *@
+            <KpiTile Label="Agents"
+                     Value="@view.Kpis.AgentCount.ToString(Nl)"
+                     Sub="in productie" />
+
+            <KpiTile Label="Statusverdeling">
+                <div class="kpi-statuses">
+                    @foreach (var status in StatusVisuals.All)
+                    {
+                        <span class="kpi-status">
+                            <StatusDot Status="status" />
+                            <span class="kpi-status__count">@Count(view.Kpis.Statuses, status)</span>
+                            <span class="kpi-status__label">@Lower(StatusVisuals.Label(status))</span>
+                        </span>
+                    }
+                </div>
+            </KpiTile>
+
+            <KpiTile Label="Runs vandaag"
+                     Value="@view.Kpis.RunsToday.ToString(Nl)"
+                     Sub="@($"{view.Kpis.RunsFailedToday} mislukt")"
+                     title="@($"geteld vanaf {TimeFormat.Absolute(view.Kpis.TodayStartedAt)}")" />
+
+            <KpiTile Label="Foutpercentage 24 u"
+                     Value="@ErrorRate(view.Kpis.ErrorRate24Hours)"
+                     Sub="@ErrorRateSub(view.Kpis)"
+                     Alarm="view.Kpis.Last24Hours.Failed > 0" />
+        </div>
+
+        @* De voetnoot onder de KPI-rij. Alles wat de getallen hierboven relativeert
+           staat hier, en bewust als rustige tekst: agents buiten productie zijn
+           informatie en geen alarm, dus ze krijgen geen tegel en geen statuskleur.
+           §8 houdt groen, amber en rood voor status, en dit is er geen. *@
+        @if (view.Kpis.NonProductionAgentCount > 0
+             || view.Kpis.NonProductionOnlyCount > 0
+             || view.HasUnavailableCustomers)
+        {
+            <p class="meta notice">
+                @if (view.Kpis.NonProductionAgentCount > 0)
+                {
+                    <span>
+                        Daarbuiten draaien @view.Kpis.NonProductionAgentCount agents op acceptatie of
+                        ontwikkeling@(view.Kpis.NonProductionAttention > 0
+                            ? $", waarvan {view.Kpis.NonProductionAttention} met problemen"
+                            : string.Empty). Die tellen niet mee in de ernst en niet in de sortering.
+                    </span>
+                }
+                @if (view.Kpis.NonProductionOnlyCount > 0)
+                {
+                    <span>
+                        @view.Kpis.NonProductionOnlyCount @(view.Kpis.NonProductionOnlyCount == 1
+                            ? "klant heeft" : "klanten hebben") wel agents, maar nog niets in
+                        productie.
+                    </span>
+                }
+                @if (view.HasUnavailableCustomers)
+                {
+                    <span>
+                        Van @view.Kpis.UnavailableCount van de @view.Kpis.CustomerCount klanten kwam
+                        geen antwoord uit de opslag; hun agents en runs zitten niet in de getallen
+                        hierboven. Ze staan onderaan de lijst, met de reden erbij.
+                    </span>
+                }
+            </p>
+        }
+
+        @if (view.Customers.Count == 0)
+        {
+            <EmptyState Title="Nog geen klanten ingericht"
+                        Text="Er staat nog geen klant in de configuratie van dit portaal. Zodra er een klant is ingericht verschijnt hij hier, ook als hij nog geen agents heeft."
+                        Facts="NoCustomerFacts" />
+        }
+        else
+        {
+            <DataCard Grid="CustomerGrid" Title="Klanten">
+                <HeaderContent>
+                    <span>gesorteerd op ernst, dan laatste activiteit</span>
+                </HeaderContent>
+                <ChildContent>
+                    <DataRowHeader />
+                    @foreach (var row in view.Customers)
+                    {
+                        <DataRow Href="@($"/klant/{Uri.EscapeDataString(row.CustomerId)}/agents")"
+                                 Tint="row.Status">
+                            <DataCell Truncate="true">
+                                <span class="row-name">
+                                    <StatusDot Status="row.Status" />
+                                    <span class="row-name__text">@row.DisplayName</span>
+                                </span>
+                            </DataCell>
+
+                            <DataCell Truncate="true" title="@row.EnvironmentDetail">
+                                <span class="mono-meta">@(row.Environment ?? "—")</span>
+                            </DataCell>
+
+                            <DataCell>
+                                @if (row.IsAvailable)
+                                {
+                                    <span class="num">@row.AgentCount</span>
+                                }
+                                else
+                                {
+                                    <span class="num muted" title="onbekend — de opslag antwoordde niet">—</span>
+                                }
+                            </DataCell>
+
+                            <DataCell>
+                                @if (row.IsAvailable)
+                                {
+                                    @* De balk herhaalt de tekst eronder en is daarom aria-hidden:
+                                       kleur is hier nooit de enige drager. *@
+                                    <span class="dist" aria-hidden="true">
+                                        @foreach (var segment in Segments(row.Statuses))
+                                        {
+                                            <span class="dist__seg"
+                                                  style="flex: @segment.Count; background: @StatusVisuals.DotColorVar(segment.Status);"></span>
+                                        }
+                                    </span>
+                                    <span class="dist__text">@Distribution(row)</span>
+                                    @if (row.NonProductionAgentCount > 0)
+                                    {
+                                        <span class="dist__aside">@NonProduction(row)</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="dist__text" title="@row.Unavailable!.Detail">@row.Unavailable!.Reason</span>
+                                }
+                            </DataCell>
+
+                            <DataCell>
+                                @* "Geen agents" is onwaar bij een klant die wél agents heeft maar
+                                   niets in productie. Die krijgt dezelfde rang 0, dus hetzelfde
+                                   vlak, met een label dat klopt. *@
+                                <StatusBadge Status="row.Status"
+                                             UnknownLabel="@UnknownLabelFor(row)" />
+                            </DataCell>
+
+                            <DataCell>
+                                <RelativeTime Value="row.LastActivityAt"
+                                              Now="view.GeneratedAt"
+                                              Class="mono-meta" />
+                            </DataCell>
+                        </DataRow>
+                    }
+                </ChildContent>
+            </DataCard>
+        }
+
+        <StatusLegend UnknownLabel="@StatusVisuals.UnknownCustomerLabel" />
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// De kolomsporen uit de mockup: klant, omgeving, agents, statusverdeling,
+    /// ernstigste status, laatste activiteit.
+    /// </summary>
+    private static readonly RowGrid CustomerGrid = new(
+        new GridColumn("Klant", "minmax(150px, 1.4fr)", Labelled: false),
+        new GridColumn("Omgeving", "118px"),
+        new GridColumn("Agents", "54px", Align: CellAlign.End),
+        new GridColumn("Statusverdeling", "150px"),
+        new GridColumn("Ernstigste status", "118px"),
+        new GridColumn("Laatste activiteit", "104px", Align: CellAlign.End));
+
+    private static readonly CultureInfo Nl = CultureInfo.GetCultureInfo("nl-NL");
+
+    private static readonly string[] NoCustomerFacts = ["klanten: 0"];
+
+    private OperatorOverviewView? _view;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var state = await AuthenticationState;
+        var scope = await Scopes.ResolveOperatorAsync(state.User);
+
+        // Het beleid op deze pagina laat alleen operators door, dus dit hoort niet
+        // voor te komen. Gebeurt het toch — een rol die is ingetrokken tussen twee
+        // verzoeken — dan 404 en geen 403: we bevestigen niets over wat hier staat.
+        if (scope is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        _view = await Views.BuildOverviewAsync(scope);
+    }
+
+    /// <summary>Het aantal agents in één status. Leest de telling, telt niet opnieuw.</summary>
+    private static int Count(AgentStatusBreakdown breakdown, AgentStatus status) => status switch
+    {
+        AgentStatus.Live => breakdown.Live,
+        AgentStatus.Degraded => breakdown.Degraded,
+        AgentStatus.Failed => breakdown.Failed,
+        AgentStatus.Idle => breakdown.Idle,
+        _ => breakdown.Unknown,
+    };
+
+    /// <summary>De segmenten van de verdelingsbalk, ernstigste eerst, lege statussen weg.</summary>
+    private static IEnumerable<(AgentStatus Status, int Count)> Segments(AgentStatusBreakdown breakdown) =>
+        new (AgentStatus Status, int Count)[]
+        {
+            (AgentStatus.Failed, breakdown.Failed),
+            (AgentStatus.Degraded, breakdown.Degraded),
+            (AgentStatus.Live, breakdown.Live),
+            (AgentStatus.Idle, breakdown.Idle),
+            (AgentStatus.Unknown, breakdown.Unknown),
+        }.Where(segment => segment.Count > 0);
+
+    /// <summary>
+    /// De verdeling in woorden: "2 live · 1 failed". Gaat over productie, net als de
+    /// balk erboven en de rangkolom ernaast.
+    /// </summary>
+    /// <remarks>
+    /// De nulgevallen zijn twee verschillende dingen en krijgen twee verschillende
+    /// zinnen. Een klant zonder enige agent is in onboarding; een klant die alleen
+    /// op acceptatie draait is bezig. "Geen agents ingericht" zou over die tweede
+    /// een onwaarheid zijn.
+    /// </remarks>
+    private static string Distribution(OperatorCustomerRow row)
+    {
+        var breakdown = row.Statuses;
+
+        var parts = new (AgentStatus Status, int Count)[]
+        {
+            (AgentStatus.Live, breakdown.Live),
+            (AgentStatus.Degraded, breakdown.Degraded),
+            (AgentStatus.Failed, breakdown.Failed),
+            (AgentStatus.Idle, breakdown.Idle),
+            (AgentStatus.Unknown, breakdown.Unknown),
+        }
+            .Where(part => part.Count > 0)
+            .Select(part => $"{part.Count} {Lower(StatusVisuals.Label(part.Status))}")
+            .ToArray();
+
+        if (parts.Length > 0)
+        {
+            return string.Join(" · ", parts);
+        }
+
+        return row.HasOnlyNonProductionAgents
+            ? "geen agents in productie"
+            : "geen agents ingericht";
+    }
+
+    /// <summary>
+    /// De rustige regel onder de verdeling: wat er buiten productie draait. Geen
+    /// statuskleur — dit is informatie en geen alarm.
+    /// </summary>
+    private static string NonProduction(OperatorCustomerRow row) =>
+        row.NonProductionStatuses.Attention > 0
+            ? $"+{row.NonProductionAgentCount} buiten productie · {row.NonProductionStatuses.Attention} met problemen"
+            : $"+{row.NonProductionAgentCount} buiten productie";
+
+    /// <summary>
+    /// Het woordlabel voor rang 0 op deze rij. Twee gevallen komen op dezelfde rang
+    /// uit en verdienen niet dezelfde zin.
+    /// </summary>
+    private static string UnknownLabelFor(OperatorCustomerRow row) =>
+        row.HasOnlyNonProductionAgents
+            ? StatusVisuals.UnknownNonProductionLabel
+            : StatusVisuals.UnknownCustomerLabel;
+
+    /// <summary>
+    /// Het foutpercentage als tekst. <c>null</c> is geen nul procent: er is niets
+    /// afgerond, en dan staat er een streepje.
+    /// </summary>
+    private static string ErrorRate(double? rate) =>
+        rate is { } value ? $"{(value * 100).ToString("0.0", Nl)} %" : "—";
+
+    private static string ErrorRateSub(OperatorOverviewKpis kpis) =>
+        kpis.Last24Hours.Completed == 0
+            ? "niets afgerond in 24 u"
+            : $"{kpis.Last24Hours.Failed} van {kpis.Last24Hours.Completed} runs mislukt";
+
+    private static string Lower(string label) => label.ToLower(Nl);
+}

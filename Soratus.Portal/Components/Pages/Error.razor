@@ -1,0 +1,62 @@
+@page "/Error"
+@attribute [AllowAnonymous]
+
+@* De foutpagina waar UseExceptionHandler naartoe wijst.
+
+   Anoniem bereikbaar, om dezelfde reden als de 404: met het fallback-beleid uit
+   Program.cs zou een niet-aangemelde bezoeker hier een Entra-challenge krijgen
+   in plaats van te lezen dat er iets misging.
+
+   Geen uitzondering, geen stacktrace, geen typenaam. Wat er hier wél staat is
+   het aanvraag-id: dat is nietszeggend voor wie het leest en precies genoeg voor
+   wie het logboek erbij pakt. De klant hoeft niet te weten wát er stukging, maar
+   wel dat wij het kunnen terugvinden.
+
+   De link wijst naar "/", de landingsroute: die stuurt een operator door naar
+   /overzicht en een klantgebruiker naar zijn eigen omgeving. Eén link die voor
+   beide rollen werkt, achter AuthorizeView omdat hij voor een niet-aangemelde
+   bezoeker alleen een aanmeldscherm oplevert. *@
+
+@using System.Diagnostics
+
+<PageTitle>Er ging iets mis · Agent Portal</PageTitle>
+
+<div class="page-head">
+    <h1 class="page-title">Er ging iets mis</h1>
+    <span class="page-meta">fout bij het verwerken van dit verzoek</span>
+</div>
+
+<EmptyState Title="Deze pagina kon niet worden opgebouwd"
+            Glyph="✕"
+            Facts="@Facts">
+    @* TODO — fase 2/3: "Er is niets gewijzigd: het portaal leest alleen" is waar
+       zolang het portaal alleen leest. Vanaf fase 2 (contract en toegangsbeheer)
+       en fase 3 (uren boeken) schrijft het wél, en dan wordt deze zin een
+       geruststelling die niet klopt. Herschrijf hem dan naar wat we echt kunnen
+       beloven — bijvoorbeeld dat een mislukte handeling niet half is
+       weggeschreven — of haal hem weg. *@
+    <p>
+        Het portaal is de fout ingegaan bij het ophalen of tonen van deze pagina. Er is niets
+        gewijzigd: het portaal leest alleen. Probeer de pagina opnieuw te laden; blijft het misgaan,
+        geef Soratus dan het aanvraag-id hieronder door — daarmee vinden we de regel in het logboek
+        terug.
+    </p>
+    <AuthorizeView>
+        <Authorized>
+            <p><a href="/">Terug naar het begin</a></p>
+        </Authorized>
+    </AuthorizeView>
+</EmptyState>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? _requestId;
+
+    private IReadOnlyList<string>? Facts =>
+        string.IsNullOrEmpty(_requestId) ? null : [$"aanvraag-id: {_requestId}"];
+
+    protected override void OnInitialized() =>
+        _requestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

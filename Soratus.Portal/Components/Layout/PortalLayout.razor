@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+
+@* De shell waar elke pagina in landt: header plus contentkolom van max 1280px. *@
+
+<div class="portal-shell">
+    <PortalHeader />
+
+    <main class="portal-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Er is een onverwachte fout opgetreden.
+    <a href="." class="reload">Opnieuw laden</a>
+    <span class="dismiss">&#10005;</span>
+</div>
