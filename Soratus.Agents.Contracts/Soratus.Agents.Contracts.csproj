@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Dit project wordt door zowel agents als het portaal gebruikt. De documentatie is
+         daarmee de uitleg van het contract zelf, dus die hoort mee te reizen en de build
+         moet klagen zodra een publiek lid ongedocumenteerd blijft. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>
