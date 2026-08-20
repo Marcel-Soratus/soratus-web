@@ -1,0 +1,18 @@
+{
+  "profiles": {
+    "heartbeat-demo": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "SORATUS_CUSTOMER__ID": "soratus",
+        "SORATUS_AGENT__NAME": "heartbeat-demo",
+        "SORATUS_AGENT__DISPLAY_TYPE": "Referentie",
+        "SORATUS_AGENT__SCHEDULE": "* * * * *",
+        "SORATUS_AGENT__TIMEZONE": "Europe/Amsterdam",
+        "SORATUS_AGENT__TRIGGER_DETAIL": "Elke minuut, alleen om het portaal te voeden",
+        "SORATUS_TELEMETRY__ENDPOINT": "https://cosmos-soratus-prod.documents.azure.com:443/"
+      }
+    }
+  }
+}
