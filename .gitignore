@@ -494,3 +494,11 @@ Soratus.Web/wwwroot/img/cases/*.orig.png
 
 # Python-cache van de campagnescripts
 handoff/social/__pycache__/
+
+# Uitvoer van `az deployment ... what-if`. Werkmateriaal bij het schrijven van
+# Bicep, geen bron van waarheid.
+.whatif/
+
+# Persoonlijke Claude Code-instellingen. launch.json blijft er wel in: dat is de
+# startconfiguratie van de projecten en is voor iedereen hetzelfde.
+.claude/settings.local.json

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Sora:wght@200;300;400&amp;display=swap" rel="stylesheet" />
+<style>
+  doc-page:not(:defined) { visibility: hidden; }
+  a { color: #2B5BFF; text-decoration: none; }
+  a:hover { color: #1B1F8C; text-decoration: underline; }
+  figure { break-inside: avoid; }
+</style>
+<script src="./doc-page.js"></script>
+</helmet>
+<doc-page margin="0.7in">
+  <div slot="header" style="display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #e3e5ee;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="14" height="14" role="img" aria-label="Soratus"><circle cx="6" cy="26" r="3" fill="#2A2FCC"></circle><circle cx="16" cy="16" r="4" fill="#5C82FF"></circle><circle cx="26" cy="6" r="5" fill="#34E27A"></circle></svg>
+    <span style="font-family: 'Sora', sans-serif; font-weight: 200; font-size: 13px; letter-spacing: -0.04em; color: #0a0d1a;">soratus</span>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94;">Agent Portal · schermen</span>
+  </div>
+
+  <div style="font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; color: #0a0d1a; font-size: 11pt; line-height: 1.5;">
+
+    <h1 style="font-size: 24pt; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 6px;">Soratus Agent Portal</h1>
+    <p style="margin: 0 0 4px; font-size: 12pt; color: #575d75;">Handout van de schermen — één portaal, twee scopes: de klant ziet zijn eigen omgeving, de operator alle klanten met dezelfde klantweergave erachter.</p>
+    <p style="font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; letter-spacing: 0.06em; color: #767c94; margin: 0 0 22px;">interactieve mockup: Soratus Agent Portal.dc.html · functioneel ontwerp en faseplan: agent-portal-spec.md</p>
+
+    <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #fbfbfd; padding: 12px 14px; margin-bottom: 20px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75; margin-bottom: 8px;">Zeven schermen</div>
+      <ol style="margin: 0; padding-left: 20px; font-size: 10.5pt; color: #575d75; columns: 2; column-gap: 24px;">
+        <li>Soratus-overzicht — alle klanten, problemen bovenaan</li>
+        <li>Klantweergave — agents van één klant</li>
+        <li>Agentdetail — logs, runs, configuratie</li>
+        <li>Sprint — huidige sprint uit Azure DevOps</li>
+        <li>Contract — contractgegevens en toegang</li>
+        <li>Uren — bundel, boeken, fiatteren</li>
+        <li>Facturatie — Azure-kosten, extra uren, SnelStart</li>
+        <li>Support — eerstelijn door agent, mens erachter</li>
+      </ol>
+    </div>
+
+    <figure style="margin: 0 0 26px;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">1 · Soratus-overzicht</figcaption>
+      <p style="margin: 0 0 8px; font-size: 10.5pt; color: #575d75;">Wat de operator 's ochtends als eerste opent. Binnen twee seconden zien of er ergens iets mis is.</p>
+      <img src="screens/01-screen.png" alt="Soratus-overzicht met KPI-rij en klantenlijst" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>KPI's: klanten, agents, statusverdeling, runs vandaag, foutpercentage 24u.</li>
+        <li>Sortering op ernst, dan recentheid — failed &gt; degraded &gt; live &gt; idle. Idle tilt een klant nooit naar boven.</li>
+        <li>Per klant de omgeving (regio · subscription), statusverdeling als balk, en de ernstigste status met label én glyph.</li>
+        <li>Interne klant "Soratus — intern beheer" staat er gewoon tussen: onze beheeragents monitoren we met hetzelfde scherm.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 26px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">2 · Klantweergave — agents</figcaption>
+      <p style="margin: 0 0 8px; font-size: 10.5pt; color: #575d75;">Precies wat de klant zelf ziet. De operator heeft er alleen een terugknop en klant-switcher bij.</p>
+      <img src="screens/02-screen.png" alt="Agentlijst van Bakker Logistiek" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Per agent: type, status, laatste run en duur, sparkline van 24 uur (mislukte blokken rood), volgende run, versie.</li>
+        <li>Statuslegenda in gewone taal onderaan — een klant kent "degraded" niet vanzelf.</li>
+        <li>Idle is neutraal grijs met "normale rusttoestand": geen storing.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 26px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">3 · Agentdetail — Logs</figcaption>
+      <p style="margin: 0 0 8px; font-size: 10.5pt; color: #575d75;">De hoofdmoot bij een storing: wat is er precies gebeurd?</p>
+      <img src="screens/03-screen.png" alt="Agentdetail met logtabel en filters" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Kop met versie, draait sinds, laatste heartbeat, laatste en volgende run; daaronder een statusspecifieke melding (hier: transactie teruggedraaid, geen halve voorraadstand).</li>
+        <li>Filters op info/warn/error met tellingen en een zoekveld over event, bericht en runId.</li>
+        <li>Live tail met de eerlijke melding "historische logs lopen ~1 min achter".</li>
+        <li>Elke regel klapt uit naar de volledige JSON, inclusief payload en stacktrace, die netjes afbreekt.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 20px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">4 · Agentdetail — Runs en Configuratie</figcaption>
+      <img src="screens/04-screen.png" alt="Runs-tab met recente runs" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block; margin-bottom: 10px;" />
+      <img src="screens/05-screen.png" alt="Configuratie-tab, read-only" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Runs: starttijd, duur, resultaat en aantal verwerkte items per run.</li>
+        <li>Configuratie is read-only — planning, trigger, resource-limieten, image, identity. Ingrijpen (pauzeren, herstarten) kan bewust nog niet, en dat staat er ook.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 26px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">5 · Sprint</figcaption>
+      <p style="margin: 0 0 8px; font-size: 10.5pt; color: #575d75;">De huidige sprint uit Azure DevOps, read-only.</p>
+      <img src="screens/06-screen.png" alt="Sprintweergave met work items" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Sprintnaam, periode, boardpad en het tijdstip van ophalen.</li>
+        <li>Work items met state, toegewezen persoon, open en gedane uren, en of het item door een agent of handmatig is aangemaakt.</li>
+        <li>Agents schieten taken in DevOps in; het portaal schrijft niets terug en haalt bij openen alleen de laatste status op.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 26px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">6 · Contract</figcaption>
+      <img src="screens/07-screen.png" alt="Contractgegevens en toegangsbeheer" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Contractnummer, soort, looptijd, opzegtermijn, urenbundel, uurtarief buiten bundel, indexatie, SLA, contactpersoon. Soratus kan alle velden bewerken; de klant leest mee.</li>
+        <li>Toegang tot het portaal: e-mailadres, naam en rol per persoon, uit te geven en in te trekken. Loopt via Entra ID.</li>
+        <li>Nieuwe klanten worden op het overzicht aangemaakt met dezelfde velden plus de e-mailadressen die toegang krijgen.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 26px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">7 · Uren</figcaption>
+      <img src="screens/08-screen.png" alt="Urenpagina met maandtabel, boeken en specificatie" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Standaard alleen de huidige maand: bundel, besteed, saldo, status. "Alle maanden" klapt de historie en het jaartotaal open.</li>
+        <li>Klik op een maand filtert de specificatie en zet die maand in het boekformulier.</li>
+        <li>Elke regel heeft een bron (Portaal · MCP/Claude Code · Azure DevOps) en een naam van wie het boekte.</li>
+        <li>Regels die een agent inschiet komen binnen als "te fiatteren" en tellen pas mee na akkoord. De klant ziet die stroom niet — alleen gefiatteerde uren.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 26px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">8 · Facturatie</figcaption>
+      <img src="screens/09-screen.png" alt="Facturatiepagina met facturen uit SnelStart en Azure-kosten" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Facturen per maand uit SnelStart: nummer, verstuurd- en vervaldatum, extra uren, Azure, totaal en status Concept · Verzonden · Openstaand · Betaald met betaaldatum.</li>
+        <li>De facturatie-agent zet op de 1e van de volgende maand een conceptfactuur klaar; versturen doen wij zelf.</li>
+        <li>Azure-kosten per dienst uit de resource group, met beheeropslag — door ons aanpasbaar. De klant ziet alleen het door te belasten totaal.</li>
+        <li>Uren boven bundel rollen automatisch mee en staan met Azure op één factuur, achteraf.</li>
+        <li>Maandoverzicht mailen naar de contactpersoon, met verzendbevestiging.</li>
+      </ul>
+    </figure>
+
+    <figure style="margin: 0 0 20px; break-before: page;">
+      <figcaption style="font-size: 14pt; font-weight: 600; margin-bottom: 2px;">9 · Support</figcaption>
+      <p style="margin: 0 0 8px; font-size: 10.5pt; color: #575d75;">Boven de operatorweergave, onder dezelfde draad in de klantrol.</p>
+      <img src="screens/10-screen.png" alt="Supportdraad in operatorrol" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block; margin-bottom: 10px;" />
+      <img src="screens/11-screen.png" alt="Supportdraad in klantrol" style="width: 100%; border: 1px solid #e3e5ee; border-radius: 6px; display: block;" />
+      <ul style="margin: 10px 0 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li>Een AI-eerstelijnsagent antwoordt direct op basis van wat er in het portaal staat: agentstatus met uitleg, laatste en volgende run, het bijbehorende DevOps-item, uren tegen de bundel, factuur- en betaalstatus, open sprintitems.</li>
+        <li>Elke AI-bubbel draagt het badge "AI · eerstelijn" plus de bron van het antwoord, en biedt "Toch een mens van Soratus spreken".</li>
+        <li>Weet de agent het niet, dan zegt hij dat en escaleert binnen de SLA. In de operatorrol antwoordt een mens en springt de agent er niet tussen.</li>
+      </ul>
+    </figure>
+
+    <div style="break-before: page; border: 1px solid #e3e5ee; border-radius: 8px; background: #fbfbfd; padding: 14px 16px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75; margin-bottom: 8px;">Opbouw in fases</div>
+      <ol style="margin: 0; padding-left: 20px; font-size: 10.5pt; color: #575d75;">
+        <li><strong style="color: #0a0d1a;">Fundament</strong> — tokens, Entra ID met twee rollen, klant- en agentmodel op seed-data.</li>
+        <li><strong style="color: #0a0d1a;">Observability</strong> — status, heartbeat, runs, logs uit Container Apps en Log Analytics.</li>
+        <li><strong style="color: #0a0d1a;">Contract en toegang</strong> — contractbeheer, klant aanmaken, toegang per e-mailadres.</li>
+        <li><strong style="color: #0a0d1a;">Uren</strong> — bundel, boeken, bronnen (MCP en DevOps), fiattering.</li>
+        <li><strong style="color: #0a0d1a;">Kosten en facturatie</strong> — Azure-kosten per RG, conceptfactuur in SnelStart, betaalstatus terug.</li>
+        <li><strong style="color: #0a0d1a;">Sprint en support</strong> — DevOps-weergave, berichtendraad, AI-eerstelijn.</li>
+        <li><strong style="color: #0a0d1a;">Beheeragents</strong> — storingsmelder, automatische maandfactuur, interne klant in het overzicht.</li>
+      </ol>
+      <p style="margin: 12px 0 0; font-size: 10pt; color: #767c94;">Buiten scope voor nu: ingrijpen vanuit het portaal (pauzeren, herstarten, limieten), donkere variant, agent-provisioning direct vanuit klantaanmaak.</p>
+    </div>
+  </div>
+</doc-page>
+</x-dc>
+</body>
+</html>

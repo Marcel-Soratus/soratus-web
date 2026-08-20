@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "portal",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Soratus.Portal", "--launch-profile", "http"],
+      "port": 5092
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Soratus.Web", "--launch-profile", "http"],
+      "port": 5255
+    }
+  ]
+}

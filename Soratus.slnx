@@ -1,4 +1,14 @@
 <Solution>
+  <Folder Name="/agents/">
+    <Project Path="agents/heartbeat-demo/heartbeat-demo.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Soratus.Seed/Soratus.Seed.csproj" />
+  </Folder>
+  <Project Path="Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj" />
+  <Project Path="Soratus.Agents.Telemetry/Soratus.Agents.Telemetry.csproj" />
+  <Project Path="Soratus.Portal.Tests/Soratus.Portal.Tests.csproj" />
+  <Project Path="Soratus.Portal/Soratus.Portal.csproj" />
   <Project Path="Soratus.Web.Tests/Soratus.Web.Tests.csproj" />
   <Project Path="Soratus.Web/Soratus.Web.csproj" />
 </Solution>

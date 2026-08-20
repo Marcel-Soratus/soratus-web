@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Sora:wght@200;300;400&amp;display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #f6f7fb; }
+  * { box-sizing: border-box; }
+  a { color: #2B5BFF; text-decoration: none; }
+  a:hover { color: #1B1F8C; text-decoration: underline; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+  :focus-visible { outline: 2px solid #2B5BFF; outline-offset: 2px; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (max-width: 1180px) { [data-hide-md] { display: none !important; } }
+  @media (max-width: 768px) {
+    [data-rowgrid] { grid-template-columns: 1fr 1fr !important; row-gap: 6px !important; }
+    [data-hide-sm] { display: none !important; }
+  }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #f6f7fb; color: #0a0d1a; font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; font-size: 14px; line-height: 1.45;">
+
+  <header style="position: sticky; top: 0; z-index: 50; background: #ffffff; border-bottom: 1px solid #e3e5ee; display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 52px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" role="img" aria-label="Soratus"><circle cx="6" cy="26" r="3" fill="#2A2FCC"></circle><circle cx="16" cy="16" r="4" fill="#5C82FF"></circle><circle cx="26" cy="6" r="5" fill="#34E27A"></circle></svg>
+      <span style="font-family: 'Sora', sans-serif; font-weight: 200; font-size: 19px; letter-spacing: -0.04em; color: #0a0d1a;">soratus</span>
+      <span style="width: 1px; height: 18px; background: #cfd3e0; margin: 0 4px;" data-hide-md="1"></span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;" data-hide-md="1">Agent Portal</span>
+    </div>
+
+    <nav style="display: flex; align-items: center; gap: 2px; margin-left: 4px; min-width: 0; flex-shrink: 1; flex-wrap: wrap;" aria-label="Hoofdmenu">
+      <sc-for list="{{ menu }}" as="m" hint-placeholder-count="3">
+        <button type="button" onClick="{{ m.go }}" aria-current="{{ m.active }}" style="border: none; background: {{ m.bg }}; color: {{ m.color }}; border-radius: 6px; padding: 5px 9px; font-size: 13px; font-weight: 500; white-space: nowrap; flex: none;" style-hover="background: #f1f2f6; color: #0a0d1a;">{{ m.label }}</button>
+      </sc-for>
+    </nav>
+
+    <div style="flex: 1;"></div>
+
+    <div style="display: flex; align-items: center; gap: 8px; border: 1px dashed #cfd3e0; border-radius: 8px; padding: 4px; background: #f6f7fb; flex: none;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #767c94;" data-hide-md="1">demo · rol</span>
+      <div style="display: flex; gap: 2px;">
+        <button type="button" onClick="{{ setOperator }}" aria-pressed="{{ isOperator }}" style="{{ roleOperatorStyle }}">Soratus-operator</button>
+        <button type="button" onClick="{{ setClient }}" aria-pressed="{{ isClient }}" style="{{ roleClientStyle }}">Klant</button>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; flex: none;" data-hide-sm="1">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #575d75;" data-hide-md="1">{{ whoLabel }}</span>
+      <span style="width: 26px; height: 26px; border-radius: 999px; background: #eef0f5; border: 1px solid #e3e5ee; display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #575d75;">{{ whoInitials }}</span>
+    </div>
+  </header>
+
+  <main style="max-width: 1280px; margin: 0 auto; padding: 18px 20px 56px;">
+
+    <sc-if value="{{ isScreenA }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 14px;">
+          <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">Soratus-overzicht</h1>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94;" title="{{ nowAbs }}">alle klanten · bijgewerkt {{ nowClock }}</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 1px; background: #e3e5ee; border: 1px solid #e3e5ee; border-radius: 8px; overflow: hidden; margin-bottom: 18px;">
+          <div style="background: #ffffff; padding: 12px 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94;">Klanten</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; margin-top: 4px;">{{ kpiCustomers }}</div>
+            <div style="font-size: 12px; color: #575d75;">{{ kpiOnboarding }}</div>
+          </div>
+          <div style="background: #ffffff; padding: 12px 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94;">Agents</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; margin-top: 4px;">{{ kpiAgents }}</div>
+            <div style="font-size: 12px; color: #575d75;">in productie</div>
+          </div>
+          <div style="background: #ffffff; padding: 12px 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94; margin-bottom: 6px;">Statusverdeling</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 2px 10px;">
+              <sc-for list="{{ kpiStatuses }}" as="s" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="width: 7px; height: 7px; border-radius: 999px; flex: none; background: {{ s.dot }};"></span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #0a0d1a; min-width: 14px;">{{ s.count }}</span>
+                  <span style="font-size: 12px; color: #575d75;">{{ s.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background: #ffffff; padding: 12px 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94;">Runs vandaag</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; margin-top: 4px;">{{ kpiRuns }}</div>
+            <div style="font-size: 12px; color: #575d75;">{{ kpiFailedRuns }} mislukt</div>
+          </div>
+          <div style="background: #ffffff; padding: 12px 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94;">Foutpercentage 24u</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; margin-top: 4px; color: {{ kpiErrColor }};">{{ kpiErrRate }}</div>
+            <div style="font-size: 12px; color: #575d75;">1 klant met gefaalde run</div>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNew }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; margin-bottom: 14px;">
+            <div style="padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Nieuwe klant aanmaken</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 14px; padding: 12px 14px;">
+              <sc-for list="{{ newFields }}" as="fld" hint-placeholder-count="14">
+                <label style="display: grid; gap: 4px; min-width: 0;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">{{ fld.label }}</span>
+                  <input type="text" value="{{ fld.value }}" onInput="{{ fld.onInput }}" placeholder="{{ fld.placeholder }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 8px; font-size: 13px; background: #ffffff; color: #0a0d1a;" style-focus="border-color: #2B5BFF;" />
+                </label>
+              </sc-for>
+            </div>
+            <sc-if value="{{ newError }}" hint-placeholder-val="{{ false }}">
+              <div style="padding: 0 14px 10px; font-size: 12px; color: #b3261e;">{{ newError }}</div>
+            </sc-if>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 0 14px 14px;">
+              <button type="button" onClick="{{ createCustomer }}" style="border: 1px solid #0a0d1a; background: #0a0d1a; color: #ffffff; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 500;" style-hover="background: #2B5BFF; border-color: #2B5BFF;">Klant aanmaken</button>
+              <button type="button" onClick="{{ toggleNew }}" style="border: 1px solid #cfd3e0; background: #ffffff; color: #575d75; border-radius: 6px; padding: 7px 14px; font-size: 13px;" style-hover="border-color: #b3261e; color: #b3261e;">Annuleren</button>
+              <span style="font-size: 12px; color: #767c94;">De omgeving wordt daarna door Soratus uitgerold; de klant start zonder agents.</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto; overflow-y: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Klanten</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: #767c94;">{{ sortLabel }}</span>
+              <sc-if value="{{ isOperator }}" hint-placeholder-val="{{ true }}">
+                <button type="button" onClick="{{ toggleNew }}" style="border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 3px 10px; font-size: 12px; color: #575d75;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">Nieuwe klant</button>
+              </sc-if>
+            </div>
+          </div>
+          <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ customerCols }}; gap: 0 10px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+            <span>Klant</span>
+            <sc-if value="{{ showEnv }}" hint-placeholder-val="{{ true }}"><span>Omgeving</span></sc-if>
+            <span style="text-align: right;">Agents</span>
+            <span>Statusverdeling</span>
+            <span>Ernstigste status</span>
+            <span style="text-align: right;">Laatste activiteit</span>
+          </div>
+          <sc-for list="{{ customerRows }}" as="row" hint-placeholder-count="6">
+            <div data-rowgrid="1" role="button" tabindex="0" onClick="{{ row.open }}" onKeyDown="{{ row.keydown }}" style="display: grid; grid-template-columns: {{ customerCols }}; gap: 0 10px; align-items: center; padding: 11px 14px; border-bottom: 1px solid #eef0f5; cursor: pointer; background: #ffffff;" style-hover="background: #f6f7fb;">
+              <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                <span style="width: 6px; height: 6px; border-radius: 999px; flex: none; background: {{ row.worstDot }};"></span>
+                <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ row.name }}</span>
+              </div>
+              <sc-if value="{{ showEnv }}" hint-placeholder-val="{{ true }}">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ row.envFull }}">{{ row.env }}</span>
+              </sc-if>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; color: {{ row.countColor }};">{{ row.agentCount }}</span>
+              <div>
+                <div style="display: flex; height: 6px; border-radius: 2px; overflow: hidden; background: #eef0f5; gap: 1px;">
+                  <sc-for list="{{ row.segs }}" as="seg" hint-placeholder-count="2">
+                    <span style="background: {{ seg.dot }}; width: {{ seg.pct }}%;" title="{{ seg.title }}"></span>
+                  </sc-for>
+                </div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; margin-top: 4px; letter-spacing: 0.04em;">{{ row.distText }}</div>
+              </div>
+              <div>
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; border-radius: 4px; border: 1px solid {{ row.worstBorder }}; background: {{ row.worstBg }}; color: {{ row.worstFg }}; font-size: 12px; font-weight: 500;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">{{ row.worstGlyph }}</span>{{ row.worstLabel }}
+                </span>
+              </div>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #575d75; text-align: right; font-variant-numeric: tabular-nums;" title="{{ row.lastAbs }}">{{ row.lastRel }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreenB }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;">
+          <sc-if value="{{ isOperator }}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{ goA }}" style="display: inline-flex; align-items: center; gap: 7px; border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #0a0d1a;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">
+              <span style="font-family: 'JetBrains Mono', monospace;">&#8592;</span>Alle klanten
+            </button>
+          </sc-if>
+          <sc-if value="{{ isOperator }}" hint-placeholder-val="{{ true }}">
+            <div style="position: relative;">
+              <button type="button" onClick="{{ toggleSwitcher }}" aria-expanded="{{ switcherOpen }}" style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #575d75;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">
+                Klant wisselen<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">&#9662;</span>
+              </button>
+              <sc-if value="{{ switcherOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position: absolute; top: 34px; left: 0; z-index: 40; width: 280px; background: #ffffff; border: 1px solid #cfd3e0; border-radius: 8px; box-shadow: 0 8px 24px rgba(10, 13, 26, 0.12); padding: 4px;">
+                  <sc-for list="{{ switcherRows }}" as="c" hint-placeholder-count="6">
+                    <button type="button" onClick="{{ c.open }}" style="display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 9px; border: none; background: none; border-radius: 6px; text-align: left; font-size: 13px; color: #0a0d1a;" style-hover="background: #f6f7fb;">
+                      <span style="width: 6px; height: 6px; border-radius: 999px; flex: none; background: {{ c.worstDot }};"></span>
+                      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ c.name }}</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94;">{{ c.agentCount }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 14px;">
+          <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">{{ customerName }}</h1>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94;" title="{{ nowAbs }}">laatst bijgewerkt {{ nowClock }} · {{ customerEnvFull }}</span>
+        </div>
+
+        <sc-if value="{{ customerHasAgents }}" hint-placeholder-val="{{ true }}">
+          <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto; overflow-y: hidden;">
+            <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ agentCols }}; gap: 0 10px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+              <span>Agent</span>
+              <span>Type</span>
+              <span>Status</span>
+              <span style="text-align: right;">Laatste run</span>
+              <span style="text-align: right;">Duur</span>
+              <sc-if value="{{ showSparks }}" hint-placeholder-val="{{ true }}"><span>Runs 24u</span></sc-if>
+              <span>Volgende run</span>
+              <span style="text-align: right;">Versie</span>
+            </div>
+            <sc-for list="{{ agentRows }}" as="a" hint-placeholder-count="4">
+              <div data-rowgrid="1" role="button" tabindex="0" onClick="{{ a.open }}" onKeyDown="{{ a.keydown }}" style="display: grid; grid-template-columns: {{ agentCols }}; gap: 0 10px; align-items: center; padding: 11px 14px; border-bottom: 1px solid #eef0f5; cursor: pointer; background: #ffffff;" style-hover="background: #f6f7fb;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.id }}</span>
+                <span style="font-size: 12px; color: #575d75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.type }}</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; border-radius: 4px; border: 1px solid {{ a.border }}; background: {{ a.bg }}; color: {{ a.fg }}; font-size: 12px; font-weight: 500; justify-self: start;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">{{ a.glyph }}</span>{{ a.statusLabel }}
+                </span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #575d75; text-align: right; font-variant-numeric: tabular-nums;" title="{{ a.lastAbs }}">{{ a.lastRel }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{ a.durColor }}; text-align: right; font-variant-numeric: tabular-nums;">{{ a.dur }}</span>
+                <sc-if value="{{ showSparks }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; align-items: flex-end; gap: 2px; height: 22px;" title="{{ a.sparkTitle }}">
+                    <sc-for list="{{ a.spark }}" as="b" hint-placeholder-count="12">
+                      <span style="width: 5px; border-radius: 1px; background: {{ b.color }}; height: {{ b.h }}px;"></span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #575d75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.next }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94; text-align: right;">{{ a.version }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top: 14px; border: 1px solid #e3e5ee; border-radius: 8px; background: #fbfbfd; padding: 12px 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #767c94; margin-bottom: 8px;">Wat de statussen betekenen</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px 20px;">
+              <sc-for list="{{ legend }}" as="l" hint-placeholder-count="4">
+                <div style="display: flex; gap: 8px; align-items: flex-start;">
+                  <span style="display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px 1px 5px; border-radius: 4px; border: 1px solid {{ l.border }}; background: {{ l.bg }}; color: {{ l.fg }}; font-size: 11px; font-weight: 500; flex: none;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">{{ l.glyph }}</span>{{ l.label }}
+                  </span>
+                  <span style="font-size: 12px; color: #575d75;">{{ l.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ customerIsEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px dashed #cfd3e0; border-radius: 8px; background: #ffffff; padding: 26px 22px; display: flex; gap: 18px; align-items: flex-start;">
+            <span style="width: 30px; height: 30px; border-radius: 6px; border: 1px solid #e3e5ee; background: #f6f7fb; display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #767c94; flex: none;">&#8709;</span>
+            <div>
+              <div style="font-weight: 600; font-size: 15px;">Nog geen agents in deze omgeving</div>
+              <p style="margin: 6px 0 0; color: #575d75; max-width: 62ch;">De Azure-omgeving is aangemaakt en geïsoleerd; er is nog niets uitgerold. Zodra Soratus de eerste agent deployt verschijnt hij hier, met logs vanaf de eerste run.</p>
+              <div style="display: flex; gap: 18px; margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94;">
+                <span>omgeving aangemaakt: 18-08-2026</span><span>agents: 0</span><span>runs: 0</span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFactuurView }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; gap: 14px; align-items: start;">
+            <div style="display: grid; gap: 14px;">
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Facturen · SnelStart</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">status opgehaald {{ snelstartSync }} · read-only</span>
+                </div>
+                <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ invoiceCols }}; gap: 0 12px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+                  <span>Maand</span><span>Factuur</span><span style="text-align: right;">Extra uren</span><span style="text-align: right;">Azure</span><span style="text-align: right;">Totaal</span><span>Status</span>
+                </div>
+                <sc-for list="{{ invoiceHistory }}" as="i" hint-placeholder-count="5">
+                  <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ invoiceCols }}; gap: 0 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid #eef0f5; background: {{ i.rowBg }};">
+                    <span style="font-size: 13px;">{{ i.month }}</span>
+                    <span>
+                      <span style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #0a0d1a;">{{ i.nr }}</span>
+                      <span style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ i.dateLine }}</span>
+                    </span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: #575d75;">{{ i.uren }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: #575d75;">{{ i.azure }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; font-weight: 600;">{{ i.total }}</span>
+                    <span>
+                      <span style="display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 6px; border-radius: 4px; border: 1px solid {{ i.border }}; background: {{ i.bg }}; color: {{ i.fg }}; font-size: 12px;">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">{{ i.glyph }}</span>{{ i.status }}
+                      </span>
+                      <span style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; margin-top: 3px;">{{ i.statusNote }}</span>
+                    </span>
+                  </div>
+                </sc-for>
+                <div style="padding: 10px 14px; font-size: 12px; color: #767c94;">Betaalstatus komt uit SnelStart en wordt bij openen opgehaald; het portaal wijzigt niets in de administratie.</div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; align-items: start;">
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Facturatie-agent · SnelStart</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 6px; border-radius: 4px; border: 1px solid {{ invoice.border }}; background: {{ invoice.bg }}; color: {{ invoice.fg }}; font-size: 12px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">{{ invoice.glyph }}</span>{{ invoice.statusLabel }}
+                  </span>
+                </div>
+                <div style="padding: 10px 14px; border-bottom: 1px solid #f4f5f9;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500;">maandfactuur-snelstart</span>
+                  <p style="margin: 5px 0 0; font-size: 12.5px; color: #575d75;">Zet op de 1e van de maand een conceptfactuur klaar in SnelStart op basis van de gefiatteerde uren. Versturen doet Soratus zelf.</p>
+                </div>
+                <div style="padding: 10px 14px; border-bottom: 1px solid #f4f5f9;">
+                  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+                    <span style="font-size: 12.5px; font-weight: 600;">Azure-verbruik uit de resource group</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ azureRg }}</span>
+                  </div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; margin-top: 2px;">{{ azurePeriod }}</div>
+                  <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+                  <sc-for list="{{ azureRows }}" as="a" hint-placeholder-count="5">
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; align-items: center; margin-top: 6px;">
+                      <span style="font-size: 12.5px; color: #575d75;">{{ a.name }}</span>
+                      <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+                        <input type="number" step="0.01" min="0" value="{{ a.value }}" onInput="{{ a.onInput }}" aria-label="Azure-kosten {{ a.name }}" style="width: 108px; text-align: right; border: 1px solid #cfd3e0; border-radius: 6px; padding: 3px 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #0a0d1a; background: #ffffff;" style-focus="border-color: #2B5BFF;" />
+                      </sc-if>
+                      <sc-if value="{{ hoursReadOnly }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right;">{{ a.display }}</span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; margin-top: 8px; padding-top: 7px; border-top: 1px solid #eef0f5;">
+                    <span style="font-size: 12.5px; color: #575d75;">Subtotaal Azure</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right;">{{ azureSubtotal }}</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; align-items: center; margin-top: 6px;">
+                    <span style="font-size: 12.5px; color: #575d75;">Opslag beheer (%)</span>
+                    <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+                      <input type="number" step="1" min="0" value="{{ opslagValue }}" onInput="{{ setOpslag }}" aria-label="Opslag in procenten" style="width: 108px; text-align: right; border: 1px solid #cfd3e0; border-radius: 6px; padding: 3px 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #0a0d1a; background: #ffffff;" style-focus="border-color: #2B5BFF;" />
+                    </sc-if>
+                    <sc-if value="{{ hoursReadOnly }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right;">{{ opslagValue }} %</span>
+                    </sc-if>
+                  </div>
+                  </sc-if>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; margin-top: 6px;">
+                    <span style="font-size: 12.5px; color: #575d75;">Azure door te belasten</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right;">{{ azureCharged }}</span>
+                  </div>
+                </div>
+                <div style="padding: 10px 14px; border-bottom: 1px solid #f4f5f9;">
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px;">
+                    <span style="font-size: 12.5px; color: #575d75;">Extra uren boven bundel<br /><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ extraUrenLabel }}</span></span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: {{ extraUrenColor }};">{{ extraUrenAmount }}</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; margin-top: 8px; padding-top: 7px; border-top: 1px solid #eef0f5;">
+                    <span style="font-size: 13px; font-weight: 600;">Totaal na afloop van de maand</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right;">{{ invoiceTotal }}</span>
+                  </div>
+                  <div style="font-size: 12px; color: #767c94; margin-top: 6px;">Wordt op 01-09-2026 als conceptfactuur klaargezet in SnelStart — Azure-kosten en extra uren op één factuur, achteraf.</div>
+                </div>
+                <sc-for list="{{ invoiceRows }}" as="r" hint-placeholder-count="4">
+                  <div style="display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 10px; padding: 8px 14px; border-bottom: 1px solid #f4f5f9;">
+                    <span style="font-size: 12.5px; color: #767c94;">{{ r.k }}</span>
+                    <span style="font-size: 12.5px; color: {{ r.color }}; overflow-wrap: anywhere; font-family: {{ r.font }};">{{ r.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+                <div style="padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Maandoverzicht mailen</div>
+                <div style="padding: 12px 14px; display: grid; gap: 8px;">
+                  <div style="font-size: 12.5px; color: #575d75;">{{ mailSummary }}</div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #0a0d1a;">{{ mailTo }}</div>
+                  <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+                    <button type="button" onClick="{{ sendMail }}" style="border: 1px solid #0a0d1a; background: #ffffff; color: #0a0d1a; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500; justify-self: start;" style-hover="background: #0a0d1a; color: #ffffff;">{{ mailButton }}</button>
+                  </sc-if>
+                  <sc-if value="{{ mailSent }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #0f7a4a;">{{ mailSent }}</div>
+                  </sc-if>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSupportView }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; gap: 14px; max-width: 880px;">
+            <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Support · eerstelijn door agent</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ supportSla }}</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px;">
+                <sc-for list="{{ thread }}" as="m" hint-placeholder-count="2">
+                  <div style="display: flex; flex-direction: column; align-items: {{ m.align }};">
+                    <div style="max-width: 82%; border: 1px solid {{ m.border }}; background: {{ m.bg }}; border-radius: 8px; padding: 9px 12px;">
+                      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <sc-if value="{{ m.isAi }}" hint-placeholder-val="{{ false }}">
+                          <span style="display: inline-flex; align-items: center; border: 1px solid #ccd6ff; background: #eef2ff; color: #1B1F8C; border-radius: 4px; padding: 0 6px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;">AI · eerstelijn</span>
+                        </sc-if>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ m.who }} · {{ m.at }}</span>
+                      </div>
+                      <div style="font-size: 13.5px; color: #0a0d1a; text-wrap: pretty;">{{ m.text }}</div>
+                      <sc-if value="{{ m.hasContext }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #575d75; margin-top: 6px; border-top: 1px dashed #dcdfe9; padding-top: 5px;">{{ m.contextLabel }} {{ m.context }}</div>
+                      </sc-if>
+                      <sc-if value="{{ m.canEscalate }}" hint-placeholder-val="{{ false }}">
+                        <button type="button" onClick="{{ m.escalate }}" style="margin-top: 8px; border: 1px solid #cfd3e0; background: #ffffff; color: #575d75; border-radius: 6px; padding: 3px 10px; font-size: 12px;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">Toch een mens van Soratus spreken</button>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ threadEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 18px 4px; text-align: center; font-size: 13px; color: #767c94;">Nog geen berichten. Stel je vraag: de support-agent kent jullie agents, sprint en contract en beantwoordt de eerste lijn direct.</div>
+                </sc-if>
+              </div>
+              <div style="border-top: 1px solid #e3e5ee; padding: 12px 14px; display: grid; gap: 10px;">
+                <label style="display: grid; gap: 4px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">Onderwerp</span>
+                  <select value="{{ topic }}" onChange="{{ setTopic }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 7px; font-size: 13px; background: #ffffff; color: #0a0d1a;">
+                    <sc-for list="{{ topics }}" as="t" hint-placeholder-count="4">
+                      <option value="{{ t }}">{{ t }}</option>
+                    </sc-for>
+                  </select>
+                </label>
+                <textarea value="{{ draft }}" onInput="{{ setDraft }}" rows="3" placeholder="Waar loop je tegenaan?" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 8px 10px; font-family: 'Space Grotesk', sans-serif; font-size: 13.5px; color: #0a0d1a; background: #ffffff; resize: vertical;" style-focus="border-color: #2B5BFF;"></textarea>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <sc-for list="{{ supportSuggestions }}" as="s" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ s.use }}" style="border: 1px solid #cfd3e0; background: #ffffff; color: #575d75; border-radius: 999px; padding: 4px 11px; font-size: 12px;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">{{ s.label }}</button>
+                  </sc-for>
+                </div>
+                <button type="button" onClick="{{ sendMessage }}" style="border: 1px solid #0a0d1a; background: #0a0d1a; color: #ffffff; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 500; justify-self: start;" style-hover="background: #2B5BFF; border-color: #2B5BFF;">{{ sendLabel }}</button>
+              </div>
+            </div>
+
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSprintView }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; gap: 14px;">
+            <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Huidige sprint · Azure DevOps</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">read-only · status opgehaald {{ sprint.syncedAt }}</span>
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 12px 14px 4px;">
+                <span style="font-size: 15px; font-weight: 600;">{{ sprint.name }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #575d75;">{{ sprint.start }} — {{ sprint.end }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ sprint.board }}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 20px; padding: 8px 14px 14px;">
+                <sc-for list="{{ sprintStats }}" as="s" hint-placeholder-count="5">
+                  <div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">{{ s.k }}</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 16px; font-variant-numeric: tabular-nums; margin-top: 2px;">{{ s.v }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto;">
+              <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ sprintCols }}; gap: 0 12px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+                <span>ID</span><span>Type</span><span>Titel</span><span>Status</span><span>Toegewezen</span><span style="text-align: right;">Open</span>
+              </div>
+              <sc-for list="{{ sprintRows }}" as="w" hint-placeholder-count="4">
+                <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ sprintCols }}; gap: 0 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid #eef0f5;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #575d75;">{{ w.id }}</span>
+                  <span style="font-size: 12px; color: #575d75;">{{ w.type }}</span>
+                  <span style="min-width: 0;">
+                    <span style="display: block; font-size: 13px; color: #0a0d1a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ w.title }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ w.tags }} · {{ w.origin }}</span>
+                  </span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 6px; border-radius: 4px; border: 1px solid {{ w.border }}; background: {{ w.bg }}; color: {{ w.fg }}; font-size: 12px; justify-self: start;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">{{ w.glyph }}</span>{{ w.state }}
+                  </span>
+                  <span style="font-size: 12px; color: #575d75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ w.by }}</span>
+                  <span style="text-align: right;">
+                    <span style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-variant-numeric: tabular-nums;">{{ w.hours }}</span>
+                    <span style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ w.doneHours }}</span>
+                  </span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ sprintEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 20px 14px; text-align: center; font-size: 13px; color: #767c94;">Geen work items voor deze klant in de huidige sprint.</div>
+              </sc-if>
+            </div>
+
+            <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #fbfbfd; padding: 10px 14px; font-size: 12.5px; color: #575d75;">
+              Read-only weergave. Taken worden door de agent (of door ons) in Azure DevOps aangemaakt; dit portaal haalt bij openen alleen de laatste status op en schrijft niets terug.
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isKlantView }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; align-items: start;">
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Contractinformatie</span>
+                  <sc-if value="{{ canEditContract }}" hint-placeholder-val="{{ true }}">
+                    <button type="button" onClick="{{ toggleEditContract }}" style="border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 3px 10px; font-size: 12px; color: #575d75;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">{{ editLabel }}</button>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ editContract }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #f4f5f9;">
+                    <sc-for list="{{ contractFields }}" as="fld" hint-placeholder-count="14">
+                      <label style="display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 10px; align-items: center;">
+                        <span style="font-size: 12.5px; color: #767c94;">{{ fld.label }}</span>
+                        <input type="text" value="{{ fld.value }}" onInput="{{ fld.onInput }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; background: #ffffff; color: #0a0d1a;" style-focus="border-color: #2B5BFF;" />
+                      </label>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ contractReadOnly }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ contractRows }}" as="r" hint-placeholder-count="11">
+                  <div style="display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 10px; padding: 8px 14px; border-bottom: 1px solid #f4f5f9;">
+                    <span style="font-size: 12.5px; color: #767c94;">{{ r.k }}</span>
+                    <span style="font-size: 12.5px; color: #0a0d1a; overflow-wrap: anywhere; font-family: {{ r.font }};">{{ r.v }}</span>
+                  </div>
+                </sc-for>
+                </sc-if>
+                <div style="padding: 10px 14px; font-size: 12px; color: #767c94;">{{ contractFootnote }}</div>
+              </div>
+
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+                <div style="padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Toegang tot het portaal</div>
+                <sc-for list="{{ accessRows }}" as="a" hint-placeholder-count="2">
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid #f4f5f9; background: {{ a.bg }};">
+                    <span style="min-width: 0;">
+                      <span style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #0a0d1a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ a.email }}</span>
+                      <span style="display: block; font-size: 11.5px; color: #767c94;">{{ a.name }} · {{ a.role }}</span>
+                    </span>
+                    <sc-if value="{{ a.canRemove }}" hint-placeholder-val="{{ true }}">
+                      <button type="button" onClick="{{ a.remove }}" style="border: 1px solid #cfd3e0; background: #ffffff; color: #575d75; border-radius: 6px; padding: 2px 9px; font-size: 12px; justify-self: end;" style-hover="border-color: #b3261e; color: #b3261e;">Intrekken</button>
+                    </sc-if>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ accessEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 14px; text-align: center; font-size: 12.5px; color: #767c94;">Nog niemand van deze klant heeft toegang.</div>
+                </sc-if>
+                <sc-if value="{{ canEditContract }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid #e3e5ee;">
+                    <input type="email" value="{{ accessEmail }}" onInput="{{ setAccessEmail }}" placeholder="naam@klant.nl" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 8px; font-size: 13px; background: #ffffff; color: #0a0d1a;" style-focus="border-color: #2B5BFF;" />
+                    <input type="text" value="{{ accessName }}" onInput="{{ setAccessName }}" placeholder="Naam" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 8px; font-size: 13px; background: #ffffff; color: #0a0d1a;" style-focus="border-color: #2B5BFF;" />
+                    <select value="{{ accessRole }}" onChange="{{ setAccessRole }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 7px; font-size: 13px; background: #ffffff; color: #0a0d1a;">
+                      <sc-for list="{{ accessRoles }}" as="r" hint-placeholder-count="2">
+                        <option value="{{ r }}">{{ r }}</option>
+                      </sc-for>
+                    </select>
+                    <sc-if value="{{ accessError }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size: 12px; color: #b3261e;">{{ accessError }}</span>
+                    </sc-if>
+                    <button type="button" onClick="{{ addAccess }}" style="border: 1px solid #0a0d1a; background: #0a0d1a; color: #ffffff; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500; justify-self: start;" style-hover="background: #2B5BFF; border-color: #2B5BFF;">Toegang geven</button>
+                  </div>
+                </sc-if>
+                <div style="padding: 10px 14px; font-size: 12px; color: #767c94;">Toegang loopt via Entra ID; deze adressen krijgen een uitnodiging voor de klantweergave van hun eigen omgeving.</div>
+              </div>
+
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isUrenView }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; gap: 14px; align-items: start;">
+
+            <div style="display: grid; gap: 14px;">
+              <sc-if value="{{ hasPending }}" hint-placeholder-val="{{ false }}">
+                <div style="border: 1px solid #ecd7a6; border-left: 3px solid #8a5a00; border-radius: 8px; background: #fdf4e0; padding: 10px 14px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                  <span style="font-size: 13px; font-weight: 600; color: #8a5a00;">{{ pendingLabel }}</span>
+                  <span style="font-size: 12.5px; color: #575d75;">Regels die via Claude Code (MCP) of Azure DevOps binnenkomen tellen pas mee na fiattering door Soratus.</span>
+                </div>
+              </sc-if>
+
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">{{ hoursTitle }}</span>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">bundel {{ contract.bundelUren }} u/mnd · {{ hoursHint }}</span>
+                    <button type="button" onClick="{{ toggleAllMonths }}" style="border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 3px 9px; font-size: 12px; color: #575d75;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">{{ allMonthsLabel }}</button>
+                  </div>
+                </div>
+                <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ hourCols }}; gap: 0 12px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+                  <span>Maand</span><span style="text-align: right;">Bundel</span><span style="text-align: right;">Besteed</span><span style="text-align: right;">Saldo</span><span>Status</span>
+                </div>
+                <sc-for list="{{ monthRows }}" as="m" hint-placeholder-count="1">
+                  <div data-rowgrid="1" role="button" tabindex="0" onClick="{{ m.select }}" onKeyDown="{{ m.keydown }}" aria-pressed="{{ m.selected }}" style="display: grid; grid-template-columns: {{ hourCols }}; gap: 0 12px; align-items: center; padding: 7px 14px; border-bottom: 1px solid #eef0f5; cursor: pointer; background: {{ m.rowBg }};" style-hover="background: #f6f7fb;">
+                    <span style="font-size: 13px; font-weight: {{ m.weight }};" title="{{ m.title }}">{{ m.label }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: #767c94;">{{ m.bundel }}</span>
+                    <span style="display: flex; justify-content: flex-end;">
+                      <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+                        <input type="number" step="0.5" min="0" value="{{ m.value }}" onChange="{{ m.onInput }}" onInput="{{ m.onInput }}" aria-label="Bestede uren {{ m.label }}" style="width: 74px; text-align: right; border: 1px solid #cfd3e0; border-radius: 6px; padding: 3px 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #0a0d1a; background: #ffffff;" style-focus="border-color: #2B5BFF;" />
+                      </sc-if>
+                      <sc-if value="{{ hoursReadOnly }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #0a0d1a; padding-right: 8px;">{{ m.display }}</span>
+                      </sc-if>
+                    </span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: {{ m.saldoColor }};">{{ m.saldo }}</span>
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                      <span style="display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 6px; border-radius: 4px; border: 1px solid {{ m.border }}; background: {{ m.bg }}; color: {{ m.fg }}; font-size: 12px; align-self: start;">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">{{ m.glyph }}</span>{{ m.status }}
+                      </span>
+                      <sc-if value="{{ m.hasPending }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8a5a00;">{{ m.pendingText }}</span>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ showAllMonths }}" hint-placeholder-val="{{ false }}">
+                  <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ hourCols }}; gap: 0 12px; align-items: center; padding: 9px 14px; background: #fbfbfd;">
+                    <span style="font-size: 13px; font-weight: 600;">Totaal {{ contractYear }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: #767c94;">{{ totalBundel }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; padding-right: 8px;">{{ totalSpent }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: {{ totalColor }};">{{ totalSaldo }}</span>
+                    <span style="font-size: 12px; color: #575d75;">{{ overageLabel }}</span>
+                  </div>
+                </sc-if>
+              </div>
+
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">{{ entriesTitle }}</span>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ entriesSummary }}</span>
+                    <sc-if value="{{ monthFiltered }}" hint-placeholder-val="{{ false }}">
+                      <button type="button" onClick="{{ clearMonth }}" style="border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 3px 9px; font-size: 12px; color: #575d75;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">Alle maanden</button>
+                    </sc-if>
+                  </div>
+                </div>
+                <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px 14px;">
+                    <label style="display: grid; gap: 4px;">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">Maand</span>
+                      <select value="{{ formMonth }}" onChange="{{ setFormMonth }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 7px; font-size: 13px; background: #ffffff; color: #0a0d1a;">
+                        <sc-for list="{{ monthOptions }}" as="o" hint-placeholder-count="6">
+                          <option value="{{ o.key }}">{{ o.label }}</option>
+                        </sc-for>
+                      </select>
+                    </label>
+                    <label style="display: grid; gap: 4px;">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">Uren</span>
+                      <input type="number" step="0.5" min="0" value="{{ formHours }}" onInput="{{ setFormHours }}" placeholder="0.0" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 7px; font-family: 'JetBrains Mono', monospace; font-size: 13px; background: #ffffff; color: #0a0d1a;" style-focus="border-color: #2B5BFF;" />
+                    </label>
+                    <label style="display: grid; gap: 4px;">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">Categorie</span>
+                      <select value="{{ formCategory }}" onChange="{{ setFormCategory }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 7px; font-size: 13px; background: #ffffff; color: #0a0d1a;">
+                        <sc-for list="{{ categories }}" as="c" hint-placeholder-count="4">
+                          <option value="{{ c }}">{{ c }}</option>
+                        </sc-for>
+                      </select>
+                    </label>
+                    <label style="display: grid; gap: 4px;">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">Geboekt door</span>
+                      <select value="{{ formBy }}" onChange="{{ setFormBy }}" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 7px; font-size: 13px; background: #ffffff; color: #0a0d1a;">
+                        <sc-for list="{{ team }}" as="p" hint-placeholder-count="3">
+                          <option value="{{ p }}">{{ p }}</option>
+                        </sc-for>
+                      </select>
+                    </label>
+                    <label style="display: grid; gap: 4px; min-width: 0;">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">Omschrijving</span>
+                      <input type="text" value="{{ formNote }}" onInput="{{ setFormNote }}" placeholder="bijv. nieuwe validatieregels voorraad-sync" style="border: 1px solid #cfd3e0; border-radius: 6px; padding: 5px 8px; font-size: 13px; background: #ffffff; color: #0a0d1a;" style-focus="border-color: #2B5BFF;" />
+                    </label>
+                    <button type="button" onClick="{{ addEntry }}" style="border: 1px solid #0a0d1a; background: #0a0d1a; color: #ffffff; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 500; justify-self: start;" style-hover="background: #2B5BFF; border-color: #2B5BFF;">Boeken</button>
+                  </div>
+                  <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding: 0 14px 12px; font-size: 12px; color: #b3261e;">{{ formError }}</div>
+                  </sc-if>
+                </sc-if>
+                <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ entryCols }}; gap: 0 10px; padding: 7px 14px; border-top: 1px solid #e3e5ee; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+                  <span>Datum</span><span>Omschrijving</span><span>Bron</span><span>Geboekt door</span><span style="text-align: right;">Uren</span><span></span>
+                </div>
+                <sc-for list="{{ entryRows }}" as="e" hint-placeholder-count="5">
+                  <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ entryCols }}; gap: 0 10px; align-items: center; padding: 7px 14px; border-bottom: 1px solid #eef0f5; background: {{ e.bg }};">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #575d75;">{{ e.date }}</span>
+                    <span style="min-width: 0;">
+                      <span style="display: block; font-size: 12.5px; color: #0a0d1a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ e.note }}</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ e.meta }}</span>
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; border: 1px solid {{ e.srcBorder }}; background: {{ e.srcBg }}; color: {{ e.srcFg }}; font-size: 11px; justify-self: start;">{{ e.source }}</span>
+                    <span style="font-size: 12px; color: #575d75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ e.by }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; color: {{ e.hoursColor }};">{{ e.hours }}</span>
+                    <span style="display: flex; gap: 6px; justify-content: flex-end;">
+                      <sc-if value="{{ e.needsApproval }}" hint-placeholder-val="{{ false }}">
+                        <button type="button" onClick="{{ e.approve }}" style="border: 1px solid #bfe3cd; background: #eaf6ef; color: #0f7a4a; border-radius: 6px; padding: 2px 9px; font-size: 12px;" style-hover="border-color: #0f7a4a;">Fiatteren</button>
+                      </sc-if>
+                      <sc-if value="{{ e.needsApproval }}" hint-placeholder-val="{{ false }}">
+                        <button type="button" onClick="{{ e.reject }}" style="border: 1px solid #cfd3e0; background: #ffffff; color: #575d75; border-radius: 6px; padding: 2px 9px; font-size: 12px;" style-hover="border-color: #b3261e; color: #b3261e;">Afwijzen</button>
+                      </sc-if>
+                      <sc-if value="{{ e.pendingBadge }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8a5a00;">te fiatteren</span>
+                      </sc-if>
+                    </span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ entriesEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 18px 14px; text-align: center; font-size: 13px; color: #767c94;">{{ entriesEmptyText }}</div>
+                </sc-if>
+              </div>
+            </div>
+
+            <div style="display: grid; gap: 14px;">
+              <sc-if value="{{ canEditHours }}" hint-placeholder-val="{{ true }}">
+              <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff;">
+                <div style="padding: 9px 14px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">Koppelingen — urenregels</div>
+                <sc-for list="{{ integrations }}" as="i" hint-placeholder-count="2">
+                  <div style="padding: 10px 14px; border-bottom: 1px solid #f4f5f9;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+                      <span style="font-size: 13px; font-weight: 600;">{{ i.name }}</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94;">{{ i.last }}</span>
+                    </div>
+                    <sc-for list="{{ i.rows }}" as="r" hint-placeholder-count="3">
+                      <div style="display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 10px; margin-top: 5px;">
+                        <span style="font-size: 12px; color: #767c94;">{{ r.k }}</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #0a0d1a; overflow-wrap: anywhere;">{{ r.v }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+                <div style="padding: 10px 14px; font-size: 12px; color: #767c94;">Ingeschoten regels landen als “te fiatteren” en tellen pas mee na akkoord van Soratus.</div>
+              </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreenC }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <button type="button" onClick="{{ goB }}" style="display: inline-flex; align-items: center; gap: 7px; border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #0a0d1a;" style-hover="border-color: #2B5BFF; color: #2B5BFF;">
+            <span style="font-family: 'JetBrains Mono', monospace;">&#8592;</span>{{ customerName }}
+          </button>
+        </div>
+
+        <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; padding: 14px 16px; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <h1 style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500; letter-spacing: -0.01em;">{{ agentId }}</h1>
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 7px; border-radius: 4px; border: 1px solid {{ detail.border }}; background: {{ detail.bg }}; color: {{ detail.fg }}; font-size: 12px; font-weight: 500;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">{{ detail.glyph }}</span>{{ detail.statusLabel }}
+            </span>
+            <span style="font-size: 12px; color: #575d75;">{{ detail.type }} · {{ customerName }}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 20px; margin-top: 12px; border-top: 1px solid #eef0f5; padding-top: 11px;">
+            <sc-for list="{{ detailFacts }}" as="f" hint-placeholder-count="5">
+              <div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94;">{{ f.label }}</div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 3px; color: {{ f.color }};" title="{{ f.title }}">{{ f.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ detail.notice }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top: 12px; border-left: 2px solid {{ detail.fg }}; background: {{ detail.bg }}; padding: 8px 12px; font-size: 12px; color: #0a0d1a;">{{ detail.notice }}</div>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; gap: 2px; border-bottom: 1px solid #e3e5ee; margin-bottom: 14px;">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+            <button type="button" onClick="{{ t.select }}" aria-selected="{{ t.active }}" style="border: none; background: none; padding: 8px 14px; font-size: 13px; font-weight: 500; color: {{ t.color }}; border-bottom: 2px solid {{ t.underline }}; margin-bottom: -1px;" style-hover="color: #0a0d1a;">{{ t.label }}</button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+              <div style="display: flex; gap: 4px;">
+                <sc-for list="{{ levelChips }}" as="c" hint-placeholder-count="3">
+                  <button type="button" onClick="{{ c.toggle }}" aria-pressed="{{ c.on }}" style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid {{ c.border }}; background: {{ c.bg }}; color: {{ c.fg }}; border-radius: 6px; padding: 5px 9px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em;">
+                    {{ c.label }}<span style="font-variant-numeric: tabular-nums; color: #767c94;">{{ c.count }}</span>
+                  </button>
+                </sc-for>
+              </div>
+              <label style="display: inline-flex; align-items: center; gap: 7px; border: 1px solid #cfd3e0; background: #ffffff; border-radius: 6px; padding: 0 9px; height: 29px; flex: 1; max-width: 320px;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94;">/</span>
+                <input type="text" value="{{ query }}" onInput="{{ onQuery }}" placeholder="zoek in event, bericht of runId" style="border: none; outline: none; background: none; flex: 1; font-size: 13px; color: #0a0d1a;" />
+                <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+                  <button type="button" onClick="{{ clearQuery }}" aria-label="Zoekterm wissen" style="border: none; background: none; color: #767c94; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 0;">&#10005;</button>
+                </sc-if>
+              </label>
+              <div style="flex: 1;"></div>
+              <div style="display: flex; align-items: center; gap: 9px;">
+                <button type="button" onClick="{{ toggleTail }}" aria-pressed="{{ liveTail }}" style="display: inline-flex; align-items: center; gap: 7px; border: 1px solid {{ tailBorder }}; background: {{ tailBg }}; color: {{ tailFg }}; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 500;">
+                  <span style="width: 7px; height: 7px; border-radius: 999px; background: {{ tailDot }}; animation: {{ tailAnim }};"></span>Live tail
+                </button>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; letter-spacing: 0.04em;">historische logs lopen ~1 min achter</span>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto; overflow-y: hidden;">
+              <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ logCols }}; gap: 0 12px; padding: 7px 12px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+                <span>Tijd</span><span>Level</span><span>Event</span><span>Bericht</span><span>RunId</span><span></span>
+              </div>
+              <sc-for list="{{ logRows }}" as="r" hint-placeholder-count="10">
+                <div style="border-bottom: 1px solid #eef0f5;">
+                  <div data-rowgrid="1" role="button" tabindex="0" onClick="{{ r.toggle }}" onKeyDown="{{ r.keydown }}" aria-expanded="{{ r.open }}" style="display: grid; grid-template-columns: {{ logCols }}; gap: 0 12px; align-items: baseline; padding: 6px 12px; cursor: pointer; background: {{ r.rowBg }};" style-hover="background: #f6f7fb;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #575d75; font-variant-numeric: tabular-nums;" title="{{ r.abs }}">{{ r.time }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: {{ r.levelFg }}; font-weight: 600;">{{ r.level }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #0a0d1a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.event }}</span>
+                    <span style="font-size: 12.5px; color: #575d75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">{{ r.msg }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94;">{{ r.runId }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; text-align: right;">{{ r.caret }}</span>
+                  </div>
+                  <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                    <pre style="margin: 0; padding: 10px 12px 12px 12px; background: #fbfbfd; border-top: 1px dashed #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.55; color: #575d75; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto;">{{ r.json }}</pre>
+                  </sc-if>
+                </div>
+              </sc-for>
+              <sc-if value="{{ logsEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 26px 14px; text-align: center; color: #767c94; font-size: 13px;">Geen logregels die aan het filter voldoen.</div>
+              </sc-if>
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #767c94; margin-top: 8px; letter-spacing: 0.04em;">{{ logFooter }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRuns }}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto; overflow-y: hidden;">
+            <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ runCols }}; gap: 0 14px; padding: 7px 14px; border-bottom: 1px solid #e3e5ee; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #767c94; background: #fbfbfd;">
+              <span>Gestart</span><span>Duur</span><span>Resultaat</span><span style="text-align: right;">Items verwerkt</span><span style="text-align: right;">RunId</span>
+            </div>
+            <sc-for list="{{ runRows }}" as="r" hint-placeholder-count="8">
+              <div data-rowgrid="1" style="display: grid; grid-template-columns: {{ runCols }}; gap: 0 14px; align-items: center; padding: 9px 14px; border-bottom: 1px solid #eef0f5;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #575d75; font-variant-numeric: tabular-nums;" title="{{ r.abs }}">{{ r.start }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-variant-numeric: tabular-nums; color: #575d75;">{{ r.dur }}</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 6px; border-radius: 4px; border: 1px solid {{ r.border }}; background: {{ r.bg }}; color: {{ r.fg }}; font-size: 12px; justify-self: start;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">{{ r.glyph }}</span>{{ r.result }}
+                </span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; color: #0a0d1a;">{{ r.items }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #767c94; text-align: right;">{{ r.runId }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isConfig }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #fbfbfd; padding: 10px 13px; margin-bottom: 14px; font-size: 12.5px; color: #575d75;">
+              Read-only. Configuratie wordt beheerd via de deployment-pipeline van Soratus; ingrijpen vanuit het portaal (pauzeren, herstarten, limieten wijzigen) kan in deze fase niet.
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
+              <sc-for list="{{ configGroups }}" as="g" hint-placeholder-count="3">
+                <div style="border: 1px solid #e3e5ee; border-radius: 8px; background: #ffffff; overflow-x: auto; overflow-y: hidden;">
+                  <div style="padding: 8px 13px; border-bottom: 1px solid #e3e5ee; background: #fbfbfd; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #575d75;">{{ g.title }}</div>
+                  <sc-for list="{{ g.rows }}" as="row" hint-placeholder-count="4">
+                    <div style="display: grid; grid-template-columns: 130px 1fr; gap: 12px; padding: 8px 13px; border-bottom: 1px solid #f4f5f9;">
+                      <span style="font-size: 12.5px; color: #767c94;">{{ row.k }}</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #0a0d1a; overflow-wrap: anywhere;">{{ row.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;sortByProblems&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Overzicht&quot;},&quot;showEnvironmentColumn&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Overzicht&quot;},&quot;showSparklines&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Klantweergave&quot;}}">
+class Component extends DCLogic {
+  // ─────────────────────────────────────────────────────────────
+  //  DUMMY-DATA — één object, makkelijk te vervangen
+  // ─────────────────────────────────────────────────────────────
+  DATA = {
+    now: '2026-08-19T09:22:00Z',
+    operator: { label: 'Soratus-operator', initials: 'SO' },
+    customers: [
+      { id: 'soratus', name: 'Soratus — intern beheer', intern: true, env: 'westeurope · sub-core', envFull: 'Azure West Europe · sub-core01 · rg-soratus-platform', agents: [
+        { id: 'maandfactuur-snelstart-01', short: 'maandfactuur-snelstart', type: 'Facturatie', status: 'live', version: '1.2.0', lastRun: '2026-08-01T06:00:12Z', durMs: 21400, next: '01-09-2026 06:00', schedule: '0 6 1 * *', trigger: 'Timer (1e van de maand)', uptime: '54 d 3 u', heartbeatSec: 17, runs24: [[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]] },
+        { id: 'storingsmelder-01', short: 'storingsmelder', type: 'Monitoring', status: 'live', version: '2.3.1', lastRun: '2026-08-19T09:21:40Z', durMs: 310, next: '09:23 (elke minuut)', schedule: '* * * * *', trigger: 'Timer + statuswijziging agent', uptime: '31 d 8 u', heartbeatSec: 4, runs24: [[60,0],[60,0],[60,0],[60,0],[60,0],[60,0],[60,1],[60,0],[60,0],[60,0],[60,0],[22,0]] },
+        { id: 'kosten-collector-01', short: 'kosten-collector', type: 'Cost Management', status: 'live', version: '1.0.4', lastRun: '2026-08-19T04:00:08Z', durMs: 47600, next: 'morgen 04:00', schedule: '0 4 * * *', trigger: 'Timer (dagelijks)', uptime: '22 d 15 u', heartbeatSec: 26, runs24: [[0,0],[1,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]] },
+        { id: 'urensync-mcp-01', short: 'urensync-mcp', type: 'Integratie', status: 'idle', version: '0.8.2', lastRun: '2026-08-19T09:13:55Z', durMs: 420, next: 'op trigger (MCP-call)', schedule: '—', trigger: 'MCP tool uren.boeken', uptime: 'geschaald naar 0', heartbeatSec: 0, runs24: [[0,0],[0,0],[0,0],[0,0],[1,0],[2,0],[1,0],[0,0],[2,0],[1,0],[3,0],[1,0]] },
+        { id: 'devops-sync-01', short: 'devops-sync', type: 'Integratie', status: 'live', version: '1.1.3', lastRun: '2026-08-19T09:15:02Z', durMs: 2240, next: '09:30 (elke 15 min)', schedule: '*/15 * * * *', trigger: 'Timer + DevOps webhook', uptime: '18 d 1 u', heartbeatSec: 11, runs24: [[4,0],[4,0],[4,0],[4,0],[4,0],[4,0],[4,0],[4,0],[4,0],[4,0],[4,0],[2,0]] }
+      ]},
+      { id: 'vandijk', name: 'Van Dijk Installatietechniek', env: 'westeurope · sub-a41c', envFull: 'Azure West Europe · sub-a41c9f · rg-soratus-vandijk', agents: [
+        { id: 'factuur-intake-01', short: 'factuur-intake', type: 'Document-intake', status: 'live', version: '1.4.2', lastRun: '2026-08-19T09:18:22Z', durMs: 1840, next: '09:30 (elke 15 min)', schedule: '*/15 * * * *', trigger: 'Timer + blob-drop (inbox-facturen)', uptime: '11 d 4 u', heartbeatSec: 12, runs24: [[4,0],[3,0],[2,0],[0,0],[1,0],[5,0],[6,0],[7,0],[6,0],[5,0],[4,0],[3,0]] },
+        { id: 'mail-triage-01', short: 'mail-triage', type: 'Mail-triage', status: 'degraded', version: '2.0.1', lastRun: '2026-08-19T09:02:41Z', durMs: 620, next: '09:24 (elke 5 min)', schedule: '*/5 * * * *', trigger: 'Graph-subscription (Inbox)', uptime: '3 d 19 u', heartbeatSec: 487, runs24: [[6,0],[5,0],[6,0],[4,0],[5,0],[7,0],[8,1],[6,0],[7,0],[5,2],[3,0],[1,0]] },
+        { id: 'offerte-generator-01', short: 'offerte-generator', type: 'Generatie', status: 'live', version: '0.9.7', lastRun: '2026-08-19T08:47:03Z', durMs: 12400, next: 'op trigger', schedule: '—', trigger: 'Queue-message (offerte-aanvraag)', uptime: '6 d 2 u', heartbeatSec: 31, runs24: [[0,0],[0,0],[0,0],[0,0],[1,0],[2,0],[1,0],[3,0],[2,0],[1,0],[2,0],[0,0]] },
+        { id: 'urenregistratie-01', short: 'urenregistratie', type: 'Sync', status: 'idle', version: '1.1.0', lastRun: '2026-08-18T23:05:12Z', durMs: 4200, next: 'vanavond 23:00', schedule: '0 23 * * *', trigger: 'Timer (nachtelijk)', uptime: 'geschaald naar 0', heartbeatSec: 0, runs24: [[1,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]] }
+      ]},
+      { id: 'bakker', name: 'Bakker Logistiek', env: 'westeurope · sub-77b2', envFull: 'Azure West Europe · sub-77b2e0 · rg-soratus-bakker', agents: [
+        { id: 'voorraad-sync-01', short: 'voorraad-sync', type: 'Sync', status: 'failed', version: '3.2.0', lastRun: '2026-08-19T09:11:04Z', durMs: 8300, next: '09:26 (elke 15 min)', schedule: '*/15 * * * *', trigger: 'Timer + webhook (WMS)', uptime: '1 d 6 u', heartbeatSec: 19, runs24: [[3,0],[4,0],[3,0],[2,0],[3,0],[4,0],[3,0],[4,1],[3,1],[4,2],[2,1],[1,1]] },
+        { id: 'vrachtbrief-check-01', short: 'vrachtbrief-check', type: 'Document-controle', status: 'live', version: '1.0.9', lastRun: '2026-08-19T09:19:47Z', durMs: 2260, next: 'op trigger', schedule: '—', trigger: 'Blob-drop (vrachtbrieven)', uptime: '9 d 11 u', heartbeatSec: 8, runs24: [[2,0],[3,0],[2,0],[1,0],[2,0],[4,0],[5,0],[4,0],[3,0],[4,0],[3,0],[2,0]] },
+        { id: 'mail-triage-02', short: 'mail-triage', type: 'Mail-triage', status: 'live', version: '2.0.1', lastRun: '2026-08-19T09:21:12Z', durMs: 540, next: '09:26 (elke 5 min)', schedule: '*/5 * * * *', trigger: 'Graph-subscription (Inbox)', uptime: '12 d 3 u', heartbeatSec: 5, runs24: [[5,0],[5,0],[6,0],[4,0],[5,0],[6,0],[7,0],[6,0],[6,0],[5,0],[4,0],[2,0]] }
+      ]},
+      { id: 'meijer', name: 'Meijer Advocaten', env: 'westeurope · sub-05de', envFull: 'Azure West Europe · sub-05de13 · rg-soratus-meijer', agents: [
+        { id: 'contractcheck-01', short: 'contractcheck', type: 'Document-analyse', status: 'live', version: '1.2.0', lastRun: '2026-08-19T09:14:55Z', durMs: 9700, next: 'op trigger', schedule: '—', trigger: 'Upload (dossierportaal)', uptime: '21 d 8 u', heartbeatSec: 22, runs24: [[1,0],[1,0],[0,0],[0,0],[1,0],[2,0],[3,0],[2,0],[3,0],[2,0],[1,0],[1,0]] },
+        { id: 'dossier-indexering-01', short: 'dossier-indexering', type: 'Indexering', status: 'idle', version: '0.4.3', lastRun: '2026-08-19T04:30:09Z', durMs: 61400, next: 'vannacht 04:30', schedule: '30 4 * * *', trigger: 'Timer (nachtelijk)', uptime: 'geschaald naar 0', heartbeatSec: 0, runs24: [[0,0],[0,0],[1,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]] }
+      ]},
+      { id: 'vitaal', name: 'Coöperatie Vitaal', env: 'westeurope · sub-9c31', envFull: 'Azure West Europe · sub-9c3140 · rg-soratus-vitaal', agents: [
+        { id: 'declaratie-intake-01', short: 'declaratie-intake', type: 'Document-intake', status: 'live', version: '2.1.4', lastRun: '2026-08-19T09:20:31Z', durMs: 2140, next: '09:25 (elke 5 min)', schedule: '*/5 * * * *', trigger: 'Timer + mailbox (declaraties)', uptime: '17 d 2 u', heartbeatSec: 6, runs24: [[7,0],[6,0],[5,0],[4,0],[6,0],[9,0],[11,0],[10,0],[9,0],[8,0],[6,0],[4,0]] },
+        { id: 'rooster-bot-01', short: 'rooster-bot', type: 'Planning', status: 'live', version: '1.0.2', lastRun: '2026-08-19T09:00:08Z', durMs: 3350, next: '10:00 (elk uur)', schedule: '0 * * * *', trigger: 'Timer', uptime: '8 d 14 u', heartbeatSec: 14, runs24: [[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0],[1,0]] },
+        { id: 'mail-triage-03', short: 'mail-triage', type: 'Mail-triage', status: 'live', version: '2.0.1', lastRun: '2026-08-19T09:20:55Z', durMs: 610, next: '09:25 (elke 5 min)', schedule: '*/5 * * * *', trigger: 'Graph-subscription (Inbox)', uptime: '5 d 7 u', heartbeatSec: 9, runs24: [[4,0],[4,0],[5,0],[3,0],[4,0],[6,0],[7,0],[6,0],[5,0],[5,0],[4,0],[2,0]] }
+      ]},
+      { id: 'kroon', name: 'Kroon Techniek BV', env: 'westeurope · sub-e820', envFull: 'Azure West Europe · sub-e820a7 · rg-soratus-kroon', agents: [
+        { id: 'factuur-intake-02', short: 'factuur-intake', type: 'Document-intake', status: 'live', version: '1.4.2', lastRun: '2026-08-19T08:58:19Z', durMs: 1620, next: '09:30 (elk half uur)', schedule: '0,30 * * * *', trigger: 'Timer + blob-drop (inbox-facturen)', uptime: '4 d 9 u', heartbeatSec: 27, runs24: [[2,0],[2,0],[1,0],[1,0],[2,0],[2,0],[3,0],[2,0],[2,0],[2,0],[1,0],[1,0]] },
+        { id: 'onderdelen-lookup-01', short: 'onderdelen-lookup', type: 'Lookup-API', status: 'idle', version: '0.3.1', lastRun: '2026-08-19T07:41:37Z', durMs: 380, next: 'op trigger', schedule: '—', trigger: 'HTTP (intern portaal)', uptime: 'geschaald naar 0', heartbeatSec: 0, runs24: [[0,0],[0,0],[0,0],[1,0],[2,0],[1,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]] }
+      ]},
+      { id: 'nieuw', name: 'Nieuwe klant (onboarding)', env: 'westeurope · sub-1f04', envFull: 'Azure West Europe · sub-1f04bd · rg-soratus-nieuw', agents: [] }
+    ],
+    months: [['2026-03', 'maart 2026'], ['2026-04', 'april 2026'], ['2026-05', 'mei 2026'], ['2026-06', 'juni 2026'], ['2026-07', 'juli 2026'], ['2026-08', 'augustus 2026']],
+    categories: ['Ontwikkeling', 'Beheer', 'Support', 'Advies'],
+    contracts: {
+      vandijk: { uurTarief: 125, nr: 'SOR-2025-014', type: 'Agent-abonnement + doorontwikkeling', start: '01-11-2025', looptijd: '24 maanden', opzeg: '2 maanden', sla: 'Reactie 4 werkuren · herstel 1 werkdag', bundelUren: 16, tarief: '€ 125 / uur buiten bundel', indexatie: 'CBS-index per 1 januari', contact: 'J. van Dijk — operations', eigenaar: 'Soratus — accountteam' },
+      bakker: { uurTarief: 125, nr: 'SOR-2026-003', type: 'Agent-abonnement', start: '01-02-2026', looptijd: '12 maanden', opzeg: '1 maand', sla: 'Reactie 4 werkuren · herstel 1 werkdag', bundelUren: 12, tarief: '€ 125 / uur buiten bundel', indexatie: 'CBS-index per 1 januari', contact: 'R. Bakker — logistiek', eigenaar: 'Soratus — accountteam' },
+      meijer: { uurTarief: 145, nr: 'SOR-2025-021', type: 'Agent-abonnement', start: '15-12-2025', looptijd: '12 maanden', opzeg: '1 maand', sla: 'Reactie 8 werkuren · herstel 2 werkdagen', bundelUren: 8, tarief: '€ 145 / uur buiten bundel', indexatie: 'CBS-index per 1 januari', contact: 'mr. T. Meijer', eigenaar: 'Soratus — accountteam' },
+      vitaal: { uurTarief: 118, nr: 'SOR-2025-009', type: 'Agent-abonnement + doorontwikkeling', start: '01-09-2025', looptijd: '36 maanden', opzeg: '3 maanden', sla: 'Reactie 2 werkuren · herstel 4 werkuren', bundelUren: 20, tarief: '€ 118 / uur buiten bundel', indexatie: 'CBS-index per 1 januari', contact: 'A. de Groot — bedrijfsbureau', eigenaar: 'Soratus — accountteam' },
+      kroon: { uurTarief: 125, nr: 'SOR-2026-011', type: 'Agent-abonnement', start: '01-05-2026', looptijd: '12 maanden', opzeg: '1 maand', sla: 'Reactie 8 werkuren · herstel 2 werkdagen', bundelUren: 8, tarief: '€ 125 / uur buiten bundel', indexatie: 'CBS-index per 1 januari', contact: 'S. Kroon — directie', eigenaar: 'Soratus — accountteam' },
+      soratus: { uurTarief: 0, nr: 'INTERN-001', type: 'Beheercontract (intern, niet gefactureerd)', start: '01-01-2025', looptijd: 'doorlopend', opzeg: 'n.v.t.', sla: 'Interne norm: storing binnen 1 u opgepakt', bundelUren: 40, tarief: 'intern — niet doorbelast', indexatie: 'n.v.t.', contact: 'Soratus — platformteam', eigenaar: 'Soratus — platformteam' },
+      nieuw: { uurTarief: 125, nr: 'SOR-2026-018', type: 'Agent-abonnement (in onboarding)', start: '18-08-2026', looptijd: '12 maanden', opzeg: '1 maand', sla: 'gaat in bij eerste deployment', bundelUren: 6, tarief: '€ 125 / uur buiten bundel', indexatie: 'CBS-index per 1 januari', contact: 'nog niet vastgelegd', eigenaar: 'Soratus — accountteam' }
+    },
+    team: ['Marcel', 'Sanne', 'Joris'],
+    invoices: {
+      vandijk: [
+        { month: '2026-07', nr: 'F2026-0714', date: '01-08-2026', due: '15-08-2026', uren: 0, azure: 741.62, status: 'Betaald', paidAt: '11-08-2026' },
+        { month: '2026-06', nr: 'F2026-0611', date: '01-07-2026', due: '15-07-2026', uren: 312.5, azure: 705.18, status: 'Betaald', paidAt: '09-07-2026' },
+        { month: '2026-05', nr: 'F2026-0509', date: '01-06-2026', due: '15-06-2026', uren: 0, azure: 688.44, status: 'Betaald', paidAt: '12-06-2026' },
+        { month: '2026-04', nr: 'F2026-0407', date: '01-05-2026', due: '15-05-2026', uren: 0, azure: 664.9, status: 'Betaald', paidAt: '08-05-2026' }
+      ],
+      bakker: [
+        { month: '2026-07', nr: 'F2026-0715', date: '01-08-2026', due: '15-08-2026', uren: 437.5, azure: 517.31, status: 'Openstaand', paidAt: '' },
+        { month: '2026-06', nr: 'F2026-0612', date: '01-07-2026', due: '15-07-2026', uren: 0, azure: 498.77, status: 'Betaald', paidAt: '14-07-2026' },
+        { month: '2026-05', nr: 'F2026-0510', date: '01-06-2026', due: '15-06-2026', uren: 187.5, azure: 486.2, status: 'Betaald', paidAt: '10-06-2026' }
+      ],
+      meijer: [
+        { month: '2026-07', nr: 'F2026-0716', date: '01-08-2026', due: '15-08-2026', uren: 0, azure: 388.19, status: 'Verzonden', paidAt: '' },
+        { month: '2026-06', nr: 'F2026-0613', date: '01-07-2026', due: '15-07-2026', uren: 0, azure: 371.4, status: 'Betaald', paidAt: '13-07-2026' }
+      ],
+      vitaal: [
+        { month: '2026-07', nr: 'F2026-0717', date: '01-08-2026', due: '15-08-2026', uren: 0, azure: 972.65, status: 'Betaald', paidAt: '06-08-2026' },
+        { month: '2026-06', nr: 'F2026-0614', date: '01-07-2026', due: '15-07-2026', uren: 0, azure: 948.12, status: 'Betaald', paidAt: '07-07-2026' },
+        { month: '2026-05', nr: 'F2026-0511', date: '01-06-2026', due: '15-06-2026', uren: 295, azure: 961.5, status: 'Betaald', paidAt: '09-06-2026' }
+      ],
+      kroon: [
+        { month: '2026-07', nr: 'F2026-0718', date: '01-08-2026', due: '15-08-2026', uren: 0, azure: 256.41, status: 'Verzonden', paidAt: '' },
+        { month: '2026-06', nr: 'F2026-0615', date: '01-07-2026', due: '15-07-2026', uren: 0, azure: 248.9, status: 'Betaald', paidAt: '15-07-2026' }
+      ],
+      nieuw: [],
+      soratus: []
+    },
+    access: {
+      vandijk: [
+        { email: 'j.vandijk@vandijk-installatie.nl', name: 'Jeroen van Dijk', role: 'Beheerder klant' },
+        { email: 'administratie@vandijk-installatie.nl', name: 'Administratie', role: 'Lezer' }
+      ],
+      bakker: [
+        { email: 'r.bakker@bakkerlogistiek.nl', name: 'Rick Bakker', role: 'Beheerder klant' },
+        { email: 'planning@bakkerlogistiek.nl', name: 'Planning', role: 'Lezer' }
+      ],
+      meijer: [{ email: 't.meijer@meijeradvocaten.nl', name: 'mr. T. Meijer', role: 'Beheerder klant' }],
+      vitaal: [
+        { email: 'a.degroot@cooperatievitaal.nl', name: 'Anne de Groot', role: 'Beheerder klant' },
+        { email: 'bedrijfsbureau@cooperatievitaal.nl', name: 'Bedrijfsbureau', role: 'Lezer' }
+      ],
+      kroon: [{ email: 's.kroon@kroontechniek.nl', name: 'Sander Kroon', role: 'Beheerder klant' }],
+      soratus: [
+        { email: 'marcel@soratus.com', name: 'Marcel', role: 'Soratus-operator' },
+        { email: 'sanne@soratus.com', name: 'Sanne', role: 'Soratus-operator' },
+        { email: 'joris@soratus.com', name: 'Joris', role: 'Soratus-operator' }
+      ],
+      nieuw: []
+    },
+    accessRoles: ['Beheerder klant', 'Lezer'],
+    snelstartSync: '19-08-2026 09:20',
+    threads: {
+      vandijk: [
+        { from: 'klant', who: 'J. van Dijk', at: '19-08-2026 08:41', text: 'Mail-triage lijkt trager te reageren sinds gisteren. Klopt dat?', context: 'mail-triage-01 · degraded' },
+        { from: 'soratus', who: 'Sanne — Soratus', at: '19-08-2026 08:52', text: 'Klopt. De container draait, maar de heartbeat komt te laat binnen. We hebben work item 4507 lopen om de drempel te verhogen; werk blijft ondertussen doorlopen.', context: 'DevOps #4507' }
+      ],
+      bakker: [
+        { from: 'klant', who: 'R. Bakker', at: '19-08-2026 09:14', text: 'Voorraad-sync staat op failed. Wat betekent dat voor de standen van vanochtend?', context: 'voorraad-sync-01 · failed' },
+        { from: 'soratus', who: 'Marcel — Soratus', at: '19-08-2026 09:19', text: 'De run is teruggedraaid, dus er staat geen halve voorraadstand in het WMS. Oorzaak is een ontbrekende locatieCode in de export; fix loopt via 4471.', context: 'run r-4a91 · DevOps #4471' }
+      ]
+    },
+    sprint: {
+      name: 'Sprint 2026-16', start: '17-08-2026', end: '28-08-2026', syncedAt: '19-08-2026 09:21',
+      board: 'dev.azure.com/soratus/Agents/_sprints/taskboard/Agents%20Team/Agents/2026-16',
+      items: {
+        vandijk: [
+          { id: '4501', type: 'User Story', title: 'Offerte-generator: sjabloonregels per klantgroep', state: 'Active', by: 'Marcel', points: 5, remaining: 6, done: 4, tags: 'agent · offerte-generator', origin: 'agent' },
+          { id: '4507', type: 'Task', title: 'Mail-triage: heartbeat-drempel verhogen naar 5 min', state: 'Active', by: 'Sanne', points: 0, remaining: 3, done: 1, tags: 'degraded', origin: 'agent' },
+          { id: '4488', type: 'Bug', title: 'Factuur-intake laat regels zonder BTW-nummer vallen', state: 'Blocked', by: 'Joris', points: 0, remaining: 4, done: 2, tags: 'wacht op klant', origin: 'handmatig' },
+          { id: '4462', type: 'Task', title: 'Urenregistratie: koppeling loonpakket afronden', state: 'Closed', by: 'Marcel', points: 0, remaining: 0, done: 8, tags: 'urenregistratie', origin: 'handmatig' }
+        ],
+        bakker: [
+          { id: '4471', type: 'User Story', title: 'Voorraad-sync: validatie locatieCode uit WMS', state: 'Active', by: 'Sanne', points: 8, remaining: 9, done: 5, tags: 'failed run', origin: 'agent' },
+          { id: '4479', type: 'Bug', title: 'Voorraad-sync draait terug bij 503 van WMS-export', state: 'Active', by: 'Marcel', points: 0, remaining: 5, done: 3, tags: 'retry', origin: 'agent' },
+          { id: '4483', type: 'Task', title: 'Vrachtbrief-check: OCR-drempel evalueren', state: 'New', by: 'niet toegewezen', points: 0, remaining: 4, done: 0, tags: 'vrachtbrief-check', origin: 'handmatig' },
+          { id: '4455', type: 'Task', title: 'Mail-triage 2.0.1 uitrollen', state: 'Closed', by: 'Joris', points: 0, remaining: 0, done: 3, tags: 'release', origin: 'handmatig' }
+        ],
+        meijer: [
+          { id: '4492', type: 'User Story', title: 'Contractcheck: clausule-parser uitbreiden', state: 'Active', by: 'Joris', points: 5, remaining: 7, done: 3, tags: 'contractcheck', origin: 'agent' },
+          { id: '4498', type: 'Task', title: 'Dossier-indexering: nachtrun monitoren', state: 'New', by: 'niet toegewezen', points: 0, remaining: 2, done: 0, tags: 'idle', origin: 'handmatig' }
+        ],
+        vitaal: [
+          { id: '4488', type: 'User Story', title: 'Declaratie-intake: schaalregels bij piek', state: 'Active', by: 'Marcel', points: 8, remaining: 6, done: 6, tags: 'declaratie-intake', origin: 'agent' },
+          { id: '4494', type: 'Task', title: 'Rooster-bot: cao-regels 2026 verwerken', state: 'Resolved', by: 'Sanne', points: 0, remaining: 1, done: 5, tags: 'rooster-bot', origin: 'handmatig' },
+          { id: '4502', type: 'Task', title: 'Mail-triage: categorieën bedrijfsbureau', state: 'New', by: 'niet toegewezen', points: 0, remaining: 3, done: 0, tags: 'mail-triage', origin: 'agent' }
+        ],
+        kroon: [
+          { id: '4505', type: 'Task', title: 'Onderdelen-lookup: cache-instellingen bijstellen', state: 'Active', by: 'Joris', points: 0, remaining: 3, done: 2, tags: 'onderdelen-lookup', origin: 'agent' },
+          { id: '4468', type: 'Task', title: 'Factuur-intake: leveranciersregels Kroon', state: 'Closed', by: 'Marcel', points: 0, remaining: 0, done: 4, tags: 'factuur-intake', origin: 'handmatig' }
+        ],
+        soratus: [
+          { id: '4521', type: 'User Story', title: 'Facturatie-agent: Azure-kosten per RG in conceptregel', state: 'Active', by: 'Marcel', points: 5, remaining: 7, done: 5, tags: 'maandfactuur-snelstart', origin: 'agent' },
+          { id: '4526', type: 'Task', title: 'Storingsmelder: mail bij degraded langer dan 10 min', state: 'Active', by: 'Sanne', points: 0, remaining: 3, done: 2, tags: 'storingsmelder', origin: 'agent' },
+          { id: '4530', type: 'Task', title: 'Klantaanmaak in portaal koppelen aan RG-provisioning', state: 'New', by: 'niet toegewezen', points: 3, remaining: 6, done: 0, tags: 'platform', origin: 'handmatig' }
+        ],
+        nieuw: [
+          { id: '4510', type: 'User Story', title: 'Onboarding: eerste agent uitrollen', state: 'New', by: 'Marcel', points: 3, remaining: 8, done: 0, tags: 'onboarding', origin: 'handmatig' }
+        ]
+      }
+    },
+    azure: {
+      vandijk: { opslag: 10, lines: [['Container Apps', 214.8], ['Azure OpenAI', 386.45], ['Storage (blob)', 28.9], ['Log Analytics', 41.2], ['Key Vault', 4.1]] },
+      bakker: { opslag: 10, lines: [['Container Apps', 168.3], ['Azure OpenAI', 241.7], ['Storage (blob)', 22.4], ['Log Analytics', 33.6], ['Key Vault', 4.1]] },
+      meijer: { opslag: 10, lines: [['Container Apps', 96.5], ['Azure OpenAI', 174.2], ['Storage (blob)', 51.8], ['Log Analytics', 26.4], ['Key Vault', 4.1]] },
+      vitaal: { opslag: 8, lines: [['Container Apps', 288.6], ['Azure OpenAI', 512.35], ['Storage (blob)', 36.7], ['Log Analytics', 58.9], ['Key Vault', 4.1]] },
+      kroon: { opslag: 10, lines: [['Container Apps', 74.2], ['Azure OpenAI', 118.9], ['Storage (blob)', 14.6], ['Log Analytics', 21.3], ['Key Vault', 4.1]] },
+      soratus: { opslag: 0, lines: [['Container Apps', 342.6], ['Azure OpenAI', 128.4], ['Storage (blob)', 44.2], ['Log Analytics', 96.8], ['Key Vault', 8.2]] },
+      nieuw: { opslag: 10, lines: [['Container Apps', 0], ['Azure OpenAI', 0], ['Storage (blob)', 2.4], ['Log Analytics', 3.1], ['Key Vault', 4.1]] }
+    },
+    hourEntries: [
+      { cid: 'vandijk', date: '19-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Offerte-generator: promptset herzien', hours: 2.5, source: 'mcp', by: 'Claude Code — Marcel', status: 'pending' },
+      { cid: 'bakker', date: '19-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Voorraad-sync: validatie locatieCode', hours: 3, source: 'mcp', by: 'Claude Code — Sanne', status: 'pending' },
+      { cid: 'bakker', date: '18-08-2026', month: '2026-08', category: 'Beheer', note: 'Retry-beleid WMS herzien (PBI 4471)', hours: 1.5, source: 'devops', by: 'Azure DevOps — PBI 4471', status: 'pending' },
+      { cid: 'vitaal', date: '18-08-2026', month: '2026-08', category: 'Beheer', note: 'Declaratie-intake: schaalregels (PBI 4488)', hours: 2, source: 'devops', by: 'Azure DevOps — PBI 4488', status: 'pending' },
+      { cid: 'meijer', date: '17-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Contractcheck: clausule-parser', hours: 1.5, source: 'mcp', by: 'Claude Code — Joris', status: 'pending' },
+      { cid: 'vandijk', date: '19-08-2026', month: '2026-08', category: 'Beheer', note: 'Mail-triage: heartbeat-drempel onderzocht', hours: 3 },
+      { cid: 'vandijk', date: '18-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Offerte-generator: nieuwe sjabloonregels', hours: 4.5 },
+      { cid: 'vandijk', date: '11-08-2026', month: '2026-08', category: 'Beheer', note: 'Urenregistratie: nachtrooster aangepast', hours: 2.5 },
+      { cid: 'vandijk', date: '07-08-2026', month: '2026-08', category: 'Support', note: 'Vraag over factuurregels zonder BTW-nummer', hours: 1.5 },
+      { cid: 'vandijk', date: '31-07-2026', month: '2026-07', category: 'Ontwikkeling', note: 'Factuur-intake 1.4.2 uitgerold', hours: 6 },
+      { cid: 'vandijk', date: '17-07-2026', month: '2026-07', category: 'Beheer', note: 'Wachtrij opgeschoond na piek', hours: 3 },
+      { cid: 'vandijk', date: '26-06-2026', month: '2026-06', category: 'Support', note: 'Uitleg foutmelding bij INV-2104', hours: 2 },
+      { cid: 'vandijk', date: '19-06-2026', month: '2026-06', category: 'Beheer', note: 'Mail-triage: nieuwe categorieën', hours: 5 },
+      { cid: 'vandijk', date: '11-06-2026', month: '2026-06', category: 'Ontwikkeling', note: 'Urenregistratie: koppeling loonpakket', hours: 11.5 },
+      { cid: 'vandijk', date: '29-05-2026', month: '2026-05', category: 'Support', note: 'Vraag over afwijkende PDF-varianten', hours: 2 },
+      { cid: 'vandijk', date: '22-05-2026', month: '2026-05', category: 'Beheer', note: 'Herstel na Azure-onderhoud', hours: 3 },
+      { cid: 'vandijk', date: '14-05-2026', month: '2026-05', category: 'Ontwikkeling', note: 'Offerte-generator: sjablonen uitgebreid', hours: 7.5 },
+      { cid: 'vandijk', date: '28-04-2026', month: '2026-04', category: 'Advies', note: 'Kwartaaloverleg agent-roadmap', hours: 2 },
+      { cid: 'vandijk', date: '21-04-2026', month: '2026-04', category: 'Beheer', note: 'Urenregistratie: nachtelijke sync ingericht', hours: 4 },
+      { cid: 'vandijk', date: '09-04-2026', month: '2026-04', category: 'Ontwikkeling', note: 'Offerte-generator: eerste versie', hours: 10 },
+      { cid: 'vandijk', date: '30-03-2026', month: '2026-03', category: 'Support', note: 'Vragen over dubbele facturen', hours: 2 },
+      { cid: 'vandijk', date: '24-03-2026', month: '2026-03', category: 'Beheer', note: 'Mail-triage: filters bijgesteld', hours: 3.5 },
+      { cid: 'vandijk', date: '12-03-2026', month: '2026-03', category: 'Ontwikkeling', note: 'Factuur-intake: nieuwe leveranciersregels', hours: 8.5 },
+      { cid: 'bakker', date: '19-08-2026', month: '2026-08', category: 'Beheer', note: 'Voorraad-sync: validatie WMS-payload', hours: 3.5 },
+      { cid: 'bakker', date: '12-08-2026', month: '2026-08', category: 'Advies', note: 'Doorlooptijd vrachtbrieven doorgesproken', hours: 2 },
+      { cid: 'bakker', date: '07-08-2026', month: '2026-08', category: 'Support', note: 'Vraag over vrachtbrief zonder ordernummer', hours: 1.5 },
+      { cid: 'bakker', date: '29-07-2026', month: '2026-07', category: 'Support', note: 'Analyse afgekeurde voorraadregels', hours: 2 },
+      { cid: 'bakker', date: '22-07-2026', month: '2026-07', category: 'Beheer', note: 'Validatieregels herzien', hours: 4 },
+      { cid: 'bakker', date: '14-07-2026', month: '2026-07', category: 'Ontwikkeling', note: 'Voorraad-sync 3.2 voorbereid', hours: 9.5 },
+      { cid: 'bakker', date: '23-06-2026', month: '2026-06', category: 'Beheer', note: 'Retry-beleid WMS aangescherpt', hours: 5 },
+      { cid: 'bakker', date: '10-06-2026', month: '2026-06', category: 'Ontwikkeling', note: 'Vrachtbrief-check: OCR-model bijgewerkt', hours: 7 },
+      { cid: 'bakker', date: '28-05-2026', month: '2026-05', category: 'Advies', note: 'Doorlooptijd voorraadmutaties besproken', hours: 1.5 },
+      { cid: 'bakker', date: '21-05-2026', month: '2026-05', category: 'Beheer', note: 'Locatiecodes gemigreerd', hours: 4 },
+      { cid: 'bakker', date: '13-05-2026', month: '2026-05', category: 'Ontwikkeling', note: 'Voorraad-sync 3.1 uitgerold', hours: 8 },
+      { cid: 'bakker', date: '27-04-2026', month: '2026-04', category: 'Support', note: 'Vraag over ontbrekende SKU\u2019s', hours: 1.5 },
+      { cid: 'bakker', date: '20-04-2026', month: '2026-04', category: 'Beheer', note: 'Retry-beleid ingericht', hours: 3 },
+      { cid: 'bakker', date: '08-04-2026', month: '2026-04', category: 'Ontwikkeling', note: 'Mail-triage ingericht', hours: 7.5 },
+      { cid: 'bakker', date: '25-03-2026', month: '2026-03', category: 'Beheer', note: 'Vrachtbrief-check: OCR-drempel', hours: 4 },
+      { cid: 'bakker', date: '10-03-2026', month: '2026-03', category: 'Ontwikkeling', note: 'Voorraad-sync: WMS-koppeling v3', hours: 6 },
+      { cid: 'meijer', date: '11-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Contractcheck: clausulebibliotheek uitgebreid', hours: 3.5 },
+      { cid: 'meijer', date: '30-07-2026', month: '2026-07', category: 'Advies', note: 'Inrichting dossierstructuur besproken', hours: 2 },
+      { cid: 'meijer', date: '16-07-2026', month: '2026-07', category: 'Beheer', note: 'Contractcheck: modeldrempels bijgesteld', hours: 3 },
+      { cid: 'meijer', date: '24-06-2026', month: '2026-06', category: 'Beheer', note: 'Dossier-indexering: nachtrun ingericht', hours: 2 },
+      { cid: 'meijer', date: '12-06-2026', month: '2026-06', category: 'Ontwikkeling', note: 'Dossier-indexering: eerste versie', hours: 6 },
+      { cid: 'meijer', date: '27-05-2026', month: '2026-05', category: 'Support', note: 'Vraag over gescande bijlagen', hours: 1.5 },
+      { cid: 'meijer', date: '14-05-2026', month: '2026-05', category: 'Beheer', note: 'Contractcheck: hersteld na modelupdate', hours: 3 },
+      { cid: 'meijer', date: '23-04-2026', month: '2026-04', category: 'Beheer', note: 'Clausuleregels onderhouden', hours: 2.5 },
+      { cid: 'meijer', date: '09-04-2026', month: '2026-04', category: 'Ontwikkeling', note: 'Contractcheck 1.2 uitgerold', hours: 5.5 },
+      { cid: 'meijer', date: '26-03-2026', month: '2026-03', category: 'Beheer', note: 'Contractcheck: eerste tuning', hours: 2 },
+      { cid: 'meijer', date: '11-03-2026', month: '2026-03', category: 'Ontwikkeling', note: 'Contractcheck: clausules NL toegevoegd', hours: 4 },
+      { cid: 'vitaal', date: '18-08-2026', month: '2026-08', category: 'Beheer', note: 'Declaratie-intake: piekcapaciteit verhoogd', hours: 5 },
+      { cid: 'vitaal', date: '12-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Rooster-bot: nieuwe cao-regels', hours: 5 },
+      { cid: 'vitaal', date: '05-08-2026', month: '2026-08', category: 'Support', note: 'Rooster-bot: vragen bedrijfsbureau', hours: 2 },
+      { cid: 'vitaal', date: '30-07-2026', month: '2026-07', category: 'Support', note: 'Vragen over afgekeurde declaraties', hours: 2 },
+      { cid: 'vitaal', date: '23-07-2026', month: '2026-07', category: 'Beheer', note: 'Declaratie-intake: drempels bijgesteld', hours: 5 },
+      { cid: 'vitaal', date: '15-07-2026', month: '2026-07', category: 'Ontwikkeling', note: 'Rooster-bot 1.0.2 uitgerold', hours: 9.5 },
+      { cid: 'vitaal', date: '25-06-2026', month: '2026-06', category: 'Support', note: 'Uitleg afwijkende declaratieregels', hours: 2 },
+      { cid: 'vitaal', date: '18-06-2026', month: '2026-06', category: 'Beheer', note: 'Mail-triage: categorieën herzien', hours: 5 },
+      { cid: 'vitaal', date: '11-06-2026', month: '2026-06', category: 'Ontwikkeling', note: 'Declaratie-intake: koppeling zorgadministratie', hours: 11 },
+      { cid: 'vitaal', date: '28-05-2026', month: '2026-05', category: 'Support', note: 'Vragen over dubbele declaraties', hours: 2 },
+      { cid: 'vitaal', date: '21-05-2026', month: '2026-05', category: 'Beheer', note: 'Capaciteit verhoogd na piekmaand', hours: 6.5 },
+      { cid: 'vitaal', date: '13-05-2026', month: '2026-05', category: 'Ontwikkeling', note: 'Declaratie-intake 2.1 uitgerold', hours: 14 },
+      { cid: 'vitaal', date: '29-04-2026', month: '2026-04', category: 'Advies', note: 'Kwartaaloverleg met bedrijfsbureau', hours: 2 },
+      { cid: 'vitaal', date: '21-04-2026', month: '2026-04', category: 'Beheer', note: 'Rooster-bot: onderhoud planningsregels', hours: 5.5 },
+      { cid: 'vitaal', date: '09-04-2026', month: '2026-04', category: 'Ontwikkeling', note: 'Rooster-bot: eerste versie', hours: 12.5 },
+      { cid: 'vitaal', date: '27-03-2026', month: '2026-03', category: 'Support', note: 'Vragen over declaratieformaten', hours: 2 },
+      { cid: 'vitaal', date: '20-03-2026', month: '2026-03', category: 'Beheer', note: 'Declaratie-intake: filters bijgesteld', hours: 5 },
+      { cid: 'vitaal', date: '12-03-2026', month: '2026-03', category: 'Ontwikkeling', note: 'Declaratie-intake 2.0 uitgerold', hours: 12 },
+      { cid: 'kroon', date: '13-08-2026', month: '2026-08', category: 'Ontwikkeling', note: 'Onderdelen-lookup: cache toegevoegd', hours: 4 },
+      { cid: 'kroon', date: '28-07-2026', month: '2026-07', category: 'Support', note: 'Vragen over onbekende artikelnummers', hours: 2.5 },
+      { cid: 'kroon', date: '16-07-2026', month: '2026-07', category: 'Beheer', note: 'Factuur-intake: leveranciersregels', hours: 4 },
+      { cid: 'kroon', date: '23-06-2026', month: '2026-06', category: 'Beheer', note: 'Onderdelen-lookup: onderhoud', hours: 3 },
+      { cid: 'kroon', date: '11-06-2026', month: '2026-06', category: 'Ontwikkeling', note: 'Onderdelen-lookup opgezet', hours: 5 },
+      { cid: 'kroon', date: '26-05-2026', month: '2026-05', category: 'Beheer', note: 'Factuur-intake: eerste tuning', hours: 3 },
+      { cid: 'kroon', date: '14-05-2026', month: '2026-05', category: 'Ontwikkeling', note: 'Factuur-intake uitgerold', hours: 6.5 },
+      { cid: 'nieuw', date: '18-08-2026', month: '2026-08', category: 'Advies', note: 'Intake en inrichting Azure-omgeving', hours: 2.5 },
+    ],
+    logs: {
+      'factuur-intake-01': [
+        { ts: '2026-08-19T09:18:24Z', level: 'info', event: 'run.completed', msg: 'Run afgerond — 6 facturen verwerkt', runId: 'r-8f3c', extra: { durationMs: 1840, itemsProcessed: 6, itemsFailed: 0 } },
+        { ts: '2026-08-19T09:18:22Z', level: 'info', event: 'document.processed', msg: 'Factuur verwerkt', runId: 'r-8f3c', extra: { durationMs: 1840, docId: 'INV-2291' } },
+        { ts: '2026-08-19T09:18:19Z', level: 'info', event: 'document.processed', msg: 'Factuur verwerkt', runId: 'r-8f3c', extra: { durationMs: 1610, docId: 'INV-2290' } },
+        { ts: '2026-08-19T09:18:11Z', level: 'warn', event: 'api.retry', msg: 'Boekhoudkoppeling gaf 429, opnieuw geprobeerd na 800 ms', runId: 'r-8f3c', extra: { attempt: 2, backoffMs: 800, endpoint: 'POST /v2/purchase-invoices' } },
+        { ts: '2026-08-19T09:18:04Z', level: 'info', event: 'document.processed', msg: 'Factuur verwerkt', runId: 'r-8f3c', extra: { durationMs: 2040, docId: 'INV-2289' } },
+        { ts: '2026-08-19T09:18:01Z', level: 'info', event: 'run.started', msg: 'Run gestart — 6 documenten in wachtrij', runId: 'r-8f3c', extra: { queueDepth: 6, trigger: 'timer' } },
+        { ts: '2026-08-19T09:15:00Z', level: 'info', event: 'heartbeat', msg: 'Container gezond', runId: '—', extra: { uptimeSec: 964800, memMb: 412 } },
+        { ts: '2026-08-19T09:03:12Z', level: 'info', event: 'run.completed', msg: 'Run afgerond — 4 facturen verwerkt', runId: 'r-8f2a', extra: { durationMs: 1520, itemsProcessed: 4, itemsFailed: 0 } },
+        { ts: '2026-08-19T09:02:58Z', level: 'info', event: 'auth.refreshed', msg: 'Managed identity token vernieuwd', runId: 'r-8f2a', extra: { scope: 'https://storage.azure.com/.default', expiresInSec: 3599 } },
+        { ts: '2026-08-19T08:48:33Z', level: 'info', event: 'queue.empty', msg: 'Geen nieuwe documenten — run overgeslagen', runId: 'r-8f18', extra: { queueDepth: 0 } },
+        { ts: '2026-08-19T08:30:02Z', level: 'info', event: 'config.reloaded', msg: 'Configuratie herladen na deployment 1.4.2', runId: '—', extra: { version: '1.4.2', changed: ['maxConcurrency', 'timeoutSec'] } }
+      ],
+      'mail-triage-01': [
+        { ts: '2026-08-19T09:14:02Z', level: 'warn', event: 'heartbeat', msg: 'Heartbeat gemist — laatste bevestiging 8 min geleden, container draait nog', runId: '—', extra: { lastHeartbeatAgeSec: 487, containerState: 'Running', probe: 'liveness' } },
+        { ts: '2026-08-19T09:09:31Z', level: 'warn', event: 'api.retry', msg: 'Graph-subscription reageert langzaam (p95 4,2 s)', runId: 'r-7c11', extra: { attempt: 3, backoffMs: 3200, p95Ms: 4200, endpoint: 'GET /v1.0/me/messages/delta' } },
+        { ts: '2026-08-19T09:02:41Z', level: 'info', event: 'run.completed', msg: 'Run afgerond — 3 mails getrieerd', runId: 'r-7c11', extra: { durationMs: 620, itemsProcessed: 3, itemsFailed: 0 } },
+        { ts: '2026-08-19T09:02:40Z', level: 'info', event: 'run.started', msg: 'Run gestart — delta-query', runId: 'r-7c11', extra: { trigger: 'graph-subscription' } },
+        { ts: '2026-08-19T08:56:18Z', level: 'error', event: 'validation.failed', msg: 'Mail zonder afzender-domein kon niet geclassificeerd worden', runId: 'r-7c05', extra: { messageId: 'AAMkAGI2...vQAAA', rule: 'sender-domain-required' } },
+        { ts: '2026-08-19T08:50:11Z', level: 'info', event: 'auth.refreshed', msg: 'Graph-token vernieuwd', runId: '—', extra: { scope: 'Mail.ReadWrite', expiresInSec: 3599 } },
+        { ts: '2026-08-19T08:45:00Z', level: 'info', event: 'heartbeat', msg: 'Container gezond', runId: '—', extra: { uptimeSec: 329400, memMb: 268 } }
+      ],
+      'voorraad-sync-01': [
+        { ts: '2026-08-19T09:11:12Z', level: 'error', event: 'run.completed', msg: 'Run mislukt — 41 van 210 regels afgekeurd, transactie teruggedraaid', runId: 'r-4a91', extra: { durationMs: 8300, itemsProcessed: 169, itemsFailed: 41, result: 'failed', rollback: true } },
+        { ts: '2026-08-19T09:11:04Z', level: 'error', event: 'validation.failed', msg: 'Voorraadregel afgekeurd: veld "locatieCode" ontbreekt in WMS-payload — zie stacktrace', runId: 'r-4a91', extra: { rule: 'locatieCode-required', sku: 'BK-99120-XL', payload: '{"orderId":"WMS-2026-08-19-0091","lines":[{"sku":"BK-99120-XL","qty":24,"unit":"stuk","warehouse":null,"locatieCode":null,"batch":"B-2026-0812","expiry":null,"supplier":{"id":"SUP-3391","name":"Nordkamp Verpakkingen B.V.","country":"DE"},"customsCode":"3923.21.00","weightKg":18.4}],"meta":{"source":"wms-export-v3","exportedAt":"2026-08-19T09:10:58Z","checksum":"9f2c1b77ae4d5e08c1"}}', stacktrace: 'SoratusAgent.Sync.ValidationException: locatieCode is required for warehouse-bound lines\n   at SoratusAgent.Sync.Validators.StockLineValidator.Validate(StockLine line) in /src/Sync/Validators/StockLineValidator.cs:line 88\n   at SoratusAgent.Sync.StockSyncRunner.ProcessBatch(IEnumerable`1 lines, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 214\n   at SoratusAgent.Sync.StockSyncRunner.RunAsync(RunContext ctx, CancellationToken ct) in /src/Sync/StockSyncRunner.cs:line 121\n   at SoratusAgent.Host.AgentLoop.ExecuteAsync(CancellationToken ct) in /src/Host/AgentLoop.cs:line 76' } },
+        { ts: '2026-08-19T09:10:52Z', level: 'warn', event: 'api.retry', msg: 'WMS-export gaf 503, poging 2 van 3', runId: 'r-4a91', extra: { attempt: 2, backoffMs: 1600, endpoint: 'GET /wms/v3/stock/export' } },
+        { ts: '2026-08-19T09:10:44Z', level: 'info', event: 'run.started', msg: 'Run gestart — 210 voorraadregels', runId: 'r-4a91', extra: { queueDepth: 210, trigger: 'timer' } },
+        { ts: '2026-08-19T08:56:41Z', level: 'error', event: 'validation.failed', msg: 'Voorraadregel afgekeurd: onbekende SKU BK-77004', runId: 'r-4a88', extra: { rule: 'sku-known', sku: 'BK-77004' } },
+        { ts: '2026-08-19T08:56:33Z', level: 'info', event: 'run.started', msg: 'Run gestart — 188 voorraadregels', runId: 'r-4a88', extra: { queueDepth: 188, trigger: 'timer' } },
+        { ts: '2026-08-19T08:41:20Z', level: 'info', event: 'run.completed', msg: 'Run afgerond — 194 regels bijgewerkt', runId: 'r-4a80', extra: { durationMs: 7100, itemsProcessed: 194, itemsFailed: 0 } },
+        { ts: '2026-08-19T08:30:05Z', level: 'info', event: 'config.reloaded', msg: 'Configuratie herladen na deployment 3.2.0', runId: '—', extra: { version: '3.2.0', changed: ['retryPolicy'] } },
+        { ts: '2026-08-19T08:15:00Z', level: 'info', event: 'heartbeat', msg: 'Container gezond', runId: '—', extra: { uptimeSec: 108000, memMb: 731 } }
+      ]
+    },
+    runs: {
+      'voorraad-sync-01': [
+        { ts: '2026-08-19T09:10:44Z', durMs: 8300, result: 'failed', items: 169, runId: 'r-4a91' },
+        { ts: '2026-08-19T08:56:33Z', durMs: 6400, result: 'failed', items: 152, runId: 'r-4a88' },
+        { ts: '2026-08-19T08:41:12Z', durMs: 7100, result: 'ok', items: 194, runId: 'r-4a80' },
+        { ts: '2026-08-19T08:26:09Z', durMs: 6900, result: 'ok', items: 188, runId: 'r-4a74' },
+        { ts: '2026-08-19T08:11:02Z', durMs: 7400, result: 'ok', items: 201, runId: 'r-4a68' },
+        { ts: '2026-08-19T07:56:00Z', durMs: 5900, result: 'ok', items: 176, runId: 'r-4a61' },
+        { ts: '2026-08-19T07:41:04Z', durMs: 6200, result: 'ok', items: 181, runId: 'r-4a55' },
+        { ts: '2026-08-19T07:26:00Z', durMs: 6050, result: 'ok', items: 179, runId: 'r-4a49' }
+      ],
+      'mail-triage-01': [
+        { ts: '2026-08-19T09:02:40Z', durMs: 620, result: 'ok', items: 3, runId: 'r-7c11' },
+        { ts: '2026-08-19T08:56:10Z', durMs: 980, result: 'failed', items: 1, runId: 'r-7c05' },
+        { ts: '2026-08-19T08:51:02Z', durMs: 540, result: 'ok', items: 2, runId: 'r-7bfa' },
+        { ts: '2026-08-19T08:46:00Z', durMs: 610, result: 'ok', items: 4, runId: 'r-7bf1' },
+        { ts: '2026-08-19T08:41:00Z', durMs: 700, result: 'ok', items: 5, runId: 'r-7be6' },
+        { ts: '2026-08-19T08:36:00Z', durMs: 560, result: 'ok', items: 2, runId: 'r-7bdb' }
+      ]
+    }
+  };
+
+  STATUS = {
+    live:     { label: 'Live',     glyph: '●', dot: '#0f7a4a', fg: '#0f7a4a', bg: '#eaf6ef', border: '#bfe3cd', rank: 2, text: 'De agent draait en heeft recent werk afgerond. Geen actie nodig.' },
+    degraded: { label: 'Degraded', glyph: '◐', dot: '#8a5a00', fg: '#8a5a00', bg: '#fdf4e0', border: '#ecd7a6', rank: 3, text: 'De container draait, maar meldt zich niet op tijd of is traag. Werk kan vertragen; Soratus kijkt ernaar.' },
+    failed:   { label: 'Failed',   glyph: '✕', dot: '#b3261e', fg: '#b3261e', bg: '#fdedeb', border: '#f0c4bf', rank: 4, text: 'De laatste run is niet afgerond. Werk blijft liggen tot dit is opgelost.' },
+    idle:     { label: 'Idle',     glyph: '○', dot: '#767c94', fg: '#575d75', bg: '#f1f2f6', border: '#dcdfe9', rank: 1, text: 'Er is niets te doen, dus de agent is naar nul geschaald. Dit is normaal en geen storing.' },
+    none:     { label: 'Geen agents', glyph: '–', dot: '#cfd3e0', fg: '#767c94', bg: '#f6f7fb', border: '#e3e5ee', rank: 0, text: '' }
+  };
+
+  LEVEL = { info: '#575d75', warn: '#8a5a00', error: '#b3261e' };
+
+  state = { screen: 'A', view: 'agents', role: 'operator', customerId: 'bakker', agentId: 'voorraad-sync-01', tab: 'logs', levels: { info: true, warn: true, error: true }, q: '', liveTail: false, tailRows: [], expanded: {}, switcherOpen: false,
+    hourEdits: {}, entries: [], form: { month: this.DATA.now.slice(0, 7), hours: '', category: 'Ontwikkeling', note: '', by: 'Marcel' }, formError: '', selectedMonth: null, allMonths: false, decisions: {}, mails: {}, azureEdits: {}, opslagEdits: {}, msgs: {}, draft: '', topic: 'Algemeen', accessAdds: {}, accessRemoved: {}, accessForm: { email: '', name: '', role: 'Beheerder klant' }, accessError: '', newCustomers: [], customerEdits: {}, newCustomer: {}, newError: '', showNew: false, editContract: false };
+
+  num(n) { return (Math.round(n * 10) / 10).toFixed(1).replace('.', ','); }
+  entryCount(cid, key) { return this.entriesFor(cid).filter(e => e.month === key).length; }
+  monthLabel(key) { const m = this.DATA.months.find(x => x[0] === key); return m ? m[1] : key; }
+  WI_STATE = {
+    New: { fg: '#575d75', bg: '#f1f2f6', border: '#dcdfe9', glyph: '○' },
+    Active: { fg: '#0a0d1a', bg: '#eef2ff', border: '#ccd6ff', glyph: '◐' },
+    Blocked: { fg: '#8a5a00', bg: '#fdf4e0', border: '#ecd7a6', glyph: '✕' },
+    Resolved: { fg: '#0f7a4a', bg: '#eaf6ef', border: '#bfe3cd', glyph: '✓' },
+    Closed: { fg: '#0f7a4a', bg: '#eaf6ef', border: '#bfe3cd', glyph: '●' }
+  };
+  SOURCES = {
+    handmatig: { label: 'Portaal', bg: '#f1f2f6', fg: '#575d75', border: '#dcdfe9' },
+    mcp: { label: 'MCP · Claude Code', bg: '#eef2ff', fg: '#1B1F8C', border: '#ccd6ff' },
+    devops: { label: 'Azure DevOps', bg: '#eef2ff', fg: '#1B1F8C', border: '#ccd6ff' }
+  };
+  entriesFor(cid) {
+    return [].concat(this.state.entries, this.DATA.hourEntries)
+      .filter(e => e.cid === cid)
+      .map(e => {
+        const key = cid + '|' + e.date + '|' + e.note;
+        const status = this.state.decisions[key] || e.status || 'approved';
+        return Object.assign({}, e, { key, status, source: e.source || 'handmatig', by: e.by || this.DATA.team[(e.note.length + e.hours * 2) % 3] });
+      })
+      .filter(e => e.status !== 'rejected');
+  }
+  entrySum(cid, key) {
+    return this.entriesFor(cid).filter(e => e.month === key && e.status === 'approved').reduce((t, e) => t + e.hours, 0);
+  }
+  pendingSum(cid, key) {
+    return this.entriesFor(cid).filter(e => e.month === key && e.status === 'pending').reduce((t, e) => t + e.hours, 0);
+  }
+  money(n) {
+    const s = (Math.round(n * 100) / 100).toFixed(2).split('.');
+    return '\u20ac ' + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + s[1];
+  }
+  azureCost(cid, i) {
+    const k = cid + '|' + i;
+    return this.state.azureEdits[k] != null ? this.state.azureEdits[k] : this.azureOf(cid).lines[i][1];
+  }
+  setAzureCost(cid, i, v) {
+    const n = Math.max(0, parseFloat(String(v).replace(',', '.')) || 0);
+    this.setState(s => ({ azureEdits: Object.assign({}, s.azureEdits, { [cid + '|' + i]: n }) }));
+  }
+  opslag(cid) {
+    if (this.state.opslagEdits[cid] != null) return this.state.opslagEdits[cid];
+    const ed = (this.state.customerEdits[cid] || {}).opslag;
+    if (ed !== undefined && ed !== '') return Number(ed);
+    return this.azureOf(cid).opslag;
+  }
+  setOpslag(cid, v) {
+    const n = Math.max(0, parseFloat(String(v).replace(',', '.')) || 0);
+    this.setState(s => ({ opslagEdits: Object.assign({}, s.opslagEdits, { [cid]: n }) }));
+  }
+  sendMessage(cid, who, topic) {
+    const text = this.state.draft.trim();
+    if (!text) return;
+    const operator = this.state.role === 'operator';
+    const msg = { from: operator ? 'soratus' : 'klant', who, at: '19-08-2026 09:22', text, context: topic, added: true };
+    const extra = operator ? [] : [this.firstLineAnswer(cid, text, topic)];
+    this.setState(s => ({ msgs: Object.assign({}, s.msgs, { [cid]: (s.msgs[cid] || []).concat([msg]).concat(extra) }), draft: '' }));
+  }
+  firstLineAnswer(cid, text, topic) {
+    const cust = this.customer(cid);
+    const contract = this.contractOf(cid);
+    const t = (text + ' ' + topic).toLowerCase();
+    const month = this.DATA.now.slice(0, 7);
+    const hit = cust.agents.find(a => t.includes(a.short) || t.includes(a.id));
+    const broken = cust.agents.filter(a => a.status === 'failed' || a.status === 'degraded');
+    const wi = (this.DATA.sprint.items[cid] || []).filter(w => w.state !== 'Closed');
+    const base = { from: 'ai', who: 'Soratus support-agent', at: '19-08-2026 09:22', added: true };
+    if (hit || broken.length) {
+      const a = hit || broken[0];
+      const s = this.STATUS[a.status];
+      const item = wi.find(w => w.tags.indexOf(a.short) > -1) || wi.find(w => w.title.toLowerCase().indexOf(a.short) > -1);
+      const parts = [a.id + ' staat op ' + s.label.toLowerCase() + '. ' + s.text,
+        'Laatste run ' + this.rel(a.lastRun) + ' (' + this.dur(a.durMs) + '), volgende run ' + a.next + '.'];
+      if (item) parts.push('In de huidige sprint loopt hiervoor work item #' + item.id + ' — ' + item.title + ' (' + item.state.toLowerCase() + ').');
+      else parts.push('Er staat hiervoor nog geen work item open; blijft het spelen, dan zetten we er een uit in DevOps.');
+      return Object.assign(base, { text: parts.join(' '), context: a.id + ' · ' + s.label.toLowerCase() + (item ? ' · DevOps #' + item.id : ''), canEscalate: true });
+    }
+    if (t.indexOf('uur') > -1 || t.indexOf('uren') > -1 || t.indexOf('bundel') > -1) {
+      const sp = this.spent(cid, month);
+      const saldo = contract.bundelUren - sp;
+      return Object.assign(base, {
+        text: 'Deze maand staat er ' + this.num(sp) + ' u geboekt van de ' + this.num(contract.bundelUren) + ' u bundel — ' + (saldo < 0 ? this.num(-saldo) + ' u boven bundel, dat wordt achteraf gefactureerd tegen ' + contract.tarief + '.' : this.num(saldo) + ' u over.') + ' De specificatie per regel staat onder Uren.',
+        context: 'contract ' + contract.nr + ' · ' + this.monthLabel(month), canEscalate: true });
+    }
+    if (t.indexOf('factuur') > -1 || t.indexOf('betaal') > -1 || t.indexOf('kosten') > -1 || t.indexOf('azure') > -1) {
+      const inv = (this.DATA.invoices[cid] || [])[0];
+      return Object.assign(base, {
+        text: inv ? 'De laatste factuur is ' + inv.nr + ' over ' + this.monthLabel(inv.month) + ', status ' + inv.status.toLowerCase() + (inv.paidAt ? ' (betaald ' + inv.paidAt + ').' : ' (verstuurd ' + inv.date + ', verval ' + inv.due + ').') + ' De lopende maand wordt op 01-09-2026 als concept klaargezet, inclusief Azure-verbruik en uren boven bundel.'
+          : 'Er is voor deze omgeving nog geen factuur verstuurd. De eerste conceptfactuur wordt op de 1e van de volgende maand klaargezet, inclusief Azure-verbruik en uren boven bundel.',
+        context: 'SnelStart · ' + contract.nr, canEscalate: true });
+    }
+    if (t.indexOf('sprint') > -1 || t.indexOf('devops') > -1 || t.indexOf('wanneer') > -1) {
+      return Object.assign(base, {
+        text: wi.length ? 'In ' + this.DATA.sprint.name + ' (' + this.DATA.sprint.start + ' — ' + this.DATA.sprint.end + ') staan ' + wi.length + ' open items voor jullie; #' + wi[0].id + ' — ' + wi[0].title + ' is nu ' + wi[0].state.toLowerCase() + '.'
+          : 'Er staan op dit moment geen open work items voor jullie in ' + this.DATA.sprint.name + '.',
+        context: this.DATA.sprint.name, canEscalate: true });
+    }
+    return Object.assign(base, {
+      text: 'Hier kan ik geen zeker antwoord op geven. Ik heb je vraag doorgezet naar het team van Soratus; iemand reageert binnen de SLA (' + contract.sla + ').',
+      context: 'doorgezet naar Soratus' });
+  }
+  escalate(cid) {
+    const contract = this.contractOf(cid);
+    const msg = { from: 'ai', who: 'Soratus support-agent', at: '19-08-2026 09:22',
+      text: 'Doorgezet naar het team van Soratus. Iemand pakt dit op binnen de SLA (' + contract.sla + ') en reageert in deze draad.', context: 'doorgezet naar Soratus' };
+    this.setState(s => ({ msgs: Object.assign({}, s.msgs, { [cid]: (s.msgs[cid] || []).concat([msg]) }) }));
+  }
+  decide(key, verdict) { this.setState(s => ({ decisions: Object.assign({}, s.decisions, { [key]: verdict }) })); }
+  spent(cid, key) {
+    const k = cid + '|' + key;
+    if (this.state.hourEdits[k] != null) return this.state.hourEdits[k];
+    return this.entrySum(cid, key);
+  }
+  setSpent(cid, key, val) {
+    const v = Math.max(0, parseFloat(String(val).replace(',', '.')) || 0);
+    this.setState(s => ({ hourEdits: Object.assign({}, s.hourEdits, { [cid + '|' + key]: v }) }));
+  }
+  addEntry(cid) {
+    const f = this.state.form;
+    const h = parseFloat(String(f.hours).replace(',', '.'));
+    if (!h || h <= 0) { this.setState({ formError: 'Vul een aantal uren groter dan 0 in.' }); return; }
+    if (!f.note.trim()) { this.setState({ formError: 'Vul een korte omschrijving in.' }); return; }
+    const entry = { cid, date: '19-08-2026', month: f.month, category: f.category, note: f.note.trim(), hours: Math.round(h * 10) / 10, added: true, source: 'handmatig', by: f.by, status: 'approved' };
+    const k = cid + '|' + f.month;
+    const bumped = this.state.hourEdits[k] != null ? { [k]: Math.round((this.state.hourEdits[k] + entry.hours) * 10) / 10 } : {};
+    this.setState(s => ({
+      entries: [entry].concat(s.entries),
+      hourEdits: Object.assign({}, s.hourEdits, bumped),
+      form: { month: f.month, hours: '', category: f.category, note: '', by: f.by },
+      formError: ''
+    }));
+  }
+
+  componentWillUnmount() { if (this.tailTimer) clearInterval(this.tailTimer); }
+
+  // ── helpers ────────────────────────────────────────────────
+  now() { return new Date(this.DATA.now).getTime(); }
+  pad(n) { return String(n).padStart(2, '0'); }
+  clock(ts) { const d = new Date(ts); return this.pad(d.getUTCHours()) + ':' + this.pad(d.getUTCMinutes()) + ':' + this.pad(d.getUTCSeconds()); }
+  abs(ts) { const d = new Date(ts); return this.pad(d.getUTCDate()) + '-' + this.pad(d.getUTCMonth() + 1) + '-' + d.getUTCFullYear() + ' ' + this.clock(ts) + ' UTC'; }
+  rel(ts) {
+    const s = Math.round((this.now() - new Date(ts).getTime()) / 1000);
+    if (s < 45) return s + ' sec geleden';
+    const m = Math.round(s / 60);
+    if (m < 60) return m + ' min geleden';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + ' u ' + (m % 60) + ' min geleden';
+    return Math.floor(h / 24) + ' d geleden';
+  }
+  dur(ms) {
+    if (ms == null) return '—';
+    if (ms < 1000) return ms + ' ms';
+    if (ms < 60000) return (ms / 1000).toFixed(2).replace('.', ',') + ' s';
+    return Math.floor(ms / 60000) + 'm ' + Math.round((ms % 60000) / 1000) + 's';
+  }
+  totals(a) { return a.runs24.reduce((t, p) => ({ n: t.n + p[0], f: t.f + p[1] }), { n: 0, f: 0 }); }
+  worst(c) {
+    if (!c.agents.length) return this.STATUS.none;
+    let w = this.STATUS[c.agents[0].status];
+    c.agents.forEach(a => { const s = this.STATUS[a.status]; if (s.rank > w.rank) w = s; });
+    return w;
+  }
+  FIELDS = [
+    { k: 'name', label: 'Klantnaam', scope: 'customer' },
+    { k: 'env', label: 'Omgeving (kort)', scope: 'customer' },
+    { k: 'envFull', label: 'Resource group / subscription', scope: 'customer' },
+    { k: 'nr', label: 'Contractnummer', scope: 'contract' },
+    { k: 'type', label: 'Soort contract', scope: 'contract' },
+    { k: 'start', label: 'Ingangsdatum', scope: 'contract' },
+    { k: 'looptijd', label: 'Looptijd', scope: 'contract' },
+    { k: 'opzeg', label: 'Opzegtermijn', scope: 'contract' },
+    { k: 'bundelUren', label: 'Urenbundel per maand', scope: 'contract', num: true },
+    { k: 'uurTarief', label: 'Uurtarief buiten bundel', scope: 'contract', num: true },
+    { k: 'indexatie', label: 'Indexatie', scope: 'contract' },
+    { k: 'sla', label: 'SLA', scope: 'contract' },
+    { k: 'contact', label: 'Contactpersoon', scope: 'contract' },
+    { k: 'opslag', label: 'Opslag Azure-kosten (%)', scope: 'contract', num: true },
+    { k: 'emails', label: 'Toegang — e-mailadressen (komma-gescheiden)', scope: 'access' }
+  ];
+  DEFAULT_CONTRACT = { nr: '', type: 'Agent-abonnement', start: '', looptijd: '12 maanden', opzeg: '1 maand', sla: 'Reactie 8 werkuren · herstel 2 werkdagen', bundelUren: 8, uurTarief: 125, tarief: '', indexatie: 'CBS-index per 1 januari', contact: '', eigenaar: 'Soratus — accountteam' };
+  allCustomers() { return this.DATA.customers.concat(this.state.newCustomers).map(c => Object.assign({}, c, this.pick(c.id, 'customer'))); }
+  pick(cid, scope) {
+    const ed = this.state.customerEdits[cid] || {};
+    const out = {};
+    this.FIELDS.filter(x => x.scope === scope).forEach(x => { if (ed[x.k] !== undefined && ed[x.k] !== '') out[x.k] = x.num ? Number(ed[x.k]) : ed[x.k]; });
+    return out;
+  }
+  contractOf(cid) {
+    const base = Object.assign({}, this.DEFAULT_CONTRACT, this.DATA.contracts[cid] || {});
+    const c = Object.assign(base, this.pick(cid, 'contract'));
+    if (!c.tarief) c.tarief = '\u20ac ' + c.uurTarief + ' / uur buiten bundel';
+    return c;
+  }
+  azureOf(cid) { return this.DATA.azure[cid] || { opslag: 10, lines: [['Container Apps', 0], ['Azure OpenAI', 0], ['Storage (blob)', 0], ['Log Analytics', 0], ['Key Vault', 0]] }; }
+  accessFor(cid) {
+    return (this.DATA.access[cid] || []).concat(this.state.accessAdds[cid] || []).filter(a => !this.state.accessRemoved[cid + '|' + a.email]);
+  }
+  addAccess(cid) {
+    const a = this.state.accessForm;
+    if (!a.email || a.email.indexOf('@') < 1) { this.setState({ accessError: 'Vul een geldig e-mailadres in.' }); return; }
+    this.setState(s => ({
+      accessAdds: Object.assign({}, s.accessAdds, { [cid]: (s.accessAdds[cid] || []).concat([{ email: a.email.trim(), name: a.name.trim() || '—', role: a.role, added: true }]) }),
+      accessForm: { email: '', name: '', role: a.role }, accessError: ''
+    }));
+  }
+  removeAccess(cid, email) { this.setState(s => ({ accessRemoved: Object.assign({}, s.accessRemoved, { [cid + '|' + email]: true }) })); }
+  setField(cid, k, v) { this.setState(s => ({ customerEdits: Object.assign({}, s.customerEdits, { [cid]: Object.assign({}, s.customerEdits[cid], { [k]: v }) }) })); }
+  customer(id) { return this.allCustomers().find(c => c.id === id) || this.allCustomers()[0]; }
+  agent(cid, aid) { const c = this.customer(cid); return c.agents.find(a => a.id === aid) || c.agents[0]; }
+  createCustomer() {
+    const d = this.state.newCustomer;
+    if (!d.name || !d.name.trim()) { this.setState({ newError: 'Vul minimaal een klantnaam in.' }); return; }
+    const id = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 12) + '-' + (this.state.newCustomers.length + 1);
+    const cust = { id, name: d.name.trim(), env: d.env || 'westeurope · nieuw', envFull: d.envFull || ('Azure West Europe · rg-soratus-' + id), agents: [] };
+    const mails = (d.emails || '').split(',').map(x => x.trim()).filter(x => x.indexOf('@') > 0).map(x => ({ email: x, name: '—', role: 'Beheerder klant', added: true }));
+    const edits = {};
+    this.FIELDS.filter(x => x.scope === 'contract').forEach(x => { if (d[x.k] !== undefined && d[x.k] !== '') edits[x.k] = d[x.k]; });
+    this.setState(s => ({
+      newCustomers: s.newCustomers.concat([cust]),
+      accessAdds: Object.assign({}, s.accessAdds, { [id]: mails }),
+      customerEdits: Object.assign({}, s.customerEdits, { [id]: edits }),
+      newCustomer: {}, newError: '', showNew: false, screen: 'B', view: 'agents', customerId: id
+    }));
+  }
+  lastActivity(c) {
+    if (!c.agents.length) return null;
+    return c.agents.map(a => a.lastRun).sort().reverse()[0];
+  }
+
+  // ── synthetische logs / runs voor agents zonder eigen set ──
+  synthLogs(a) {
+    const base = new Date(a.lastRun).getTime();
+    const seq = [
+      ['info', 'run.completed', 'Run afgerond', 2],
+      ['info', 'document.processed', 'Item verwerkt', 6],
+      ['info', 'run.started', 'Run gestart', 14],
+      ['info', 'heartbeat', 'Container gezond', 320],
+      ['info', 'queue.empty', 'Geen nieuw werk — run overgeslagen', 900],
+      ['warn', 'api.retry', 'Koppeling gaf 429, opnieuw geprobeerd', 1500],
+      ['info', 'auth.refreshed', 'Managed identity token vernieuwd', 2400],
+      ['info', 'config.reloaded', 'Configuratie herladen na deployment ' + a.version, 5400]
+    ];
+    return seq.map((s, i) => ({
+      ts: new Date(base - s[3] * 1000).toISOString().replace('.000', ''),
+      level: s[0], event: s[1], msg: s[2], runId: i < 3 ? 'r-' + a.id.slice(0, 2) + '1' + i : '—',
+      extra: { agentVersion: a.version, durationMs: a.durMs }
+    }));
+  }
+  runsFor(a) {
+    if (this.DATA.runs[a.id]) return this.DATA.runs[a.id];
+    const base = new Date(a.lastRun).getTime();
+    return [0, 1, 2, 3, 4, 5].map(i => ({
+      ts: new Date(base - i * 15 * 60000).toISOString().replace('.000', ''),
+      durMs: Math.round(a.durMs * (1 + (i % 3) * 0.08)),
+      result: 'ok',
+      items: 3 + ((i * 7) % 11),
+      runId: 'r-' + a.id.slice(0, 2) + (90 - i)
+    }));
+  }
+  logsFor(a) { return this.DATA.logs[a.id] || this.synthLogs(a); }
+
+  // ── handlers ───────────────────────────────────────────────
+  openCustomer(id) { this.setState({ screen: 'B', view: 'agents', customerId: id, switcherOpen: false }); }
+  openAgent(cid, aid) { this.setState({ screen: 'C', customerId: cid, agentId: aid, tab: 'logs', expanded: {}, q: '', levels: { info: true, warn: true, error: true } }); }
+  keyOpen(fn) { return e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }; }
+
+  setRole(role) {
+    if (role === 'client') this.setState({ role, screen: this.state.screen === 'A' ? 'B' : this.state.screen, switcherOpen: false });
+    else this.setState({ role, switcherOpen: false });
+  }
+
+  toggleTail() {
+    const on = !this.state.liveTail;
+    if (this.tailTimer) { clearInterval(this.tailTimer); this.tailTimer = null; }
+    if (on) {
+      let i = 0;
+      this.tailTimer = setInterval(() => {
+        const a = this.agent(this.state.customerId, this.state.agentId);
+        const pool = [
+          ['info', 'heartbeat', 'Container gezond'],
+          ['info', 'document.processed', 'Item verwerkt'],
+          ['info', 'run.started', 'Run gestart'],
+          ['info', 'run.completed', 'Run afgerond'],
+          ['warn', 'api.retry', 'Koppeling gaf 429, opnieuw geprobeerd']
+        ];
+        const p = pool[i % pool.length];
+        i++;
+        const row = { ts: new Date(this.now() + i * 2500).toISOString().replace('.000', ''), level: p[0], event: p[1], msg: p[2], runId: 'r-live' + (i % 4), extra: { tail: true, agentVersion: a.version } };
+        this.setState(s => ({ tailRows: [row].concat(s.tailRows).slice(0, 30) }));
+      }, 2500);
+    }
+    this.setState({ liveTail: on, tailRows: on ? this.state.tailRows : [] });
+  }
+
+  // ── render values ──────────────────────────────────────────
+  renderVals() {
+    const st = this.state;
+    const isOperator = st.role === 'operator';
+    const sortByProblems = this.props.sortByProblems ?? true;
+    const showEnv = this.props.showEnvironmentColumn ?? true;
+    const showSparks = this.props.showSparklines ?? true;
+    const screen = isOperator ? st.screen : (st.screen === 'A' ? 'B' : st.screen);
+    const cust = this.customer(st.customerId);
+    const pillBase = 'border: none; border-radius: 6px; padding: 4px 9px; font-size: 12px; font-weight: 500; ';
+
+    // KPI's
+    const all = this.allCustomers().flatMap(c => c.agents);
+    const counts = { live: 0, degraded: 0, failed: 0, idle: 0 };
+    all.forEach(a => counts[a.status]++);
+    const tot = all.reduce((t, a) => { const x = this.totals(a); return { n: t.n + x.n, f: t.f + x.f }; }, { n: 0, f: 0 });
+
+    const rowsSorted = this.allCustomers().slice().sort((a, b) => {
+      if (sortByProblems) {
+        const d = this.worst(b).rank - this.worst(a).rank;
+        if (d !== 0) return d;
+      }
+      if (!sortByProblems) return a.name.localeCompare(b.name);
+      const la = this.lastActivity(a) || '', lb = this.lastActivity(b) || '';
+      return lb.localeCompare(la);
+    });
+
+    const customerRows = rowsSorted.map(c => {
+      const w = this.worst(c);
+      const cc = { live: 0, degraded: 0, failed: 0, idle: 0 };
+      c.agents.forEach(a => cc[a.status]++);
+      const segs = ['failed', 'degraded', 'live', 'idle'].filter(k => cc[k] > 0).map(k => ({
+        dot: this.STATUS[k].dot, pct: Math.round((cc[k] / c.agents.length) * 100), title: cc[k] + ' × ' + this.STATUS[k].label
+      }));
+      const distText = c.agents.length
+        ? ['live', 'degraded', 'failed', 'idle'].filter(k => cc[k] > 0).map(k => cc[k] + ' ' + this.STATUS[k].label.toLowerCase()).join(' · ')
+        : 'geen agents ingericht';
+      const la = this.lastActivity(c);
+      return {
+        id: c.id, name: c.name, env: c.env, envFull: c.envFull,
+        agentCount: c.agents.length, countColor: c.agents.length ? '#0a0d1a' : '#767c94',
+        segs, distText,
+        worstDot: w.dot, worstLabel: w.label, worstGlyph: w.glyph, worstBg: w.bg, worstFg: w.fg, worstBorder: w.border,
+        lastRel: la ? this.rel(la) : '—', lastAbs: la ? this.abs(la) : 'nog geen activiteit',
+        open: () => this.openCustomer(c.id), keydown: this.keyOpen(() => this.openCustomer(c.id))
+      };
+    });
+
+    const agentRows = cust.agents.map(a => {
+      const s = this.STATUS[a.status];
+      const t = this.totals(a);
+      const max = Math.max.apply(null, a.runs24.map(p => p[0]).concat([1]));
+      return {
+        id: a.id, type: a.type, statusLabel: s.label, glyph: s.glyph, bg: s.bg, fg: s.fg, border: s.border,
+        lastRel: this.rel(a.lastRun), lastAbs: this.abs(a.lastRun),
+        dur: this.dur(a.durMs), durColor: a.status === 'failed' ? '#b3261e' : '#575d75',
+        next: a.next, version: 'v' + a.version,
+        spark: a.runs24.map(p => ({ h: Math.max(2, Math.round((p[0] / max) * 22)), color: p[1] > 0 ? '#b3261e' : (p[0] === 0 ? '#e3e5ee' : '#a9b0c6') })),
+        sparkTitle: t.n + ' runs in 24 u, ' + t.f + ' mislukt (2-uursblokken)',
+        open: () => this.openAgent(cust.id, a.id), keydown: this.keyOpen(() => this.openAgent(cust.id, a.id))
+      };
+    });
+
+    // Detail
+    const ag = this.agent(cust.id, st.agentId);
+    const ds = ag ? this.STATUS[ag.status] : this.STATUS.none;
+    const hb = ag ? ag.heartbeatSec : 0;
+    const detail = ag ? {
+      statusLabel: ds.label, glyph: ds.glyph, bg: ds.bg, fg: ds.fg, border: ds.border, type: ag.type,
+      notice: ag.status === 'degraded' ? 'Container draait, maar de laatste heartbeat is ' + Math.round(hb / 60) + ' min oud (drempel 2 min). De agent verwerkt nog werk; meldingen kunnen vertraagd zijn.'
+        : ag.status === 'failed' ? 'Laatste run mislukt op validatie (41 van 210 regels afgekeurd). De transactie is teruggedraaid; er is geen halve voorraadstand weggeschreven.'
+        : ag.status === 'idle' ? 'Geen werk in de wachtrij, daarom naar nul geschaald. Dit is de normale rusttoestand — geen storing.' : false
+    } : { statusLabel: '—', glyph: '–', bg: '#f6f7fb', fg: '#767c94', border: '#e3e5ee', type: '—', notice: false };
+    const detailFacts = ag ? [
+      { label: 'Versie', value: 'v' + ag.version, color: '#0a0d1a', title: 'draaiende image-tag' },
+      { label: 'Draait sinds', value: ag.uptime, color: '#0a0d1a', title: 'container-uptime' },
+      { label: 'Laatste heartbeat', value: ag.status === 'idle' ? 'n.v.t. (geschaald naar 0)' : (hb < 90 ? hb + ' sec geleden' : Math.round(hb / 60) + ' min geleden'), color: hb > 120 ? '#8a5a00' : '#0a0d1a', title: 'liveness-probe' },
+      { label: 'Laatste run', value: this.rel(ag.lastRun), color: '#0a0d1a', title: this.abs(ag.lastRun) },
+      { label: 'Volgende run', value: ag.next, color: '#0a0d1a', title: 'cron: ' + ag.schedule }
+    ] : [];
+
+    // Logs
+    const raw = ag ? (st.liveTail ? st.tailRows.concat(this.logsFor(ag)) : this.logsFor(ag)) : [];
+    const levelCounts = { info: 0, warn: 0, error: 0 };
+    raw.forEach(r => levelCounts[r.level]++);
+    const q = st.q.trim().toLowerCase();
+    const filtered = raw.filter(r => st.levels[r.level] && (!q || (r.event + ' ' + r.msg + ' ' + r.runId).toLowerCase().includes(q)));
+    const logRows = filtered.map((r, i) => {
+      const key = r.ts + r.event + i;
+      const open = !!st.expanded[key];
+      const json = JSON.stringify(Object.assign({ ts: r.ts, level: r.level, agentId: ag ? ag.id : '', customerId: cust.id, runId: r.runId, event: r.event, msg: r.msg }, r.extra), null, 2);
+      return {
+        time: this.clock(r.ts), abs: this.abs(r.ts), level: r.level, levelFg: this.LEVEL[r.level],
+        event: r.event, msg: r.msg, runId: r.runId, caret: open ? '▾' : '▸', open, json,
+        rowBg: r.level === 'error' ? '#fefaf9' : (r.level === 'warn' ? '#fefcf6' : '#ffffff'),
+        toggle: () => this.setState(s => ({ expanded: Object.assign({}, s.expanded, { [key]: !s.expanded[key] }) })),
+        keydown: this.keyOpen(() => this.setState(s => ({ expanded: Object.assign({}, s.expanded, { [key]: !s.expanded[key] }) })))
+      };
+    });
+
+    const runRows = ag ? this.runsFor(ag).map(r => {
+      const ok = r.result === 'ok';
+      const s = ok ? this.STATUS.live : this.STATUS.failed;
+      return { start: this.clock(r.ts), abs: this.abs(r.ts), dur: this.dur(r.durMs), items: r.items, runId: r.runId,
+        result: ok ? 'Geslaagd' : 'Mislukt', glyph: ok ? '✓' : '✕', bg: s.bg, fg: s.fg, border: s.border };
+    }) : [];
+
+    const configGroups = ag ? [
+      { title: 'Planning', rows: [{ k: 'Schedule', v: ag.schedule }, { k: 'Trigger', v: ag.trigger }, { k: 'Volgende run', v: ag.next }, { k: 'Tijdzone', v: 'Europe/Amsterdam' }] },
+      { title: 'Resource-limieten', rows: [{ k: 'CPU-limiet', v: '0,5 vCPU' }, { k: 'Geheugenlimiet', v: '1,0 GiB' }, { k: 'Max. gelijktijdig', v: '4 runs' }, { k: 'Timeout', v: '300 s' }, { k: 'Min/max replicas', v: '0 / 3' }] },
+      { title: 'Omgeving', rows: [{ k: 'Image', v: 'acr-soratus.azurecr.io/' + ag.id.replace(/-\d+$/, '') + ':' + ag.version }, { k: 'Resource group', v: cust.envFull }, { k: 'Identity', v: 'managed-identity (system assigned)' }, { k: 'Retentie logs', v: '30 dagen' }] }
+    ] : [];
+
+    // Contract & uren
+    const contract = this.contractOf(cust.id);
+    const isKlantView = screen === 'B' && st.view === 'contract';
+    const isUrenView = screen === 'B' && st.view === 'uren';
+    const isFactuurView = screen === 'B' && st.view === 'facturatie';
+    const isContractView = isKlantView || isUrenView || isFactuurView;
+    const isSprintView = screen === 'B' && st.view === 'sprint';
+    const isSupportView = screen === 'B' && st.view === 'support';
+    const isAgentsView = screen === 'B' && !isContractView && !isSprintView && !isSupportView;
+    const currentMonth = this.DATA.now.slice(0, 7);
+    const visibleMonths = st.allMonths ? this.DATA.months : this.DATA.months.filter(m => m[0] === currentMonth);
+    const monthRows = visibleMonths.map(m => {
+      const sp = this.spent(cust.id, m[0]);
+      const pend = isOperator ? this.pendingSum(cust.id, m[0]) : 0;
+      const saldo = contract.bundelUren - sp;
+      const s = sp === 0 ? this.STATUS.idle : (saldo < 0 ? this.STATUS.degraded : this.STATUS.live);
+      return {
+        key: m[0], label: m[1], bundel: this.num(contract.bundelUren), value: String(sp),
+        hasPending: pend > 0 && isOperator, pendingText: '+ ' + this.num(pend) + ' u te fiatteren',
+        display: this.num(sp), saldo: (saldo > 0 ? '+' : '') + this.num(saldo), saldoColor: saldo < 0 ? '#8a5a00' : '#575d75',
+        status: sp === 0 ? 'Niets geboekt' : (saldo < 0 ? 'Boven bundel' : 'Binnen bundel'),
+        glyph: s.glyph, bg: s.bg, fg: s.fg, border: s.border,
+        title: this.state.hourEdits[cust.id + '|' + m[0]] != null ? 'Handmatig gecorrigeerd — specificatie telt ' + this.num(this.entrySum(cust.id, m[0])) + ' u' : this.num(sp) + ' u uit ' + this.entryCount(cust.id, m[0]) + ' regels',
+        selected: st.selectedMonth === m[0], rowBg: st.selectedMonth === m[0] ? '#f1f2f6' : '#ffffff', weight: st.selectedMonth === m[0] ? '600' : '400',
+        select: () => this.setState(s => ({ selectedMonth: s.selectedMonth === m[0] ? null : m[0], form: Object.assign({}, s.form, { month: m[0] }) })),
+        keydown: this.keyOpen(() => this.setState(s => ({ selectedMonth: s.selectedMonth === m[0] ? null : m[0], form: Object.assign({}, s.form, { month: m[0] }) }))),
+        onInput: e => this.setSpent(cust.id, m[0], e.target.value)
+      };
+    });
+    const totSpent = this.DATA.months.reduce((t, m) => t + this.spent(cust.id, m[0]), 0);
+    const totBundel = contract.bundelUren * this.DATA.months.length;
+    const over = Math.max(0, totSpent - totBundel);
+    const allEntries = this.entriesFor(cust.id);
+    const visibleEntries = isOperator ? allEntries : allEntries.filter(e => e.status !== 'pending');
+    const shownEntries = st.selectedMonth ? visibleEntries.filter(e => e.month === st.selectedMonth) : visibleEntries;
+    const shownHours = shownEntries.filter(e => e.status === 'approved').reduce((t, e) => t + e.hours, 0);
+    const pendingAll = isOperator ? allEntries.filter(e => e.status === 'pending') : [];
+    const pendingHours = pendingAll.reduce((t, e) => t + e.hours, 0);
+    const entryRows = shownEntries.map(e => {
+      const src = this.SOURCES[e.source];
+      const pending = e.status === 'pending';
+      return {
+        date: e.date, note: e.note, by: e.by, hours: this.num(e.hours),
+        meta: e.category + ' · ' + this.monthLabel(e.month),
+        source: src.label, srcBg: src.bg, srcFg: src.fg, srcBorder: src.border,
+        hoursColor: pending ? '#8a5a00' : '#0a0d1a',
+        bg: pending ? '#fdf9ef' : (e.added ? '#f7fbf8' : '#ffffff'),
+        needsApproval: pending && isOperator, pendingBadge: pending && !isOperator,
+        approve: () => this.decide(e.key, 'approved'), reject: () => this.decide(e.key, 'rejected')
+      };
+    });
+    const mailKey = cust.id + '|' + currentMonth;
+    const mailedAt = st.mails[mailKey];
+    const overNow = Math.max(0, this.spent(cust.id, currentMonth) - contract.bundelUren);
+    const pendingCurrent = pendingAll.filter(e => e.month === currentMonth).length;
+    const invoiceStatus = pendingCurrent ? this.STATUS.degraded : this.STATUS.live;
+    const azureSub = this.azureOf(cust.id).lines.reduce((t, l, i) => t + this.azureCost(cust.id, i), 0);
+    const azureCharged = azureSub * (1 + this.opslag(cust.id) / 100);
+
+    const entryRowsCountLabel = shownEntries.length + (shownEntries.length === 1 ? ' regel' : ' regels') + ' · ' + this.num(shownHours) + ' u' + (shownEntries.filter(e => e.status === 'pending').length ? ' · ' + this.num(shownEntries.filter(e => e.status === 'pending').reduce((t, e) => t + e.hours, 0)) + ' u te fiatteren' : '');
+    return {
+      menu: [['A', 'Overzicht'], ['agents', 'Agents'], ['sprint', 'Sprint'], ['contract', 'Contract'], ['uren', 'Uren'], ['facturatie', 'Facturatie'], ['support', 'Support']].filter(m => m[0] !== 'A' || isOperator).map(m => {
+        const active = m[0] === 'A' ? screen === 'A' : (screen !== 'A' && (m[0] === 'contract' ? isKlantView : m[0] === 'uren' ? isUrenView : m[0] === 'facturatie' ? isFactuurView : (m[0] === 'sprint' ? isSprintView : (m[0] === 'support' ? isSupportView : isAgentsView))));
+        return {
+          label: m[1], active,
+          bg: active ? '#f1f2f6' : 'transparent', color: active ? '#0a0d1a' : '#575d75',
+          go: () => m[0] === 'A' ? this.setState({ screen: 'A', switcherOpen: false }) : this.setState({ screen: 'B', view: m[0], switcherOpen: false })
+        };
+      }),
+      isContractView, isAgentsView, isSprintView, isSupportView, isUrenView, isFactuurView, isKlantView,
+      showNew: st.showNew && isOperator,
+      toggleNew: () => this.setState(s => ({ showNew: !s.showNew, newError: '' })),
+      newError: st.newError || false,
+      newFields: this.FIELDS.map(x => ({
+        label: x.label, value: st.newCustomer[x.k] === undefined ? '' : String(st.newCustomer[x.k]),
+        placeholder: x.num ? '0' : '',
+        onInput: e => { const v = e.target.value; this.setState(s => ({ newCustomer: Object.assign({}, s.newCustomer, { [x.k]: v }), newError: '' })); }
+      })),
+      createCustomer: () => this.createCustomer(),
+      editContract: st.editContract && isOperator,
+      canEditContract: isOperator,
+      toggleEditContract: () => this.setState(s => ({ editContract: !s.editContract })),
+      editLabel: st.editContract ? 'Klaar met bewerken' : 'Bewerken',
+      contractReadOnly: !(st.editContract && isOperator),
+      contractFootnote: isOperator ? 'Velden zijn door Soratus te beheren; de klant ziet ze read-only.' : 'Contractgegevens komen uit de administratie van Soratus en zijn hier read-only.',
+      contractFields: this.FIELDS.filter(x => x.scope !== 'access').map(x => ({
+        label: x.label,
+        value: String((x.scope === 'customer' ? cust[x.k] : (x.k === 'opslag' ? this.opslag(cust.id) : contract[x.k])) ?? ''),
+        onInput: e => this.setField(cust.id, x.k, e.target.value)
+      })),
+      snelstartSync: this.DATA.snelstartSync,
+      accessRows: this.accessFor(cust.id).map(a => ({
+        email: a.email, name: a.name, role: a.role, bg: a.added ? '#f7fbf8' : '#ffffff',
+        canRemove: isOperator, remove: () => this.removeAccess(cust.id, a.email)
+      })),
+      accessEmpty: this.accessFor(cust.id).length === 0,
+      accessRoles: this.DATA.accessRoles,
+      accessEmail: st.accessForm.email, accessName: st.accessForm.name, accessRole: st.accessForm.role,
+      accessError: st.accessError || false,
+      setAccessEmail: e => this.setState(s => ({ accessForm: Object.assign({}, s.accessForm, { email: e.target.value }), accessError: '' })),
+      setAccessName: e => this.setState(s => ({ accessForm: Object.assign({}, s.accessForm, { name: e.target.value }) })),
+      setAccessRole: e => this.setState(s => ({ accessForm: Object.assign({}, s.accessForm, { role: e.target.value }) })),
+      addAccess: () => this.addAccess(cust.id),
+      invoiceCols: '120px minmax(170px, 1fr) 104px 104px 112px 168px',
+      invoiceHistory: (this.DATA.invoices[cust.id] === undefined && !cust.intern ? [] : []).concat([{
+        month: currentMonth, nr: 'CONCEPT-' + currentMonth + '-' + contract.nr.slice(-3), date: '01-09-2026', due: '15-09-2026',
+        uren: overNow * contract.uurTarief, azure: azureCharged, status: 'Concept', paidAt: '', concept: true
+      }]).concat(this.DATA.invoices[cust.id] || []).map(i => {
+        const meta = i.status === 'Betaald' ? this.STATUS.live
+          : i.status === 'Openstaand' ? this.STATUS.degraded
+          : i.status === 'Concept' ? this.STATUS.idle : this.STATUS.idle;
+        return {
+          month: this.monthLabel(i.month), nr: i.nr,
+          dateLine: i.concept ? 'wordt klaargezet ' + i.date : 'verstuurd ' + i.date + ' · verval ' + i.due,
+          uren: this.money(i.uren), azure: this.money(i.azure), total: this.money(i.uren + i.azure),
+          status: i.status === 'Openstaand' ? 'Openstaand' : i.status,
+          statusNote: i.status === 'Betaald' ? 'betaald ' + i.paidAt
+            : i.status === 'Openstaand' ? 'vervallen sinds ' + i.due
+            : i.status === 'Concept' ? 'nog niet verstuurd' : 'wacht op betaling',
+          glyph: meta.glyph, bg: meta.bg, fg: meta.fg, border: meta.border,
+          rowBg: i.concept ? '#fbfbfd' : '#ffffff'
+        };
+      }),
+      thread: (this.DATA.threads[cust.id] || []).concat(st.msgs[cust.id] || []).map((m, i, arr) => {
+        const mine = (m.from === 'klant') === !isOperator;
+        const ai = m.from === 'ai';
+        return { who: m.who, at: m.at, text: m.text, context: m.context, hasContext: !!m.context, isAi: ai,
+          contextLabel: ai ? 'op basis van:' : 'context:',
+          align: ai ? 'flex-start' : (mine ? 'flex-end' : 'flex-start'),
+          bg: ai ? '#fbfbfd' : (mine ? '#eef2ff' : '#ffffff'),
+          border: ai ? '#dcdfe9' : (mine ? '#ccd6ff' : '#e3e5ee'),
+          canEscalate: !!m.canEscalate && i === arr.length - 1 && !isOperator,
+          escalate: () => this.escalate(cust.id) };
+      }),
+      threadEmpty: ((this.DATA.threads[cust.id] || []).concat(st.msgs[cust.id] || [])).length === 0,
+      draft: st.draft, topic: st.topic,
+      topics: ['Algemeen'].concat(cust.agents.map(a => a.id)).concat(['Contract & uren', 'Sprint / work item']),
+      setDraft: e => this.setState({ draft: e.target.value }),
+      setTopic: e => this.setState({ topic: e.target.value }),
+      sendMessage: () => this.sendMessage(cust.id, isOperator ? 'Soratus' : cust.name, st.topic),
+      sendLabel: isOperator ? 'Antwoord sturen' : 'Bericht sturen',
+      supportSla: 'eerstelijn direct · mens binnen SLA: ' + contract.sla,
+      supportSuggestions: (cust.agents.filter(a => a.status === 'failed' || a.status === 'degraded').map(a => 'Wat is de status van ' + a.id + '?'))
+        .concat(['Hoeveel uur is er deze maand besteed?', 'We willen een extra agent laten bouwen'])
+        .map(t => ({ label: t, use: () => this.setState({ draft: t }) })),
+      sprint: this.DATA.sprint,
+      sprintCols: '64px 88px minmax(0, 1fr) 116px 104px 78px',
+      sprintRows: (this.DATA.sprint.items[cust.id] || []).map(w => {
+        const s = this.WI_STATE[w.state];
+        return { id: '#' + w.id, type: w.type, title: w.title, state: w.state, glyph: s.glyph, bg: s.bg, fg: s.fg, border: s.border,
+          by: w.by, tags: w.tags, origin: w.origin === 'agent' ? 'aangemaakt door agent' : 'handmatig aangemaakt',
+          hours: this.num(w.remaining) + ' u open', doneHours: this.num(w.done) + ' u gedaan' };
+      }),
+      sprintStats: (() => {
+        const items = this.DATA.sprint.items[cust.id] || [];
+        const done = items.filter(w => w.state === 'Closed' || w.state === 'Resolved').length;
+        const rem = items.reduce((t, w) => t + w.remaining, 0);
+        const pts = items.reduce((t, w) => t + w.points, 0);
+        return [
+          { k: 'Work items', v: String(items.length) },
+          { k: 'Afgerond', v: done + ' van ' + items.length },
+          { k: 'Openstaand', v: this.num(rem) + ' u' },
+          { k: 'Story points', v: String(pts) },
+          { k: 'Geblokkeerd', v: String(items.filter(w => w.state === 'Blocked').length) }
+        ];
+      })(),
+      sprintEmpty: (this.DATA.sprint.items[cust.id] || []).length === 0,
+      team: this.DATA.team, formBy: st.form.by,
+      setFormBy: e => this.setState(s => ({ form: Object.assign({}, s.form, { by: e.target.value }) })),
+      hasPending: pendingAll.length > 0 && isOperator,
+      pendingLabel: pendingAll.length + (pendingAll.length === 1 ? ' regel' : ' regels') + ' te fiatteren · ' + this.num(pendingHours) + ' u',
+      invoice: { statusLabel: pendingCurrent ? 'Wacht op fiattering' : 'Concept klaar', glyph: invoiceStatus.glyph, bg: invoiceStatus.bg, fg: invoiceStatus.fg, border: invoiceStatus.border },
+      azureRows: this.azureOf(cust.id).lines.map((l, i) => ({
+        name: l[0], value: String(this.azureCost(cust.id, i)), display: this.money(this.azureCost(cust.id, i)),
+        onInput: e => this.setAzureCost(cust.id, i, e.target.value)
+      })),
+      azureRg: cust.envFull,
+      azurePeriod: this.monthLabel(currentMonth) + ' · Cost Management, dagelijks opgehaald',
+      azureSubtotal: this.money(azureSub),
+      opslagValue: String(this.opslag(cust.id)),
+      opslagAmount: this.money(azureSub * this.opslag(cust.id) / 100),
+      setOpslag: e => this.setOpslag(cust.id, e.target.value),
+      azureCharged: this.money(azureCharged),
+      extraUrenLabel: this.num(overNow) + ' u \u00d7 ' + this.money(contract.uurTarief),
+      extraUrenAmount: this.money(overNow * contract.uurTarief),
+      extraUrenColor: overNow > 0 ? '#8a5a00' : '#575d75',
+      invoiceTotal: this.money(azureCharged + overNow * contract.uurTarief),
+      invoiceRows: [
+        { k: 'Laatste run', v: '01-08-2026 06:00 \u2014 concept juli klaargezet', color: '#0a0d1a', font: 'inherit' },
+        { k: 'Volgende run', v: '01-09-2026 06:00 \u2014 concept ' + this.monthLabel(currentMonth), color: '#0a0d1a', font: 'inherit' },
+        { k: 'SnelStart-concept', v: 'CONCEPT-' + currentMonth + '-' + contract.nr.slice(-3), color: '#0a0d1a', font: "'JetBrains Mono', monospace" },
+        { k: 'Fiattering', v: pendingCurrent ? pendingCurrent + ' regels nog niet gefiatteerd' : 'alle regels gefiatteerd', color: pendingCurrent ? '#8a5a00' : '#0f7a4a', font: 'inherit' }
+      ],
+      mailSummary: 'Maandoverzicht ' + this.monthLabel(currentMonth) + ': ' + this.num(this.spent(cust.id, currentMonth)) + ' u besteed van ' + this.num(contract.bundelUren) + ' u bundel, met specificatie per regel.',
+      mailTo: contract.contact,
+      mailButton: mailedAt ? 'Opnieuw versturen' : 'Maandoverzicht mailen',
+      mailSent: mailedAt ? 'Verstuurd op ' + mailedAt + ' naar ' + contract.contact : false,
+      sendMail: () => this.setState(s => ({ mails: Object.assign({}, s.mails, { [mailKey]: '19-08-2026 09:22' }) })),
+      integrations: [
+        { name: 'MCP — Claude Code', last: 'laatste regel 8 min geleden', rows: [
+          { k: 'Server', v: 'soratus-uren (stdio)' },
+          { k: 'Tool', v: 'uren.boeken({ klant, maand, uren, categorie, omschrijving })' },
+          { k: 'Auth', v: 'Entra ID · service principal' },
+          { k: 'Vandaag', v: '3 regels ontvangen' }
+        ]},
+        { name: 'Azure DevOps', last: 'laatste sync 09:15', rows: [
+          { k: 'Organisatie', v: 'dev.azure.com/soratus' },
+          { k: 'Project', v: 'Agents' },
+          { k: 'Mapping', v: 'Task completed → urenregel (Completed Work)' },
+          { k: 'Vandaag', v: '2 regels ontvangen' }
+        ]}
+      ],
+      canEditHours: isOperator, hoursReadOnly: !isOperator,
+      entriesTitle: st.selectedMonth ? 'Specificatie ' + this.monthLabel(st.selectedMonth) : (isOperator ? 'Uren boeken en specificatie' : 'Specificatie bestede uren'),
+      entriesSummary: entryRowsCountLabel,
+      monthFiltered: !!st.selectedMonth,
+      entriesEmpty: entryRows.length === 0,
+      entriesEmptyText: st.selectedMonth ? 'Geen urenregels vastgelegd voor ' + this.monthLabel(st.selectedMonth) + '.' : 'Nog geen urenregels vastgelegd voor deze klant.',
+      clearMonth: () => this.setState({ selectedMonth: null }),
+      contract, contractYear: '2026',
+      contractRows: [
+        { k: 'Contractnummer', v: contract.nr, font: "'JetBrains Mono', monospace" },
+        { k: 'Soort', v: contract.type, font: 'inherit' },
+        { k: 'Ingangsdatum', v: contract.start, font: "'JetBrains Mono', monospace" },
+        { k: 'Looptijd', v: contract.looptijd, font: 'inherit' },
+        { k: 'Opzegtermijn', v: contract.opzeg, font: 'inherit' },
+        { k: 'Urenbundel', v: contract.bundelUren + ' uur per maand', font: 'inherit' },
+        { k: 'Tarief', v: contract.tarief, font: 'inherit' },
+        { k: 'Indexatie', v: contract.indexatie, font: 'inherit' },
+        { k: 'SLA', v: contract.sla, font: 'inherit' },
+        { k: 'Contactpersoon', v: contract.contact, font: 'inherit' },
+        { k: 'Beheerd door', v: contract.eigenaar, font: 'inherit' }
+      ],
+      hoursHint: (isOperator ? 'velden zijn invulbaar' : 'read-only') + ' · klik een maand voor de specificatie',
+      hoursTitle: st.allMonths ? 'Bestede uren per maand' : 'Bestede uren ' + this.monthLabel(currentMonth),
+      showAllMonths: st.allMonths,
+      allMonthsLabel: st.allMonths ? 'Alleen deze maand' : 'Alle maanden',
+      toggleAllMonths: () => this.setState(s => ({ allMonths: !s.allMonths, selectedMonth: null })),
+      hourCols: 'minmax(140px, 0.6fr) 88px 116px 88px minmax(210px, 1fr)',
+      entryCols: '92px minmax(260px, 2fr) 132px 132px 66px 150px',
+      monthRows, monthOptions: this.DATA.months.map(m => ({ key: m[0], label: m[1] })),
+      categories: this.DATA.categories,
+      totalBundel: this.num(totBundel), totalSpent: this.num(totSpent),
+      totalSaldo: (totBundel - totSpent > 0 ? '+' : '') + this.num(totBundel - totSpent),
+      totalColor: totSpent > totBundel ? '#8a5a00' : '#575d75',
+      overageLabel: over > 0 ? this.num(over) + ' u buiten bundel' : 'binnen bundel',
+      entryRows,
+      formMonth: st.form.month, formHours: st.form.hours, formCategory: st.form.category, formNote: st.form.note,
+      formError: st.formError || false,
+      setFormMonth: e => this.setState(s => ({ form: Object.assign({}, s.form, { month: e.target.value }) })),
+      setFormHours: e => this.setState(s => ({ form: Object.assign({}, s.form, { hours: e.target.value }), formError: '' })),
+      setFormCategory: e => this.setState(s => ({ form: Object.assign({}, s.form, { category: e.target.value }) })),
+      setFormNote: e => this.setState(s => ({ form: Object.assign({}, s.form, { note: e.target.value }), formError: '' })),
+      addEntry: () => this.addEntry(cust.id),
+
+      isOperator, isClient: !isOperator,
+      isScreenA: screen === 'A', isScreenB: screen === 'B', isScreenC: screen === 'C',
+      whoLabel: isOperator ? this.DATA.operator.label : cust.name, whoInitials: isOperator ? this.DATA.operator.initials : 'KL',
+      setOperator: () => this.setRole('operator'), setClient: () => this.setRole('client'),
+      roleOperatorStyle: pillBase + (isOperator ? 'background: #0a0d1a; color: #ffffff;' : 'background: transparent; color: #575d75;'),
+      roleClientStyle: pillBase + (!isOperator ? 'background: #0a0d1a; color: #ffffff;' : 'background: transparent; color: #575d75;'),
+
+      nowClock: this.clock(this.DATA.now).slice(0, 5), nowAbs: this.abs(this.DATA.now),
+      kpiCustomers: this.allCustomers().length,
+      kpiOnboarding: this.allCustomers().filter(c => c.agents.length === 0).length + ' in onboarding',
+      kpiAgents: all.length,
+      kpiStatuses: ['live', 'degraded', 'failed', 'idle'].map(k => ({ label: this.STATUS[k].label.toLowerCase(), count: counts[k], dot: this.STATUS[k].dot })),
+      kpiRuns: tot.n, kpiFailedRuns: tot.f,
+      kpiErrRate: ((tot.f / tot.n) * 100).toFixed(1).replace('.', ',') + ' %',
+      kpiErrColor: (tot.f / tot.n) > 0.02 ? '#8a5a00' : '#0a0d1a',
+      sortLabel: sortByProblems ? 'gesorteerd op ernst, dan laatste activiteit' : 'alfabetisch gesorteerd',
+      customerCols: showEnv ? 'minmax(150px, 1.4fr) 118px 54px 150px 118px 104px' : 'minmax(160px, 1.8fr) 54px 170px 118px 104px',
+      showEnv, showSparks, customerRows,
+
+      customerName: cust.name, customerEnvFull: cust.envFull,
+      customerHasAgents: isAgentsView && cust.agents.length > 0, customerIsEmpty: isAgentsView && cust.agents.length === 0,
+      agentCols: showSparks ? 'minmax(150px, 1.4fr) 108px 96px 96px 66px 74px 112px 54px' : 'minmax(150px, 1.5fr) 116px 96px 100px 70px 118px 54px',
+      agentRows,
+      legend: ['live', 'degraded', 'failed', 'idle'].map(k => ({ label: this.STATUS[k].label, glyph: this.STATUS[k].glyph, bg: this.STATUS[k].bg, fg: this.STATUS[k].fg, border: this.STATUS[k].border, text: this.STATUS[k].text })),
+      switcherOpen: st.switcherOpen,
+      toggleSwitcher: () => this.setState(s => ({ switcherOpen: !s.switcherOpen })),
+      switcherRows: this.allCustomers().map(c => ({ name: c.name, agentCount: c.agents.length, worstDot: this.worst(c).dot, open: () => this.openCustomer(c.id) })),
+      goA: () => this.setState({ screen: 'A', switcherOpen: false }),
+      goB: () => this.setState({ screen: 'B' }),
+
+      agentId: ag ? ag.id : '—', detail, detailFacts,
+      tabs: [['logs', 'Logs'], ['runs', 'Runs'], ['config', 'Configuratie']].map(t => ({
+        label: t[1], active: st.tab === t[0], color: st.tab === t[0] ? '#0a0d1a' : '#767c94',
+        underline: st.tab === t[0] ? '#2B5BFF' : 'transparent', select: () => this.setState({ tab: t[0] })
+      })),
+      isLogs: st.tab === 'logs', isRuns: st.tab === 'runs', isConfig: st.tab === 'config',
+      levelChips: ['info', 'warn', 'error'].map(k => ({
+        label: k, count: levelCounts[k], on: st.levels[k],
+        bg: st.levels[k] ? '#ffffff' : '#f1f2f6', fg: st.levels[k] ? this.LEVEL[k] : '#a4aabd',
+        border: st.levels[k] ? '#cfd3e0' : '#e3e5ee',
+        toggle: () => this.setState(s => ({ levels: Object.assign({}, s.levels, { [k]: !s.levels[k] }) }))
+      })),
+      query: st.q, hasQuery: st.q.length > 0,
+      onQuery: e => this.setState({ q: e.target.value }),
+      clearQuery: () => this.setState({ q: '' }),
+      liveTail: st.liveTail, toggleTail: () => this.toggleTail(),
+      tailBg: st.liveTail ? '#eaf6ef' : '#ffffff', tailFg: st.liveTail ? '#0f7a4a' : '#575d75',
+      tailBorder: st.liveTail ? '#bfe3cd' : '#cfd3e0', tailDot: st.liveTail ? '#0f7a4a' : '#cfd3e0',
+      tailAnim: st.liveTail ? 'pulse 1.6s ease-in-out infinite' : 'none',
+      logCols: '78px 52px 168px minmax(0, 1fr) 74px 16px',
+      logRows, logsEmpty: logRows.length === 0,
+      logFooter: logRows.length + ' van ' + raw.length + ' regels · klik een regel voor de onderliggende JSON' + (st.liveTail ? ' · live tail actief' : ''),
+      runCols: '92px 96px 132px minmax(0, 1fr) 84px', runRows, configGroups
+    };
+  }
+}
+</script>
+</body>
+</html>
