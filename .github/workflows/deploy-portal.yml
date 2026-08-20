@@ -1,0 +1,119 @@
+name: deploy-portal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Soratus.Portal/**'
+      - 'Soratus.Portal.Tests/**'
+      - 'Soratus.Agents.Contracts/**'
+      - 'Soratus.slnx'
+      - 'NuGet.config'
+      - '.github/workflows/deploy-portal.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+# Geen cancel-in-progress: een halverwege afgebroken App Service-deploy laat de
+# app in onbekende staat achter. Deploys wachten dus netjes op elkaar.
+concurrency:
+  group: deploy-portal
+
+env:
+  DOTNET_VERSION: 10.0.x
+  PROJECT: Soratus.Portal/Soratus.Portal.csproj
+  TEST_PROJECT: Soratus.Portal.Tests/Soratus.Portal.Tests.csproj
+  CONTRACTS_PROJECT: Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj
+  APP_NAME: app-soratus-portal-prod
+  RESOURCE_GROUP: rg-soratus-prod
+  HEALTH_URL: https://portal.soratus.com/healthz
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Per project in plaats van de hele solution: de marketingsite hoort de
+      # portal-deploy niet te kunnen breken, en omgekeerd.
+      - name: Restore
+        run: |
+          dotnet restore ${{ env.CONTRACTS_PROJECT }}
+          dotnet restore ${{ env.PROJECT }}
+          dotnet restore ${{ env.TEST_PROJECT }}
+
+      - name: Build
+        run: |
+          dotnet build ${{ env.CONTRACTS_PROJECT }} -c Release --no-restore
+          dotnet build ${{ env.PROJECT }} -c Release --no-restore
+          dotnet build ${{ env.TEST_PROJECT }} -c Release --no-restore
+
+      - name: Test
+        run: dotnet test ${{ env.TEST_PROJECT }} -c Release --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT }} -c Release -o ./publish --no-build
+
+      # Het artifact is tegelijk het terugrolpakket: elke geslaagde run laat een
+      # deploybare zip achter die je met de hand opnieuw kunt uitrollen.
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-${{ github.sha }}
+          path: ./publish
+          retention-days: 30
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy naar App Service
+    needs: build-test
+    runs-on: ubuntu-latest
+    # Hangt er een reviewer aan deze environment in GitHub, dan wordt dit een
+    # approval gate. Zonder regels deployt hij gewoon door.
+    environment:
+      name: production
+      url: https://portal.soratus.com
+    steps:
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: portal-${{ github.sha }}
+          path: ./publish
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_NAME }}
+          package: ./publish
+
+      - name: Smoke test /healthz
+        shell: bash
+        run: |
+          attempts=30
+          delay=10
+          code=000
+          for i in $(seq 1 $attempts); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "Health check OK (HTTP 200) bij poging $i."
+              exit 0
+            fi
+            echo "Poging $i/$attempts: HTTP $code — opnieuw over ${delay}s."
+            sleep $delay
+          done
+          echo "::error::Smoke test mislukt. $HEALTH_URL gaf na $attempts pogingen (~$((attempts * delay / 60)) min) geen HTTP 200; laatste status was $code. De deploy is wél uitgevoerd — controleer de app en rol zo nodig terug (zie docs/agent-portal/deploy.md)."
+          exit 1

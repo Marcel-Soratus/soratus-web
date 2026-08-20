@@ -3,6 +3,14 @@ name: deploy
 on:
   push:
     branches: [main]
+    # Alleen de marketingsite. Zonder dit filter deployde elke portal- of
+    # agentwijziging de productiesite opnieuw.
+    paths:
+      - 'Soratus.Web/**'
+      - 'Soratus.Web.Tests/**'
+      - 'Soratus.slnx'
+      - 'NuGet.config'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -12,6 +20,7 @@ permissions:
 env:
   DOTNET_VERSION: 10.0.x
   PROJECT: Soratus.Web/Soratus.Web.csproj
+  TEST_PROJECT: Soratus.Web.Tests/Soratus.Web.Tests.csproj
   APP_NAME: app-soratus-prod
 
 jobs:
@@ -24,14 +33,20 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # Bewust per project in plaats van de hele solution: Soratus.Portal en de
+      # agentprojecten mogen de marketing-deploy niet kunnen blokkeren.
       - name: Restore
-        run: dotnet restore
+        run: |
+          dotnet restore ${{ env.PROJECT }}
+          dotnet restore ${{ env.TEST_PROJECT }}
 
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: |
+          dotnet build ${{ env.PROJECT }} -c Release --no-restore
+          dotnet build ${{ env.TEST_PROJECT }} -c Release --no-restore
 
       - name: Test
-        run: dotnet test -c Release --no-build --verbosity normal
+        run: dotnet test ${{ env.TEST_PROJECT }} -c Release --no-build --verbosity normal
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT }} -c Release -o ./publish --no-build
