@@ -41,6 +41,25 @@ Bicep-templates voor het portaal én voor een klantomgeving, en twee gescheiden 
   maar het is ruis bij elke start, en ruis is precies wat later een échte waarschuwing
   onzichtbaar maakt. Oplossen door de poort expliciet te zetten of de middleware achter de
   proxy over te slaan.
+- **`deploy-portal` wacht niet op `ci-agents`, en dat is een bewuste keuze.** De stap
+  `Test contractregels` in `deploy-portal.yml` draait `Soratus.Agents.Telemetry.Tests` mee, dus
+  een kapotte `MessageTruncation.Cut` blokkeert de uitrol. Verdwijnt die stap ooit, dan valt de
+  dekking niet helemaal weg — `ci-agents` staat op dezelfde paths en wordt op dezelfde push
+  rood — maar dan is de uitrol al gebeurd. Koppelen met `workflow_run` zou dat dichten; niet
+  gedaan omdat die trigger draait tegen de workflowdefinitie van de standaardbranch en lastig
+  te debuggen is. Dezelfde vorm als het ontbrekende staging slot hieronder: de melding komt
+  wel, maar erna. Een test die de YAML grep't is hier géén oplossing: die bewaakt het verkeerde
+  (het is een ordeningsprobleem tussen twee workflows) en is stil te omzeilen, want wie de stap
+  weghaalt haalt in dezelfde beweging die test weg.
+- **De bibliotheek weert framework-logs nog niet.** Besloten, niet gebouwd:
+  `Microsoft.Hosting.Lifetime` schrijft `Content root path: D:\SORATUS\Website\…` naar `msg`, op
+  info-niveau en dus klantzichtbaar, bij elke agent die met een gewone host start. De knip helpt
+  daar niet — het is één regel. Filter op categorie (`Microsoft.`, `System.`) en alleen op info;
+  warn en error blijven, want een framework-waarschuwing is precies wat een operator wil zien.
+  "Application started" verdwijnt daarmee uit het portaal, en dat kost niets: dat feit staat al
+  in het registratiedocument als `startedAt` en `lifecycle`.
+- **Welke agentcode `payload.dump` schrijft.** De knip dekt het symptoom aan twee kanten; een
+  agent die een externe respons in een logbericht dumpt is de oorzaak.
 - **Een staging slot voor het portaal.** Nu geldt: faalt de smoke test, dan is de deploy al
   gebeurd en staat er een stukke app die je met de hand moet terugrollen. Met een slot draait
   de test vóór de swap. `asp-soratus-prod` is P0v3, dus slots kunnen.
