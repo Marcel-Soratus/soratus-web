@@ -19,11 +19,20 @@ builder.Services
     .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
-builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
+// PostConfigure en niet Configure: dit moet als laatste over de opties heen, ná alles wat
+// Microsoft.Identity.Web zelf instelt. Anders hangt het gedrag af van registratievolgorde.
+builder.Services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
 {
-    // Expliciet, ook al is dit de standaard van Microsoft.Identity.Web: zonder de juiste
-    // RoleClaimType levert ClaimsPrincipal.IsInRole altijd false, en dan is elk autorisatiebeleid
-    // stilletjes dicht in plaats van luidruchtig kapot.
+    // Zet het mappen van inkomende claims uit. Dat mappen is een erfenis van WIF: het doopt
+    // JWT-claims om naar lange schema-URI's, waarbij `roles` bijvoorbeeld
+    // `http://schemas.microsoft.com/ws/2008/06/identity/claims/role` wordt. Met dat mappen aan
+    // én RoleClaimType op "roles" zoekt IsInRole naar een claimnaam die na het omdopen niet
+    // meer bestaat, en dan is elk rolbeleid stil dicht in plaats van luidruchtig kapot.
+    //
+    // Uit betekent: claims heten precies wat Entra ze noemt. Dat is deterministisch, en het
+    // maakt de twee regels hieronder waar in plaats van afhankelijk van een mappingtabel.
+    options.MapInboundClaims = false;
+
     options.TokenValidationParameters.RoleClaimType = ClaimConstants.Roles;
     options.TokenValidationParameters.NameClaimType = "name";
 });
