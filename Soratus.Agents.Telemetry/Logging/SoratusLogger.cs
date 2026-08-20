@@ -17,6 +17,7 @@ namespace Soratus.Agents.Telemetry.Logging;
 /// </remarks>
 internal sealed class SoratusLogger(
     string category,
+    LogLevel minimum,
     LogRecordFactory factory,
     TelemetryWriter writer,
     Func<IExternalScopeProvider?> scopeProvider) : ILogger
@@ -25,11 +26,15 @@ internal sealed class SoratusLogger(
         scopeProvider()?.Push(state);
 
     /// <summary>
-    /// Debug en trace worden hier volledig weggefilterd. Die horen niet in dit contract: deze
-    /// regels worden gelezen door een operator die wil weten of er iets mis is, en
-    /// vijfhonderd debugregels per run maken dat moeilijker.
+    /// De ondergrens van deze categorie. Debug en trace vallen er altijd buiten; voor
+    /// framework-categorieën ligt de grens een stap hoger. Zie
+    /// <see cref="SoratusLoggerProvider"/> voor waarom.
     /// </summary>
-    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information && logLevel != LogLevel.None;
+    /// <remarks>
+    /// Dit wordt hier afgedwongen en niet met een <c>AddFilter</c>-regel, omdat een filter door de
+    /// host overschreven kan worden. Een contractregel die een agent kan uitzetten is geen regel.
+    /// </remarks>
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= minimum && logLevel != LogLevel.None;
 
     public void Log<TState>(
         LogLevel logLevel,

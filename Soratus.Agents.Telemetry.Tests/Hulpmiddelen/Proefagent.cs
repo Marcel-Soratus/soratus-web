@@ -62,10 +62,13 @@ internal static class Proefagent
     }
 
     /// <summary>Logt één regel via het gewone <c>ILogger</c>-pad en geeft het resultaat terug.</summary>
-    internal static async Task<OpvangendeSink> LogAsync(Action<ILogger> regel) =>
+    internal static Task<OpvangendeSink> LogAsync(Action<ILogger> regel) => LogAsync(Categorie, regel);
+
+    /// <summary>Als <see cref="LogAsync(Action{ILogger})"/>, onder een eigen categorie.</summary>
+    internal static async Task<OpvangendeSink> LogAsync(string categorie, Action<ILogger> regel) =>
         await DraaiAsync(diensten =>
         {
-            ILogger logger = diensten.GetRequiredService<ILoggerFactory>().CreateLogger(Categorie);
+            ILogger logger = diensten.GetRequiredService<ILoggerFactory>().CreateLogger(categorie);
             regel(logger);
             return Task.CompletedTask;
         });

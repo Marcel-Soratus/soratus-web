@@ -16,7 +16,16 @@ namespace Soratus.Seed;
 /// offset van <c>+02:00</c> zou tussen de echte documenten verkeerd gaan sorteren, en dan is de
 /// demodata niet langer stil.
 ///
-/// <see cref="AssertMatchesTelemetryLibrary"/> bewaakt dat de kopie niet wegdrijft.
+/// <see cref="AssertCanonicalUtc"/> pint deze vorm vast. Let op wat die assertie <em>niet</em>
+/// doet: hij vergelijkt niets met de telemetriebibliotheek. Dat kán hij ook niet — die klasse is
+/// <c>internal</c> — dus hij toetst deze kopie tegen een letterlijke verwachting in zijn eigen
+/// code. Zou de bibliotheek morgen op een ander formaat overgaan, dan blijft deze assertie
+/// vrolijk groen. Ze bewaakt dus dat wij niet verschuiven, niet dat wij nog gelijk zijn.
+///
+/// Dat "nog gelijk zijn" is een meting en geen assertie: leg een geseed document en een document
+/// van <c>heartbeat-demo</c> naast elkaar in de database en vergelijk de velden en de tijdvorm.
+/// Dat is gedaan en het klopte. Wordt het formaat aan één van beide kanten verbouwd, dan moet die
+/// vergelijking opnieuw — en dan zegt een groene start hier niets.
 /// </remarks>
 internal static class SeedJson
 {
@@ -61,16 +70,22 @@ internal static class SeedJson
     internal static JsonSerializerOptions ManifestOptions => LazyManifestOptions.Value;
 
     /// <summary>
-    /// Controleert bij het opstarten dat de normalisatie er echt op zit.
+    /// Controleert bij het opstarten dat de normalisatie naar UTC er nog op zit.
     /// </summary>
     /// <remarks>
     /// Dezelfde soort proef als in de telemetriebibliotheek: twee momenten die gelijk zijn maar in
     /// verschillende offsets zijn uitgedrukt, plus een waarde zonder decimalen. Komen die er niet
     /// alle drie identiek uit, dan sorteren de seed-documenten anders dan de echte en stopt dit
     /// gereedschap voordat het iets wegschrijft.
+    ///
+    /// De verwachting staat hier als letterlijke tekst, niet als verwijzing naar de bibliotheek.
+    /// Deze assertie toetst dus <em>deze</em> kopie tegen een vastgelegde vorm; hij bewijst niet dat
+    /// die vorm nog dezelfde is als die van de bibliotheek. Zie de opmerking bij
+    /// <see cref="SeedJson"/> voor hoe dat wél gemeten wordt. Vandaar ook de naam: hij zegt wat
+    /// er gecontroleerd wordt en niet meer.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Als een tijd niet als UTC wordt geschreven.</exception>
-    internal static void AssertMatchesTelemetryLibrary()
+    internal static void AssertCanonicalUtc()
     {
         var probe = new TimeProbe(
             new DateTimeOffset(2026, 8, 19, 17, 14, 0, TimeSpan.FromHours(2)),

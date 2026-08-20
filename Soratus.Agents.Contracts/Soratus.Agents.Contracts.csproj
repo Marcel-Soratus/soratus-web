@@ -8,6 +8,13 @@
          daarmee de uitleg van het contract zelf, dus die hoort mee te reizen en de build
          moet klagen zodra een publiek lid ongedocumenteerd blijft. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Een belofte die de build niet afdwingt is een belofte. Een waarschuwing hier plant zich
+         voort naar het portaal en de seed, en een waarschuwing die alleen zichtbaar is als de
+         compiler toevallig loopt is geen waarschuwing maar een loterij: een incrementele build
+         rapporteert 0 Warning(s) zonder iets te compileren. Als fout is hij niet meer afhankelijk
+         van wie er wanneer bouwt. Bewust alleen hier en niet solutionbreed — dit is de plek waar
+         de documentatie inhoudelijk meetelt. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
 </Project>

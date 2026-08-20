@@ -58,11 +58,26 @@ namespace Soratus.Portal.Tests.Contracten;
 /// </para>
 ///
 /// <para><strong>Wat deze suite met opzet níet vangt.</strong> Raakt <c>Cut</c> zijn overloop kwijt,
-/// dan blijven alle vier groen: de klantkant is dan nog correct, maar een operator verliest stil de
+/// dan blijven alle vier groen: de klantkant is dan nog correct, maar een operator verliest de
 /// stacktraces bij een gefaalde run. Het portaal leest alleen het bericht, dus dat is schrijfpad en
-/// hier niet te meten. Dat gat zit dicht in de pijplijn: <c>deploy-portal.yml</c> draait
-/// <c>Soratus.Agents.Telemetry.Tests</c> mee, zodat de deploy-gate rood is en niet alleen
-/// <c>ci-agents</c>. Verdwijnt die stap, dan verdwijnt deze dekking met hem.</para>
+/// hier niet te meten.</para>
+///
+/// <para>Dat is geen blinde vlek maar een ordeningsvraag, en het verschil is de moeite waard omdat
+/// het bepaalt wat een tegenmaatregel waard is. <c>ci-agents.yml</c> staat óók op
+/// <c>Soratus.Agents.Contracts/**</c> en draait <c>Soratus.Agents.Telemetry.Tests</c>, dus een
+/// kapotte <c>Cut</c> wordt op dezelfde push rood — het signaal komt er hoe dan ook. Wat
+/// <c>deploy-portal.yml</c> toevoegt door dat project óók in zijn eigen teststap mee te nemen, is
+/// niet het signaal maar de <em>volgorde</em>: de deploy hangt aan zijn eigen teststap, dus die
+/// wacht erop. Verdwijnt die stap, dan verdwijnt de dekking niet — dan komt de melding ná de
+/// uitrol, als een rode <c>ci-agents</c> naast een geslaagde deploy.</para>
+///
+/// <para>Daarom staat hier geen test die controleert of die stap in de YAML staat. Zo'n test
+/// bewaakt de verkeerde helft — een assertie op tekst in een bestand lost een ordening tussen twee
+/// workflows niet op — en hij is stil te omzeilen: wie de stap weghaalt haalt in dezelfde beweging
+/// de test weg die er rood van wordt. Bij de gelijkspelclausule in
+/// <see cref="LogtailcursorTests.DeTailqueryDraagtDeGelijkspelclausuleOpDeId"/> werkt een
+/// broncodetest wél, want daar is het motief om de code te wijzigen niet dat de test in de weg
+/// staat.</para>
 /// </remarks>
 public class KlantberichtTests
 {

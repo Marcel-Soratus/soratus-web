@@ -27,8 +27,9 @@ try
         return 0;
     }
 
-    // Bewaakt dat dit gereedschap tijden nog steeds precies zo wegschrijft als de bibliotheek.
-    SeedJson.AssertMatchesTelemetryLibrary();
+    // Bewaakt dat dit gereedschap tijden nog steeds als UTC met vaste breedte wegschrijft. Dat de
+    // vorm gelijk is aan die van de bibliotheek is een meting in de database, geen assertie hier.
+    SeedJson.AssertCanonicalUtc();
 
     // En dat de gedeelde knipregel op msg nog doet wat hij belooft. Die staat in het contract en
     // wordt hier alleen aangeroepen; deze assertie is er zodat een verbouwing daar hier opvalt
