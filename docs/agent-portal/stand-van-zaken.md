@@ -34,6 +34,13 @@ Bicep-templates voor het portaal én voor een klantomgeving, en twee gescheiden 
 - **De zeven klanten in `appsettings.json` zijn verzonnen**, inclusief de subscription-ids.
   Dat is de demodata uit de mockup en het punt van fase 0. Eruit zodra er echte omgevingen
   staan.
+- **`UseHttpsRedirection` waarschuwt bij elke start.** In de nieuwe workspace staat
+  `warn: HttpsRedirectionMiddleware — Failed to determine the https port for redirect`. Achter
+  de App Service-proxy kan de middleware de poort niet vaststellen. Onschadelijk in de
+  praktijk — `httpsOnly` staat aan op de App Service en de site is alleen via TLS bereikbaar —
+  maar het is ruis bij elke start, en ruis is precies wat later een échte waarschuwing
+  onzichtbaar maakt. Oplossen door de poort expliciet te zetten of de middleware achter de
+  proxy over te slaan.
 - **Een staging slot voor het portaal.** Nu geldt: faalt de smoke test, dan is de deploy al
   gebeurd en staat er een stukke app die je met de hand moet terugrollen. Met een slot draait
   de test vóór de swap. `asp-soratus-prod` is P0v3, dus slots kunnen.

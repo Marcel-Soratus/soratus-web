@@ -313,6 +313,135 @@ integratie (§5) en geen contractwijziging. Zolang niemand ernaar vraagt is de m
 
 ---
 
+## 12. `extra` op een logregel is operator-only
+
+**Spec:** §2 geeft de klant leesrecht op de logs van zijn eigen omgeving en maakt koppelingen
+(MCP- en DevOps-details) expliciet operator-only. §3.3 vraagt op het logtabblad een regel die
+uitklapt naar de volledige JSON, inclusief stacktrace.
+
+**Aanleiding:** die twee botsen. `extra` is vrije JSON die de agentbouwer vult, en bij het bouwen
+van de datalaag voor fase 1 is nagekeken wat er werkelijk in staat. Bij **gewone klant-agents**,
+dus in wat een klant zou zien:
+
+| sleutel | aangetroffen waarde | agent |
+|---|---|---|
+| `endpoint` | `GET /v1.0/me/messages/delta` | `bakker-mail-triage`, `vandijk-mail-triage` |
+| `endpoint` | `POST /v2/purchase-invoices` | `vandijk-factuur-intake` |
+| `scope` | `Mail.ReadWrite` | `bakker-mail-triage`, `vitaal-mail-triage` |
+| `scope` | `https://storage.azure.com/.default` | `vandijk-factuur-intake` |
+| `model` | `gpt-4.1` | `vandijk-offerte-generator` |
+| `containerState`, `probe` | `Running`, `liveness` | `vandijk-mail-triage` |
+| `replicas`, `memMb`, `uptimeSec` | `3`, `731`, `108000` | diverse |
+| `stacktrace` | `… at SoratusAgent.Mail.Rules.SenderDomainRule.Apply(MailItem item) in /src/Mail/Rules/SenderDomainRule.cs:line 34` | `vandijk-mail-triage` |
+
+Dat zijn API-paden van onze koppelingen, de OAuth-scopes waarmee we verbinden, welk model we
+gebruiken, hoe onze processen geschaald staan en de indeling van onze broncode. Bij de interne
+beheerklant — nu alleen zichtbaar voor een operator, maar hetzelfde mechanisme — staat het
+zwaardere spul: `resourceGroup = rg-soratus-bakker`, `customerIds = ["bakker","meijer"]`,
+`tool = uren.boeken`, `sprint`, `workItemId`, en via de structured-logging-state van `ILogger`
+zelfs `ContentRoot = D:\SORATUS\Website`.
+
+**Besluit: een klant ziet `extra` niet.** De klantweergave van een logregel bestaat uit tijd,
+niveau, event, bericht en runId. Geen uitklap, en dus ook geen chevron die niets doet.
+
+**Waarom niet filteren op inhoud.** Dat was de eerste reflex en hij sluit niet. `extra` is vrije
+JSON en de sleutelnamen komen van de agentbouwer: een blokkeerlijst met `endpoint` erin is morgen
+omzeild door `svcEndpoint`. Een half filter is erger dan geen filter, want het suggereert een grens
+die er niet is. De echte grens hoort bij het **schrijven** te liggen, in `Soratus.Agents.Telemetry`,
+waar de betekenis van een sleutel bekend is. Dat kost een contractwijziging en werk aan agentkant;
+tot die tijd staat het lek open. Dit besluit is een strikte deelverzameling van die oplossing en
+sluit die route niet af.
+
+**Hoe het is afgedwongen: het klanttype heeft het veld niet.** Geen `null` met een `@if` eromheen en
+geen vlag. `CustomerLogLine` in `Soratus.Portal/Views/AgentLogsView.cs` heeft zes velden en `extra`
+zit er niet bij; de operatorvariant draagt het volledige `LogRecord`. Dat is dezelfde regel die
+`CustomerAgentsView` al volgt (§9), en hier is hij niet alleen netter maar noodzakelijk: het
+logtabblad is een interactief eiland en krijgt zijn parameters over een serialisatiegrens. Een
+viewmodel met `extra` erin staat daarmee in de paginabron, ongeacht welke `@if` in de Razor staat.
+Wat er niet op het type staat, kan die grens niet over.
+
+**Wat dit besluit níet dekte.** `msg` bleef klantleesbaar en vrije tekst van de agentbouwer. Stond
+daar een pad of een interne naam in, dan lekte dat alsnog. Dat is inmiddels gemeten en gedicht;
+zie punt 13.
+
+**Wat er openblijft:** een agentbouwer kan klantgegevens van een ándere klant in `extra` zetten en
+dan ziet de operator dat op het verkeerde scherm. Dat is een kleiner probleem dan het lek dat hier
+is gedicht, maar het is niet nul.
+
+---
+
+## 13. `msg` wordt afgeknipt op de eerste regelovergang
+
+**Aanleiding, gemeten.** Punt 12 dichtte `extra` voor de klant en noemde één gat expliciet:
+`msg` is vrije tekst en blijft klantleesbaar. Een verificatie over 19 agents en 120 logregels vond
+dat gat bewoond. In `msg` van `bakker-voorraad-sync / payload.dump` stond 3349 tekens met zestien
+regels stacktrace — `/src/`-paden, klassenamen, methodenamen, regelnummers — zichtbaar voor een
+klant.
+
+**Een filter aan de leeskant kan dit niet.** Dat was bij punt 12 al de conclusie voor `extra` en
+geldt hier sterker: de inhoud kan in elk vrij tekstveld staan, niet alleen in het veld dat je
+afschermt. De grens moet dus bij het schrijven liggen.
+
+**Wat we eerst wilden en waarom dat niet kon.** Het eerste voorstel was een lengtegrens van de orde
+van 300 tekens: een royale Nederlandse zin is rond de 200. Toen zijn alle 93 klantzichtbare
+logregels doorgemeten:
+
+| | |
+|---|---|
+| regels met méér dan één regel in `msg` | 1 |
+| regels met verdachte inhoud in de volledige `msg` | 1 |
+| regels met verdachte inhoud in **alleen de eerste regel** | **0** |
+| langste eerste regel | **1417 tekens** |
+
+Die 1417 maakt elke lengtegrens onbruikbaar. Bij die `payload.dump` is de eerste regel legitiem
+Nederlands proza en beginnen de stacktrace-regels daarná:
+
+```
+grens 200–500  → lek weg, maar geldig bericht middenin gemangeld
+grens 1500     → eerste regel heel + "at SoratusAgent.Sync…Validate(…) in /src/…"
+grens 2000     → eerste regel heel + ~580 tekens stacktrace
+```
+
+Het middengebied is het gevaarlijkst, want het lijkt de veilige ruime keuze.
+
+**Besluit: knip op de eerste regelovergang** (`\n`, `\r\n`, losse `\r`). Wat erachter stond gaat
+naar de gereserveerde sleutel `msgOverflow` in `extra` en is daarmee operator-only. Achter de
+overgebleven regel komt `" … (ingekort)"`, zodat een lezer weet dat er meer was en niet denkt dat de
+agent halverwege stopte.
+
+**Waarom dit klopt en niet toevallig werkt.** Het is even mechanisch als een lengtegrens — geen
+inhoudsheuristiek, nooit "is dit een stacktrace" — maar het volgt rechtstreeks uit de contractregel
+die er al stond: één zin, en een zin bevat geen regelafbreking. Op de echte data verdwijnen alle
+zestien stacktrace-regels en worden de andere 92 regels niet aangeraakt omdat die al één regel
+waren. Nul valse positieven, één ware positief.
+
+Er zit een hygiënegrens van 8000 tekens bij tegen één absurd lange ononderbroken regel. Ruim boven
+de gemeten 1417, dus hij gaat in de praktijk nooit af. Slaat hij toch toe, dan wordt er op een
+grafeemgrens geknipt: nooit midden in een surrogaatpaar of een samengestelde glyph. Dat is geen
+theorie — aan de weergavekant is precies dat defect al aangetroffen in een `message[..400]`, dat een
+losse surrogaat in een attribuut achterliet zodra iemand een emoji in een productnaam had.
+
+**De knip staat op twee plekken en is één functie.** Bij het schrijven in
+`Soratus.Agents.Telemetry`, en bij het projecteren naar de klant in het portaal. Die tweede dekt wat
+de eerste niet kan: de dertig dagen documenten die er al staan, een agent op een oudere
+bibliotheekversie, en een agent die de bibliotheek niet gebruikt. Zouden die twee elk hun eigen knip
+schrijven, dan bestaan er twee definities van "één zin" en gaan die divergeren — hetzelfde patroon
+dat hier al drie keer met gekopieerde CSS is misgegaan. De functie staat daarom in
+`Soratus.Agents.Contracts` (`MessageTruncation.Cut`), dat bewust geen afhankelijkheden heeft en door
+beide kanten wordt gebruikt. De overloop komt apart terug in plaats van dat de functie hem ergens
+neerzet, want het klantpad heeft geen veld om hem in te zetten.
+
+**Het werkt alleen vooruit.** Wat vóór deze wijziging is weggeschreven houdt zijn lange `msg` tot de
+TTL het na 30 dagen opruimt. De knip in de projectie vangt dat op het scherm af; de documenten zelf
+blijven zoals ze zijn. De seed is opnieuw gedraaid.
+
+**Wat er openblijft:** het portaal moet `msgOverflow` daadwerkelijk renderen. Doet het dat niet, dan
+is de stacktrace stil wég in plaats van verplaatst, en dan hebben we bij een gefaalde run juist de
+informatie weggegooid die de operator nodig heeft. Dat is een leesbaarheidsregressie in plaats van
+een lek, maar wel een echte.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Uren, facturatie, sprint en support. Die komen pas als de statusweergave klopt, zoals de

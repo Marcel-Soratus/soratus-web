@@ -88,15 +88,100 @@ Eén document per regel. Plat en klein, want dit leest een mens die wil weten of
 | `ts` | string (tijd) | ja | Tijdstip van de regel. |
 | `level` | enum | ja | `info` · `warn` · `error`. Drie waarden, geen zes. |
 | `event` | string | ja | Puntgescheiden gebeurtenisnaam (`document.processed`, `api.retry`). |
-| `msg` | string | ja | Eén zin in het Nederlands, leesbaar voor wie de code niet kent. |
+| `msg` | string | ja | Eén zin in het Nederlands, leesbaar voor wie de code niet kent. **Eén regel — dit wordt afgedwongen, zie hieronder.** **De klant leest dit.** |
 | `runId` | string | nee | De run waarbinnen deze regel viel. Leeg voor regels buiten een run, zoals bij het starten. |
-| `extra` | object | nee | Vrije context, uitklapbaar op het scherm. Hier landt de structured-logging-state van `ILogger`, en hier hoort een stacktrace. |
+| `extra` | object | nee | Vrije context, uitklapbaar op het scherm. Hier landt de structured-logging-state van `ILogger`, en hier hoort een stacktrace. **Operator-only.** |
 | `customerId` | string | ja | De klant. |
 | `agentName` | string | ja | De agent. |
 
 `debug` en `trace` horen niet in dit contract. Die zijn voor de ontwikkelaar en gaan naar
 Application Insights. Vijfhonderd debugregels per run maken het portaal niet informatiever maar
 onleesbaar.
+
+#### Wie leest wat: `msg` is voor de klant, `extra` is voor ons
+
+Dit is geen stijladvies. Het is de enige grens die er op deze twee velden bestaat, en hij is niet
+in code af te dwingen — dus hij staat hier.
+
+- **`msg` wordt door de klant gelezen.** Het staat onverkort in de logtabel van het agentdetail,
+  voor de klant net zo goed als voor de operator. Zet er dus **geen** interne details in: geen
+  bestandspaden, geen klasse- of methodenamen, geen resource groups, geen endpoints of API-paden,
+  geen sleutels of tokennamen, geen namen of id's van **andere** klanten. Schrijf één zin over wat
+  er met het werk van *deze* klant is gebeurd.
+- **`extra` is operator-only.** De klantweergave van een logregel draagt het veld niet — niet leeg,
+  niet verborgen: het staat niet op het type. Dít is dus de plek voor de context die je bij een
+  storing nodig hebt: de stacktrace, het endpoint dat 503 gaf, de payload die werd afgekeurd, het
+  model dat traag was, de scope waarop het token is vernieuwd.
+
+Dat `extra` operator-only is, is een besluit van het portaal en niet van deze bibliotheek. Het is
+geen vrijbrief: schrijf er nog steeds geen persoonsgegevens in die er niet horen (logs zijn 30
+dagen leesbaar), en geen gegevens van een andere klant dan die van de agent — een operator die naar
+klant A kijkt, hoort daar geen naam van klant B te zien.
+
+Waarom deze kant en niet aan de leeskant filteren: `extra` is vrije JSON en de sleutelnamen komen
+van jou. Een blokkeerlijst op namen sluit niets af — vandaag `endpoint`, morgen `svcEndpoint`. De
+enige plek waar de betekenis van een sleutel bekend is, is hier, bij het schrijven.
+
+#### `msg` is één regel, en dat wordt afgedwongen
+
+Dit is geen verzoek meer. `Soratus.Agents.Telemetry` **knipt `msg` af op de eerste
+regelovergang** — `\n`, `\r\n` of een losse `\r`. Wat erachter stond verhuist naar de
+gereserveerde sleutel `msgOverflow` in `extra`, en is daarmee operator-only. Achter de
+overgebleven regel komt de markering `" … (ingekort)"`, zodat een lezer weet dat er meer was en
+niet denkt dat de agent halverwege stopte.
+
+De aanleiding was gemeten, niet bedacht. Bij een verificatie over negentien agents stond dit in
+`msg` van `bakker-voorraad-sync / payload.dump`, en dus zichtbaar voor een klant:
+
+```
+   at SoratusAgent.Sync.Validators.StockLineValidator.Validate(…) in /src/Sync/Validators/StockLineValidator.cs:line …
+   … zestien regels stacktrace met /src/-paden, klassenamen en regelnummers
+```
+
+**Waarom de regelovergang en niet een lengtegrens.** Een lengtegrens was het eerste voorstel en is
+gemeten onbruikbaar. Over de 93 klantzichtbare logregels:
+
+| | |
+|---|---|
+| regels met méér dan één regel in `msg` | 1 |
+| regels met verdachte inhoud in de volledige `msg` | 1 |
+| regels met verdachte inhoud in **alleen de eerste regel** | **0** |
+| langste eerste regel | **1417 tekens**, legitiem Nederlands proza |
+
+Elke grens tussen 200 en 500 verminkt dus een geldig bericht middenin, en elke grens boven 1417
+laat de stacktrace er deels doorheen. Dat middengebied is het gevaarlijkst, want het lijkt de
+veilige ruime keuze. De knip op de regelovergang haalt alle zestien stacktrace-regels weg en laat
+de andere 92 regels ongemoeid: nul valse positieven, één ware positief.
+
+De toets is **mechanisch**. Er wordt nooit gekeken of iets "op een stacktrace lijkt" — alleen of er
+een regelafbreking staat. Een heuristiek op inhoud is precies wat morgen faalt. Dat de knip toch
+werkt komt doordat hij samenvalt met de contractregel die er al staat: één zin, en een zin bevat
+geen regelafbreking.
+
+Er zit ook een hygiënegrens van 8000 tekens op, tegen één absurd lange ononderbroken regel. Die
+staat ruim boven de gemeten 1417 en gaat in de praktijk nooit af. Slaat hij toch toe, dan wordt er
+op een grafeemgrens geknipt — nooit midden in een surrogaatpaar of een samengestelde glyph, want
+een afgekapte string die ongeldige UTF-16 oplevert is erger dan een lange.
+
+**De knip zit op twee plekken.** Bij het schrijven, in de telemetriebibliotheek; en bij het
+projecteren naar de klant in het portaal. Die tweede is nodig voor wat de eerste niet kan dekken:
+de dertig dagen documenten die er al staan, een agent op een oudere bibliotheekversie, en een agent
+die de bibliotheek helemaal niet gebruikt. Beide roepen dezelfde functie aan,
+`MessageTruncation.Cut` in `Soratus.Agents.Contracts` — één definitie van "één zin", zodat de twee
+kanten niet kunnen divergeren.
+
+**Gereserveerde sleutels in `extra`.** Deze namen zijn van het contract; zet je ze zelf, dan
+worden ze overschreven.
+
+| Sleutel | Wat erin staat |
+|---|---|
+| `msgOverflow` | Alles ná de eerste regelovergang van `msg`, onveranderd, inclusief de oorspronkelijke regelafbrekingen. |
+| `_exception` | Type, boodschap en stacktrace van een uitzondering. |
+| `_category`, `_template`, `_scopes`, `_eventId` | Wat de `ILogger`-keten meelevert. |
+
+Het portaal moet `msgOverflow` renderen. Doet het dat niet, dan is de stacktrace stil wég in plaats
+van verplaatst — en dan hebben we bij een gefaalde run juist de informatie weggegooid die de
+operator nodig heeft.
 
 ## Statusafleiding
 
@@ -215,9 +300,15 @@ Vier dingen kan de bibliotheek niet voor je raden, en die kunnen niet automatisc
   je bewust wacht, en zet het weer op `running` als je aan het werk gaat. Doe je dat niet, dan komt
   je agent er als `Live` op te staan; dat is niet fout, alleen minder informatief.
 
-Verder: schrijf `msg` in het Nederlands en in één zin, gericht op iemand die de code niet kent. Zet
-geen persoonsgegevens in `msg` of `extra` die niet in het portaal thuishoren — logs zijn 30 dagen
-leesbaar voor de operator en voor de klant.
+Verder: schrijf `msg` in het Nederlands en in één zin, gericht op iemand die de code niet kent, en
+houd je aan de scheiding tussen `msg` en `extra` hierboven — `msg` leest de klant, `extra` alleen de
+operator. Zet in geen van beide persoonsgegevens die niet in het portaal thuishoren; logs zijn 30
+dagen leesbaar.
+
+Dat "één zin" is geen advies meer: staat er een tweede regel in `msg`, dan knipt de bibliotheek hem
+eraf en zet hem in `extra`. Je verliest niets, maar je bericht leest wel beter als je die knip niet
+nodig hebt. Verwijs in `msg` ook niet naar `extra` ("zie stacktrace"): de klant kan daar niet bij,
+en een verwijzing naar iets onzichtbaars is geen mededeling maar een raadsel.
 
 ## Wat automatisch gaat
 
@@ -235,7 +326,12 @@ Dit hoef je niet te schrijven; `Soratus.Agents.Telemetry` doet het:
   `error` met de stacktrace in `extra`
 - de runId meevoeren naar elke logregel binnen de run — je geeft hem nergens door
 - id's en partitiesleutels opbouwen, ULID's genereren, tijdstempels in UTC zetten
-- de structured-logging-state van `ILogger` in `extra` zetten
+- de structured-logging-state van `ILogger` in `extra` zetten — let op dat daar ook host- en
+  frameworkvelden in kunnen belanden (gemeten: `ContentRoot`, `EnvName`, `_category`,
+  `_template`); dat is een tweede reden dat `extra` operator-only is
+- `msg` afknippen op de eerste regelovergang en de rest naar `msgOverflow` verhuizen, op elk
+  schrijfpad: `AgentEvent`, een gewone `logger.LogInformation(...)`, en de foutboodschap van een
+  uitzondering bij een mislukte run
 - `debug` en `trace` uit dit contract houden en naar Application Insights sturen
 
 ## Hoe voldoe ik hieraan

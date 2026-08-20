@@ -1,0 +1,66 @@
+name: ci-agents
+
+# Bouwt en test de agentbibliotheken. Bewust géén deploy: agents worden per klant
+# uitgerold en er is nog geen klantomgeving die dat kan ontvangen. Een workflow die
+# naar een App Service wijst die niet bestaat is een dode knop.
+#
+# Waarom dit los staat van deploy-portal.yml: het portaal verwijst alleen naar
+# Soratus.Agents.Contracts, niet naar Telemetry. Een wijziging in de
+# telemetriebibliotheek hoort het portaal dus niet te deployen, en een wijziging in
+# het portaal hoort deze tests niet te draaien.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Soratus.Agents.Contracts/**'
+      - 'Soratus.Agents.Telemetry/**'
+      - 'Soratus.Agents.Telemetry.Tests/**'
+      - 'agents/**'
+      - 'Soratus.slnx'
+      - 'NuGet.config'
+      - '.github/workflows/ci-agents.yml'
+  pull_request:
+    paths:
+      - 'Soratus.Agents.Contracts/**'
+      - 'Soratus.Agents.Telemetry/**'
+      - 'Soratus.Agents.Telemetry.Tests/**'
+      - 'agents/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 10.0.x
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: |
+          dotnet restore Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj
+          dotnet restore Soratus.Agents.Telemetry/Soratus.Agents.Telemetry.csproj
+          dotnet restore Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj
+          dotnet restore agents/heartbeat-demo/heartbeat-demo.csproj
+
+      - name: Build
+        run: |
+          dotnet build Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj -c Release --no-restore
+          dotnet build Soratus.Agents.Telemetry/Soratus.Agents.Telemetry.csproj -c Release --no-restore
+          dotnet build Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj -c Release --no-restore
+          dotnet build agents/heartbeat-demo/heartbeat-demo.csproj -c Release --no-restore
+
+      # De referentie-agent bouwt mee omdat hij het bewijs is dat de bibliotheek
+      # bruikbaar is. Breekt een wijziging aan de publieke API hem, dan hoort dat
+      # hier rood te worden en niet pas bij een uitrol.
+      - name: Test
+        run: dotnet test Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj -c Release --no-build --verbosity normal
