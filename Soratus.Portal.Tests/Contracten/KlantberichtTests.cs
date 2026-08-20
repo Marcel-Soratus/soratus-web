@@ -27,6 +27,42 @@ namespace Soratus.Portal.Tests.Contracten;
 /// functie gebruikt <em>en haar uitkomst overneemt</em>, dat de invariant over de grens ook op het
 /// klantpad geldt, en de ene plek waar de projectie bewust afwijkt. Dat de knip inhoudelijk het
 /// juiste doet, meet <see cref="Zichtbaarheid.KlantLogregelTests"/> op de gerenderde pagina.</para>
+///
+/// <para><strong>Welke test welk gat dekt — gemeten, niet beredeneerd.</strong> Vier asserties hier
+/// vergelijken niet met <c>Cut</c> maar met een vaste verwachting, en dat is wat ze bruikbaar maakt
+/// als poort: gaat <c>Cut</c> stuk, dan is de delegatietheorie nog steeds waar, maar deze vier niet.
+/// De verdeling is met een mutatiestudie op een nabouw van <c>Cut</c> vastgesteld en is scherper dan
+/// je zou verwachten — elke mutatie wordt door precies één test gevangen:</para>
+/// <list type="bullet">
+///   <item><description>
+///     <c>Cut</c> vindt geen regelovergangen meer → alleen
+///     <see cref="DeProjectieLaatGeenStacktraceDoorEnHoudtDeEersteZinHeel"/>.
+///   </description></item>
+///   <item><description>
+///     <c>Cut</c> knipt op tekens in plaats van op een grafeemgrens → alleen
+///     <see cref="EenGekniptKlantberichtBevatGeenHalfTeken"/>. Dít is de reden dat die test hier
+///     staat en niet is weggelaten als "werk van de bibliotheek".
+///   </description></item>
+///   <item><description>
+///     <c>Cut</c> haalt de markering niet van het budget af (de 8013-fout) → alleen
+///     <see cref="EenGekniptKlantberichtBlijftMetMarkeringBinnenDeBovengrens"/>.
+///   </description></item>
+///   <item><description>
+///     <c>Cut</c> knipt een geldige lange regel af → alleen
+///     <see cref="EenLangeLegitiemeRegelKomtOngewijzigdDoorDeProjectie"/>.
+///   </description></item>
+/// </list>
+/// <para>Geen van de vier is dus overbodig, en er is er geen die een ander overneemt. Haal je er één
+/// weg omdat hij op de bibliotheek lijkt te horen, dan verdwijnt precies één failure mode uit de
+/// poort waar de uitrol aan hangt — en dat is niet te zien aan het feit dat de rest groen blijft.
+/// </para>
+///
+/// <para><strong>Wat deze suite met opzet níet vangt.</strong> Raakt <c>Cut</c> zijn overloop kwijt,
+/// dan blijven alle vier groen: de klantkant is dan nog correct, maar een operator verliest stil de
+/// stacktraces bij een gefaalde run. Het portaal leest alleen het bericht, dus dat is schrijfpad en
+/// hier niet te meten. Dat gat zit dicht in de pijplijn: <c>deploy-portal.yml</c> draait
+/// <c>Soratus.Agents.Telemetry.Tests</c> mee, zodat de deploy-gate rood is en niet alleen
+/// <c>ci-agents</c>. Verdwijnt die stap, dan verdwijnt deze dekking met hem.</para>
 /// </remarks>
 public class KlantberichtTests
 {
@@ -134,6 +170,68 @@ public class KlantberichtTests
     }
 
     [Theory]
+    [InlineData(-2)]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void EenGekniptKlantberichtBevatGeenHalfTeken(int verschuiving)
+    {
+        // ────────────────────────────────────────────────────────────────────────────────────────
+        // WAAROM DIT ER TOCH STAAT, TERWIJL DE REST VAN DE KNIPREGEL DAT NIET DOET.
+        //
+        // Deze suite is de teststap waar de uitrol van het portaal aan hangt. Wat een klant kan
+        // bereiken hoort daarom hier gemeten te worden, ook als de regel die het veroorzaakt elders
+        // woont. De andere drie invarianten die ik hier vastleg — geen stacktrace, binnen de
+        // bovengrens, geldige zin blijft heel — zijn absolute asserties en gaan dus rood als
+        // MessageTruncation.Cut stukgaat. Deze ontbrak, en het gat was klantzichtbaar: knip
+        // halverwege een surrogaatpaar of een samengestelde glyph en er staat ongeldige UTF-16 in
+        // de paginabron. Wat een browser daarmee doet is niet afgesproken.
+        //
+        // Dit is geen vierde kopie van de knipregel. Er staat niet hóe er geknipt wordt, alleen dat
+        // de uitkomst een geldige tekenreeks is — dezelfde vorm als "geen stacktrace" en "binnen de
+        // bovengrens". Hoe de grafeemgrens wordt gevonden blijft de vraag aan de bibliotheek.
+        //
+        // Vier standen rond de knipplek, want één stand zou de goede kunnen treffen door geluk. De
+        // markering gaat van het budget af, dus de knip ligt rond DefaultMaxLength - Marker.Length.
+        // ────────────────────────────────────────────────────────────────────────────────────────
+        var knipplek = MessageTruncation.DefaultMaxLength - MessageTruncation.Marker.Length;
+        var bericht = new string('a', knipplek + verschuiving)
+            + "👨‍👩‍👧‍👦"
+            + new string('b', 200);
+
+        var geknipt = CustomerMessage.FirstLine(bericht);
+
+        // Eerst vaststellen dát er is geknipt; anders kan deze test slagen doordat er niets
+        // gebeurde in plaats van doordat de knipplek klopt.
+        Assert.EndsWith(MessageTruncation.Marker, geknipt, StringComparison.Ordinal);
+
+        // En dat er hier werkelijk iets te breken valt. Een naïeve knip op dezelfde plek — gewoon
+        // [..knipplek], zoals je het zou schrijven als je niet aan grafemen dacht — levert wél een
+        // half teken op. Zonder deze regel zou de test groen kunnen staan omdat mijn verschuivingen
+        // net naast een surrogaatpaar vallen, en dan meet hij niets: een detector die altijd nul
+        // teruggeeft is niet te onderscheiden van een knip die altijd klopt.
+        var naief = bericht[..(knipplek + verschuiving + 1)];
+
+        Assert.True(
+            LosseSurrogaten(naief) > 0,
+            $"De naïeve knip op {knipplek + verschuiving + 1} tekens levert geen half teken op, " +
+            "dus deze verschuiving valt niet op een tekengrens en de test hieronder bewijst niets. " +
+            "Pas de verschuivingen aan zodat de knipplek in de familie-emoji valt.");
+
+        var half = LosseSurrogaten(geknipt);
+
+        Assert.True(
+            half == 0,
+            $"Het geknipte klantbericht bevat {half} losse surrogaat/surrogaten. Dat is geen " +
+            "geldig teken: het staat zo in de paginabron en wat een browser ermee doet is niet " +
+            "afgesproken.\n\n" +
+            "De knip hoort op een grafeemgrens te liggen. Die regel zit in " +
+            "MessageTruncation.Cut, dus zoek daar — maar deze test staat hier omdat dit de " +
+            "teststap is waar de uitrol van het portaal aan hangt, en dit een klantzichtbaar " +
+            "gevolg is.");
+    }
+
+    [Theory]
     [InlineData(1417)]
     [InlineData(1615)]
     public void EenLangeLegitiemeRegelKomtOngewijzigdDoorDeProjectie(int lengte)
@@ -151,5 +249,33 @@ public class KlantberichtTests
         Assert.Equal(lengte, geknipt.Length);
         Assert.Equal(zin, geknipt);
         Assert.DoesNotContain(MessageTruncation.Marker, geknipt, StringComparison.Ordinal);
+    }
+
+    /// <summary>Hoeveel UTF-16-eenheden in deze tekst geen geldig paar vormen.</summary>
+    /// <param name="tekst">De tekst.</param>
+    /// <returns>Nul als de tekenreeks geldig is.</returns>
+    private static int LosseSurrogaten(string tekst)
+    {
+        var aantal = 0;
+
+        for (var i = 0; i < tekst.Length; i++)
+        {
+            if (char.IsHighSurrogate(tekst[i]))
+            {
+                if (i + 1 < tekst.Length && char.IsLowSurrogate(tekst[i + 1]))
+                {
+                    i++;
+                    continue;
+                }
+
+                aantal++;
+            }
+            else if (char.IsLowSurrogate(tekst[i]))
+            {
+                aantal++;
+            }
+        }
+
+        return aantal;
     }
 }
