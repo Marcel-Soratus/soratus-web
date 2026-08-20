@@ -12,7 +12,21 @@
    streepje in de resultaatkolom is niet te onderscheiden van ontbrekende data, terwijl "Loopt" een
    waar en leesbaar antwoord is op de vraag die de kolom stelt. De badge is bewust grijs (rang 0 uit
    §8): geen groen en geen amber, want er is nog niets afgelopen. Moet het toch een streepje worden,
-   dan is dat één regel — de afbeelding zit in RunResultVisuals. *@
+   dan is dat één regel — de afbeelding zit in RunResultVisuals.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   EEN TABEL VOOR TWEE ROLLEN, EN WAAROM DAT HIER MAG
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Rows neemt AgentRunRow, en dat is het abstracte basistype. De echte rijen zijn CustomerRunRow of
+   OperatorRunRow, en het enige dat tussen die twee verschilt is de tooltip bij een mislukte run:
+   de operator ziet errorType, de klant niet. Anders dan bij de logtabel is er daarom geen tweede
+   tabel — de kolommen en het RowGrid zijn identiek, en een tweede kopie van dezelfde kolomsporen is
+   precies wat afwijking §6 verbiedt.
+
+   Dat mag alleen omdat deze tabel de tekst opvraagt in plaats van hem samen te stellen: het gaat
+   via run.FailureDetail. Reik hier niet naar errorType. Op het basistype bestaat dat veld niet, dus
+   dat vraagt om een cast — en een cast naar OperatorRunRow op een klantscherm is het lek terug.
+   KlantRunfoutTests legt beide kanten vast. *@
 
 @using Soratus.Agents.Contracts
 @using Soratus.Portal.Views
@@ -75,7 +89,15 @@
         new GridColumn("Items verwerkt", "minmax(0, 1fr)", Align: CellAlign.End),
         new GridColumn("RunId", "84px", Align: CellAlign.End));
 
-    /// <summary>De runs, nieuwste eerst. De tabel sorteert niet en filtert niet.</summary>
+    /// <summary>
+    /// De runs, nieuwste eerst. De tabel sorteert niet en filtert niet.
+    /// </summary>
+    /// <remarks>
+    /// Het abstracte <c>AgentRunRow</c> en niet één van de twee rolvarianten: een klantscherm geeft
+    /// hier <c>CustomerAgentRunsView.Runs</c> door en een operatorscherm
+    /// <c>OperatorAgentRunsView.Runs</c>. Beide zijn covariant naar deze lijst, en op dit basistype
+    /// bestaat geen enkel veld dat een klant niet mag zien.
+    /// </remarks>
     [Parameter]
     [EditorRequired]
     public IReadOnlyList<AgentRunRow> Rows { get; set; } = [];
@@ -93,8 +115,8 @@
     public EventCallback OnLoadMore { get; set; }
 
     /// <summary>
-    /// Of er nog oudere runs zijn. Geef hier <c>AgentRunsView.HasMore</c> door; zonder deze knop
-    /// stopt de lijst stil bij de eerste pagina.
+    /// Of er nog oudere runs zijn. Geef hier <c>HasMore</c> van de rolweergave door — de klant- of de
+    /// operatorvariant; zonder deze knop stopt de lijst stil bij de eerste pagina.
     /// </summary>
     [Parameter]
     public bool CanLoadMore { get; set; }
@@ -143,9 +165,14 @@
     }
 
     /// <summary>
-    /// De tooltip bij de badge. Bij een mislukte run staat de foutmelding erin: die past niet in de
+    /// De tooltip bij de badge. Bij een mislukte run staat de diagnose erin: die past niet in de
     /// kolom, maar is het eerste wat je wilt weten.
     /// </summary>
+    /// <remarks>
+    /// De tekst bij een mislukte run komt van de rij en wordt hier niet samengesteld. Dat is de hele
+    /// reden dat <c>AgentRunRow.FailureDetail</c> bestaat: wat erin staat is een rolbeslissing, en die
+    /// hoort in het viewmodel te vallen en niet in de weergave. Zie de toelichting bovenaan.
+    /// </remarks>
     private static string? ResultTitle(AgentRunRow run)
     {
         if (run.IsRunning)
@@ -155,9 +182,7 @@
 
         return run.Outcome switch
         {
-            RunResult.Failed => string.IsNullOrWhiteSpace(run.ErrorMessage)
-                ? run.ErrorType
-                : run.ErrorMessage,
+            RunResult.Failed => run.FailureDetail,
             RunResult.Skipped => "er was niets te doen; dit is geen fout",
             _ => null,
         };

@@ -101,10 +101,14 @@ resultaatbadge.
 Vul je `errorType` zelf via de tweede `Fail`-overload, zet er dan géén naamruimte in — een korte
 aanduiding als `Http502` volstaat, en die is voor beide lezers goed.
 
-> **Open punt.** Of `errorType` naar de klant geprojecteerd mag worden is een vraag voor het
-> portaal en niet voor de schrijfkant. Zolang het klanttype het veld draagt, ziet een klant onze
-> naamruimtestructuur. Gemeten: 7 van 112 runs hebben een `errorType`, alle drie de voorkomende
-> waarden bevatten een naamruimte, en twee ervan staan op documenten van een echte klant.
+> **Beslist, en niet aan deze kant.** Of `errorType` naar de klant geprojecteerd mag worden was een
+> vraag voor het portaal, en het antwoord is nee: het veld is operator-only. Gemeten: 7 van 112 runs
+> hebben een `errorType`, alle drie de voorkomende waarden bevatten een naamruimte, en twee ervan
+> staan op documenten van een echte klant. Het portaal projecteert een klantrij zonder dat veld —
+> `CustomerRunRow` heeft het niet, `OperatorRunRow` wel. **Voor de schrijfkant verandert er niets**:
+> stuur de volledige typenaam mee. Kort hem hier niet af "omdat de klant hem toch niet ziet" — dan is
+> hij ook voor de operator weg, en dat is precies het verschil met `errorMessage` hierboven. Zie
+> [`fase-0-afwijkingen.md`](fase-0-afwijkingen.md) §14.
 
 ### 3. Logregel — `LogRecord`
 

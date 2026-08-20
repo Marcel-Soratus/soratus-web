@@ -138,7 +138,13 @@ public interface IAgentDetailViews
     /// De weergave, of <c>null</c> als de agent niet bestaat, van een andere klant is, óf niet in
     /// productie draait.
     /// </returns>
-    Task<AgentRunsView?> BuildRunsAsync(
+    /// <remarks>
+    /// <strong>De klantvariant draagt geen <c>errorType</c>.</strong> Dat is geen weglating in de
+    /// projectie maar een ander type: <see cref="CustomerRunRow"/> heeft het veld niet, en het
+    /// operatortype ernaast wel. Zie <see cref="AgentRunRow"/> voor waarom afkorten hier het verkeerde
+    /// antwoord is, en <c>fase-0-afwijkingen.md</c> §14 voor het besluit.
+    /// </remarks>
+    Task<CustomerAgentRunsView?> BuildRunsAsync(
         CustomerScope scope,
         string agentName,
         int? pageSize = null,
@@ -154,7 +160,12 @@ public interface IAgentDetailViews
     /// <param name="continuationToken">Het vervolgtoken van de vorige pagina.</param>
     /// <param name="cancellationToken">Annuleringstoken.</param>
     /// <returns>De weergave, of <c>null</c> als de agent niet bestaat of van een andere klant is.</returns>
-    Task<AgentRunsView?> BuildRunsAsync(
+    /// <remarks>
+    /// Geen omgevingsfilter, én de typenaam van de uitzondering erbij. Dat laatste is precies waarom
+    /// deze overload een ander type teruggeeft dan de klantoverload en niet met een vlag te verruimen
+    /// is.
+    /// </remarks>
+    Task<OperatorAgentRunsView?> BuildRunsAsync(
         OperatorCustomerScope scope,
         string agentName,
         int? pageSize = null,

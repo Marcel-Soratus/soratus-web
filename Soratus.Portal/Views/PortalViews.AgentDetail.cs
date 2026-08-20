@@ -119,7 +119,7 @@ internal sealed partial class PortalViews : IAgentDetailViews
     }
 
     /// <inheritdoc />
-    public async Task<AgentRunsView?> BuildRunsAsync(
+    public async Task<CustomerAgentRunsView?> BuildRunsAsync(
         CustomerScope scope,
         string agentName,
         int? pageSize = null,
@@ -131,14 +131,43 @@ internal sealed partial class PortalViews : IAgentDetailViews
         var registration = await VisibleToCustomerAsync(scope, agentName, cancellationToken)
             .ConfigureAwait(false);
 
-        return registration is null
-            ? null
-            : await RunsAsync(scope, registration.AgentName, pageSize, continuationToken, cancellationToken)
-                .ConfigureAwait(false);
+        if (registration is null)
+        {
+            return null;
+        }
+
+        var page = await store
+            .GetRunsAsync(
+                scope,
+                registration.AgentName,
+                pageSize,
+                continuationToken,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return new CustomerAgentRunsView
+        {
+            AgentName = registration.AgentName,
+            GeneratedAt = timeProvider.GetUtcNow(),
+
+            // Hier valt de projectie waar het besluit over errorType op neerkomt, en het is dezelfde
+            // vorm als bij een logregel: het klanttype heeft het veld niet, dus er is geen @if te
+            // vergeten en geen tooltip die er later per ongeluk bij komt.
+            //
+            // Beide overloads projecteren rechtstreeks uit RunRecord en niet de één uit de ander.
+            // Zou de klantrij uit de operatorrij ontstaan, dan bestaat er een pad van het volle type
+            // naar het smalle waarlangs een veld kan meeliften — en dat is precies de weg terug.
+            //
+            // Geen sortering: de query levert nieuwste eerst en dat is de volgorde van het scherm.
+            // Nog eens sorteren zou de paginering doorbreken, want de tweede pagina wordt dan binnen
+            // zichzelf gesorteerd en niet ten opzichte van de eerste.
+            Runs = [.. page.Runs.Select(CustomerRunRow.From)],
+            ContinuationToken = page.ContinuationToken,
+        };
     }
 
     /// <inheritdoc />
-    public async Task<AgentRunsView?> BuildRunsAsync(
+    public async Task<OperatorAgentRunsView?> BuildRunsAsync(
         OperatorCustomerScope scope,
         string agentName,
         int? pageSize = null,
@@ -150,14 +179,27 @@ internal sealed partial class PortalViews : IAgentDetailViews
         var registration = await VisibleToOperatorAsync(scope, agentName, cancellationToken)
             .ConfigureAwait(false);
 
-        return registration is null
-            ? null
-            : await RunsAsync(
+        if (registration is null)
+        {
+            return null;
+        }
+
+        var page = await store
+            .GetRunsAsync(
                 scope.Customer,
                 registration.AgentName,
                 pageSize,
                 continuationToken,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return new OperatorAgentRunsView
+        {
+            AgentName = registration.AgentName,
+            GeneratedAt = timeProvider.GetUtcNow(),
+            Runs = [.. page.Runs.Select(OperatorRunRow.From)],
+            ContinuationToken = page.ContinuationToken,
+        };
     }
 
     /// <inheritdoc />
@@ -377,29 +419,6 @@ internal sealed partial class PortalViews : IAgentDetailViews
         return new OperatorAgentLogTail(tail.Lines, tail.Cursor, tail.HasMore, Counts(tally));
     }
 
-    private async Task<AgentRunsView> RunsAsync(
-        CustomerScope scope,
-        string agentName,
-        int? pageSize,
-        string? continuationToken,
-        CancellationToken cancellationToken)
-    {
-        var page = await store
-            .GetRunsAsync(scope, agentName, pageSize, continuationToken, cancellationToken)
-            .ConfigureAwait(false);
-
-        return new AgentRunsView
-        {
-            AgentName = agentName,
-            GeneratedAt = timeProvider.GetUtcNow(),
-
-            // Geen sortering hier: de query levert nieuwste eerst en dat is de volgorde van het
-            // scherm. Nog eens sorteren zou de paginering doorbreken — de tweede pagina zou dan
-            // binnen zichzelf gesorteerd worden en niet ten opzichte van de eerste.
-            Runs = [.. page.Runs.Select(AgentRunRow.From)],
-            ContinuationToken = page.ContinuationToken,
-        };
-    }
 
     /// <summary>
     /// De tellingen als woordenboek, zodat de filterchips ze direct kunnen aflezen.

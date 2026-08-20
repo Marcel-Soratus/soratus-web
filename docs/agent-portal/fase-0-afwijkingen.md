@@ -442,6 +442,90 @@ een lek, maar wel een echte.
 
 ---
 
+## 14. `errorType` op een mislukte run is operator-only
+
+**Aanleiding, gemeten.** Punt 13 knipte `errorMessage` af en liet één veld bewust staan: `errorType`.
+In de echte opslag hebben 7 van de 112 runs dat veld gevuld, met drie verschillende waarden — en alle
+drie bevatten een naamruimte:
+
+| klant | `errorType` |
+|---|---|
+| `bakker` | `SoratusAgent.Sync.ValidationException` |
+| `vandijk` | `SoratusAgent.Mail.ClassificationException` |
+| `soratus` | `System.Net.Http.HttpRequestException` |
+
+De eerste twee staan op documenten van **echte klanten**. Anders dan bij een logregel heeft een run
+geen operator-only variant: `AgentRunRow` droeg beide foutvelden letterlijk en werd door beide
+overloads van `BuildRunsAsync` gebruikt, en het portaal zet ze in de tooltip van de resultaatbadge.
+
+**Besluit: de klant ziet dit veld niet.** Een klant doet niets met een .NET-typenaam. Hij moet weten
+dát de run mislukte en of er werk blijft liggen, en dat staat in `errorMessage` — één Nederlandse zin
+die de agentbouwer schrijft voor precies deze lezer.
+
+**Waarom niet afkorten, en waarom dat het interessante deel is.** De korte naam na de laatste punt
+levert `ValidationException` op. Dat is de reparatie die zich aanbiedt en hij lost niets op: voor een
+klant is `ValidationException` even betekenisloos als de volledige naam, en voor de operator gooit
+het juist het nuttige deel weg — `Sync.ValidationException` en `Mail.ValidationException` zijn dan
+niet meer te onderscheiden, terwijl dat twee verschillende defecten zijn.
+
+Daar zit de asymmetrie met punt 13, en die bepaalt waar de oplossing hoort te zitten:
+
+- bij `errorMessage` **verplaatst** afkappen de informatie. Wat eraf valt blijft operator-only
+  bewaard, in `extra` van de bijbehorende `run.failed`-logregel. Daarom kan die knip bij het
+  **schrijven** staan: er raakt niets weg.
+- bij `errorType` **gooit** afkappen hem weg. Er is geen tweede plek waar de volledige naam blijft
+  staan. Een knip bij het schrijven zou de diagnose vernietigen voor de enige lezer die er iets aan
+  heeft.
+
+Dus: niet inkorten, niet tonen. De oplossing zit in de **projectie naar de klant** en niet aan de
+schrijfkant. Het contract legt aan die kant de tegengestelde regel vast — `errorType` houdt zijn
+volledige typenaam — en dat blijft zo.
+
+**Hoe het is afgedwongen: het klanttype heeft het veld niet.** Dezelfde vorm als bij §12 en §9, en om
+dezelfde reden: wat er niet is kan niet lekken, ook niet als iemand er over een half jaar een tooltip
+bij zet. `AgentRunRow` in `Soratus.Portal/Views/AgentRunsView.cs` is nu abstract en draagt alleen wat
+beide rollen mogen zien; `CustomerRunRow` en `OperatorRunRow` staan eronder, en alleen de tweede heeft
+`ErrorType`. Beide ontstaan via een eigen expliciete projectie uit `RunRecord` — niet de één uit de
+ander, want dan bestaat er een pad van de volle vorm naar de smalle waarlangs een veld kan meeliften.
+De weergave eromheen is mee gesplitst (`CustomerAgentRunsView` / `OperatorAgentRunsView`), zodat de
+compiler afdwingt welke rij op welk pad terechtkomt.
+
+**Er blijft één runtabel, en dat is geen inconsistentie met §12.** Bij de logs staan er twee tabellen
+naast elkaar omdat de klantvariant geen uitklap heeft: een echt verschil in gedrag. Bij de runs is het
+enige verschil de tekst in één tooltip, en de kolommen en het `RowGrid` zijn identiek. Twee tabellen
+zouden hier een tweede kopie van dezelfde kolomsporen betekenen — precies wat §6 verbiedt. `RunsTable`
+neemt daarom het basistype en vraagt de rij om de tekst (`FailureDetail`) in plaats van hem zelf uit
+velden samen te stellen. Reikt de tabel ooit tóch naar `ErrorType`, dan vraagt dat een cast, en een
+cast is zichtbaar in review.
+
+**Wat bij het nakijken nog naar boven kwam, en meeveranderd is:**
+
+1. **Het type stond er alleen als de melding leeg was.** De tooltip nam `errorType` als
+   terugvaloptie. Gevolg: in de gewone weergave zag de operator hem nooit — de seeder wéigert een
+   mislukte run zonder `errorMessage` — en de klant zag hem precies dán wel, namelijk als een agent
+   zijn boodschap vergat. De verkeerde kant op, bij beide rollen. De operator krijgt nu melding én
+   type, gescheiden door een `·`.
+2. **`AgentRunSummary.ErrorType` had geen enkele lezer.** Dat type hangt via
+   `CustomerAgentRow.LastRun` aan de klantweergave van de agentlijst en de agentkop, en het veld werd
+   geprojecteerd en nooit afgedrukt. Een veld dat niemand leest en dat onze naamruimtestructuur bij de
+   klant neerlegt is verwijderd in plaats van gesplitst; de operator vindt de typenaam op het
+   runtabblad.
+3. **`errorMessage` op een run had geen knip aan de leeskant.** Punt 13 zette die knip op twee
+   plekken voor logberichten — bij het schrijven en in de klantprojectie — maar op een run stond
+   alleen de schrijfkant. Dat gat is groter dan bij de logs: logregels leven 30 dagen en runs 400 (zie
+   §8), dus elk rundocument dat er vandaag staat is weggeschreven vóór de knip bestond, en de
+   foutmelding gaat op het klantscherm in een tooltip. `CustomerRunRow.From` en `AgentRunSummary.From`
+   gebruiken nu dezelfde `CustomerMessage.FirstLine` als de logprojectie. Er is een test die de
+   vindplaatsen afgaat in plaats van de regel, want een knip op twee van de drie plekken is geen knip.
+
+**Wat er openblijft.** `errorMessage` blijft vrije tekst van de agentbouwer: staat er een interne naam
+of een pad in de eerste zin, dan lekt dat alsnog, en daar is aan deze kant niets tegen te doen. Dat is
+dezelfde restrisico als bij `msg` (§13) en het staat als eis in het contract. En zoals bij §12: een
+agentbouwer kan in `errorMessage` gegevens van een ándere klant zetten. Kleiner dan het lek dat hier is
+gedicht, maar niet nul.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Uren, facturatie, sprint en support. Die komen pas als de statusweergave klopt, zoals de

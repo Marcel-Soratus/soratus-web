@@ -6,10 +6,19 @@ namespace Soratus.Portal.Views;
 /// De laatste run van een agent, klaar om af te drukken.
 /// </summary>
 /// <remarks>
-/// Gedeeld tussen de klant- en de operatorweergave, en dat mag: §2 van de spec geeft de klant
+/// <para>Gedeeld tussen de klant- en de operatorweergave, en dat mag: §2 van de spec geeft de klant
 /// leesrecht op agents, logs en runs van zijn eigen omgeving. De dingen die de klant níet mag
 /// zien — te fiatteren urenregels, koppelingdetails, de Azure-uitsplitsing per dienst — zijn geen
-/// eigenschap van een run, en daar horen dus ook geen velden voor op dit type te komen.
+/// eigenschap van een run, en daar horen dus ook geen velden voor op dit type te komen.</para>
+///
+/// <para><strong>Er stond hier één uitzondering op, en die is weg.</strong> Dit type droeg
+/// <c>ErrorType</c> — de volledige .NET-typenaam van de uitzondering — en het zit via
+/// <see cref="CustomerAgentRow.LastRun"/> op de klantweergave van de agentlijst en de agentkop. Geen
+/// enkel scherm las dat veld: het werd geprojecteerd en nooit afgedrukt. Een veld dat niemand leest en
+/// dat onze naamruimtestructuur bij de klant neerlegt hoort niet te bestaan, dus is het verwijderd in
+/// plaats van gesplitst. De operator vindt de typenaam waar hij hem nodig heeft: op het runtabblad,
+/// op <see cref="OperatorRunRow.ErrorType"/>. Zie <c>docs/agent-portal/fase-0-afwijkingen.md</c>
+/// §14.</para>
 /// </remarks>
 public sealed record AgentRunSummary
 {
@@ -42,10 +51,14 @@ public sealed record AgentRunSummary
     /// </summary>
     public bool RolledBack { get; init; }
 
-    /// <summary>Het .NET-type van de uitzondering, als de run mislukte.</summary>
-    public string? ErrorType { get; init; }
-
-    /// <summary>De foutmelding, als de run mislukte.</summary>
+    /// <summary>
+    /// De foutmelding, als de run mislukte.
+    /// </summary>
+    /// <remarks>
+    /// Dit is de zin die <c>AgentText.StatusNotice</c> onder de agentkop zet, dus hij komt bij een
+    /// klant op het scherm. Hij gaat daarom door dezelfde knip als een klantzichtbaar logbericht; zie
+    /// <see cref="From"/>.
+    /// </remarks>
     public string? ErrorMessage { get; init; }
 
     /// <summary>De agentversie die deze run draaide.</summary>
@@ -56,6 +69,13 @@ public sealed record AgentRunSummary
     /// </summary>
     /// <param name="run">De run.</param>
     /// <returns>De samenvatting.</returns>
+    /// <remarks>
+    /// <see cref="ErrorMessage"/> gaat door <c>CustomerMessage.FirstLine</c>, en dat geldt hier voor
+    /// beide rollen. De volledige boodschap raakt daarmee niemand kwijt: bij een uitzondering staat hij
+    /// in de bijbehorende <c>run.failed</c>-logregel onder <c>extra</c>, en die is operator-only. Wat
+    /// deze samenvatting doet is de eerste zin in een lopende melding zetten — daar hoort geen tweede
+    /// regel in, en zeker geen stacktrace.
+    /// </remarks>
     internal static AgentRunSummary? From(RunRecord? run) =>
         run is null
             ? null
@@ -69,8 +89,9 @@ public sealed record AgentRunSummary
                 ItemsProcessed = run.ItemsProcessed,
                 ItemsFailed = run.ItemsFailed,
                 RolledBack = run.RolledBack,
-                ErrorType = run.ErrorType,
-                ErrorMessage = run.ErrorMessage,
+                ErrorMessage = run.ErrorMessage is { } message
+                    ? CustomerMessage.FirstLine(message)
+                    : null,
                 Version = run.Version,
             };
 }

@@ -135,8 +135,11 @@ else if (_customerDetail is { } customerDetail)
     {
         @* CanLoadMore blijft uit. Doorbladeren vraagt een interactief eiland, en het
            logtabblad is het enige eiland in deze fase; een knop die niets doet is verboden.
-           De voetregel benoemt daarom de beperking in plaats van hem weg te poetsen. *@
-        <RunsTable Rows="@(_runs?.Runs ?? [])" Footer="@RunsFooter" />
+           De voetregel benoemt daarom de beperking in plaats van hem weg te poetsen.
+
+           De rijen komen uit één van de twee rolweergaven. Welke dat is, is hierboven al
+           beslist door de scope; RunRows kiest niet, hij pakt wat er staat. *@
+        <RunsTable Rows="@RunRows" Footer="@RunsFooter" />
     }
     else if (_tab == TabConfig)
     {
@@ -167,7 +170,16 @@ else if (_customerDetail is { } customerDetail)
 
     private OperatorAgentDetailView? _operatorDetail;
     private CustomerAgentDetailView? _customerDetail;
-    private AgentRunsView? _runs;
+
+    /// <summary>
+    /// Het runtabblad, in de vorm die bij de rol hoort. Twee velden en niet één, om dezelfde
+    /// reden als bij de configuratie: het klanttype draagt de typenaam van de uitzondering niet
+    /// en het operatortype wel, en dat verschil hoort de compiler af te dwingen.
+    /// </summary>
+    private CustomerAgentRunsView? _customerRuns;
+
+    private OperatorAgentRunsView? _operatorRuns;
+
     private OperatorAgentConfigurationView? _operatorConfig;
     private CustomerAgentConfigurationView? _customerConfig;
 
@@ -270,10 +282,12 @@ else if (_customerDetail is { } customerDetail)
     {
         switch (_tab)
         {
+            case TabRuns when operatorScope is not null:
+                _operatorRuns = await Details.BuildRunsAsync(operatorScope, Agentnaam!);
+                break;
+
             case TabRuns:
-                _runs = operatorScope is not null
-                    ? await Details.BuildRunsAsync(operatorScope, Agentnaam!)
-                    : await Details.BuildRunsAsync(customerScope!, Agentnaam!);
+                _customerRuns = await Details.BuildRunsAsync(customerScope!, Agentnaam!);
                 break;
 
             case TabConfig when operatorScope is not null:
@@ -287,21 +301,53 @@ else if (_customerDetail is { } customerDetail)
     }
 
     /// <summary>
+    /// De rijen voor de runtabel, uit de rolweergave die is opgehaald.
+    /// </summary>
+    /// <remarks>
+    /// Precies één van de twee is gevuld — welke, is bepaald door de scope in
+    /// <c>OnInitializedAsync</c>. Beide lijsten zijn covariant naar het basistype, en op dat
+    /// basistype staat geen veld dat een klant niet mag zien; de tabel kan dus geen typenaam tonen,
+    /// ongeacht welke rol hier binnenkomt.
+    /// </remarks>
+    private IReadOnlyList<AgentRunRow> RunRows
+    {
+        get
+        {
+            if (_operatorRuns is { } forOperator)
+            {
+                return forOperator.Runs;
+            }
+
+            return _customerRuns is { } forCustomer ? forCustomer.Runs : [];
+        }
+    }
+
+    /// <summary>
     /// De voetregel onder de runtabel. Zegt hoeveel er staan en of er meer is.
     /// </summary>
+    /// <remarks>
+    /// Eén formulering voor beide rollen: hoeveel runs er staan en of er oudere zijn, is geen
+    /// rolverschil. Alleen de twee getallen komen uit twee verschillende typen.
+    /// </remarks>
     private string RunsFooter
     {
         get
         {
-            if (_runs is not { } runs || runs.IsEmpty)
+            var (aantal, meer) = _operatorRuns is { } forOperator
+                ? (forOperator.Runs.Count, forOperator.HasMore)
+                : _customerRuns is { } forCustomer
+                    ? (forCustomer.Runs.Count, forCustomer.HasMore)
+                    : (0, false);
+
+            if (aantal == 0)
             {
                 return string.Empty;
             }
 
-            return runs.HasMore
-                ? $"{runs.Runs.Count} runs, nieuwste eerst · er zijn oudere runs; verder "
+            return meer
+                ? $"{aantal} runs, nieuwste eerst · er zijn oudere runs; verder "
                   + "terugbladeren kan in deze fase nog niet"
-                : $"{runs.Runs.Count} runs, nieuwste eerst · dit is alles wat er bewaard is";
+                : $"{aantal} runs, nieuwste eerst · dit is alles wat er bewaard is";
         }
     }
 

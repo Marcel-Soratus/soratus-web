@@ -189,14 +189,17 @@ internal sealed class VastePortaalweergaven(
     // ────────────────────────────────────────────────────────────────────────────────────────
     // IAgentDetailViews: de drie tabbladen van het agentdetail.
     //
-    // Elke methode heeft een overload per rol, en bij de logregels is dat een echt
+    // Elke methode heeft een overload per rol, en bij de logregels én de runs is dat een echt
     // typeverschil: de operator krijgt LogRecord met Extra erin, de klant krijgt
-    // CustomerLogLine en die héért Extra niet te hebben — hij hééft het niet.
+    // CustomerLogLine en die héért Extra niet te hebben — hij hééft het niet. Bij de runs
+    // gaat het om ErrorType: dat veld staat op OperatorRunRow en niet op CustomerRunRow.
     //
-    // Beide overloads leveren dezelfde regels, uit dezelfde bron, met dezelfde vijandige
-    // inhoud in Extra. Dat is de hele opzet: zou de fixture het klantpad stilletjes armer
-    // vullen, dan zou een zichtbaarheidstest groen staan omdat de fixture al filterde en niet
-    // omdat de scheiding werkt.
+    // Beide overloads leveren dezelfde regels en dezelfde runs, uit dezelfde bron, met
+    // dezelfde vijandige inhoud. Ze gaan bovendien door de échte projecties uit
+    // Soratus.Portal — CustomerLogLine.From, CustomerRunRow.From, OperatorRunRow.From — en
+    // niet door een met de hand gevulde rij. Dat is de hele opzet: zou de fixture het
+    // klantpad stilletjes armer vullen, dan zou een zichtbaarheidstest groen staan omdat de
+    // fixture al filterde en niet omdat de scheiding werkt.
     // ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>De logregels, oudste eerst. Zie <see cref="Testlogregels"/>.</summary>
@@ -293,7 +296,7 @@ internal sealed class VastePortaalweergaven(
             Testlogregels.Tellingen(_logregels)));
     }
 
-    public Task<AgentRunsView?> BuildRunsAsync(
+    public Task<CustomerAgentRunsView?> BuildRunsAsync(
         CustomerScope scope,
         string agentName,
         int? pageSize = null,
@@ -302,10 +305,16 @@ internal sealed class VastePortaalweergaven(
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        return Task.FromResult<AgentRunsView?>(Runweergave(agentName));
+        return Task.FromResult<CustomerAgentRunsView?>(new CustomerAgentRunsView
+        {
+            AgentName = agentName,
+            GeneratedAt = Nu,
+            Runs = [.. Testruns.Runs().Select(CustomerRunRow.From)],
+            ContinuationToken = null,
+        });
     }
 
-    public Task<AgentRunsView?> BuildRunsAsync(
+    public Task<OperatorAgentRunsView?> BuildRunsAsync(
         OperatorCustomerScope scope,
         string agentName,
         int? pageSize = null,
@@ -314,7 +323,13 @@ internal sealed class VastePortaalweergaven(
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        return Task.FromResult<AgentRunsView?>(Runweergave(agentName));
+        return Task.FromResult<OperatorAgentRunsView?>(new OperatorAgentRunsView
+        {
+            AgentName = agentName,
+            GeneratedAt = Nu,
+            Runs = [.. Testruns.Runs().Select(OperatorRunRow.From)],
+            ContinuationToken = null,
+        });
     }
 
     public Task<CustomerAgentConfigurationView?> BuildConfigurationAsync(
@@ -446,57 +461,6 @@ internal sealed class VastePortaalweergaven(
             ? since
             : new LogCursor(nieuw[^1].Timestamp, nieuw[^1].Id));
     }
-
-    /// <summary>
-    /// De runweergave: een mislukte run, een lopende run en een geslaagde run.
-    /// </summary>
-    /// <remarks>
-    /// De lopende run staat er met opzet in. Die rij is de enige die de streepjes en de neutrale
-    /// badge rendert, en zonder hem is dat pad op het scherm niet te zien.
-    /// </remarks>
-    private static AgentRunsView Runweergave(string agentName) =>
-        new()
-        {
-            AgentName = agentName,
-            GeneratedAt = Nu,
-            Runs =
-            [
-                new AgentRunRow
-                {
-                    RunId = "r-9a11",
-                    StartedAt = Nu - TimeSpan.FromMinutes(1),
-                    Version = "1.4.2",
-                    Trigger = TriggerKind.Timer,
-                },
-                new AgentRunRow
-                {
-                    RunId = "r-8f3c",
-                    StartedAt = Nu - TimeSpan.FromMinutes(5),
-                    FinishedAt = Nu - TimeSpan.FromMinutes(4),
-                    Duration = TimeSpan.FromSeconds(12),
-                    Outcome = RunResult.Failed,
-                    ItemsProcessed = 14,
-                    ItemsFailed = 2,
-                    ErrorType = "System.TimeoutException",
-                    ErrorMessage = "De bron antwoordde niet binnen 30 seconden.",
-                    Version = "1.4.2",
-                    Trigger = TriggerKind.Timer,
-                },
-                new AgentRunRow
-                {
-                    RunId = "r-77e0",
-                    StartedAt = Nu - TimeSpan.FromMinutes(10),
-                    FinishedAt = Nu - TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(9),
-                    Duration = TimeSpan.FromSeconds(9),
-                    Outcome = RunResult.Ok,
-                    ItemsProcessed = 31,
-                    ItemsFailed = 0,
-                    Version = "1.4.2",
-                    Trigger = TriggerKind.Timer,
-                },
-            ],
-            ContinuationToken = null,
-        };
 
     private static CustomerAgentRow[] Klantrijen() =>
     [

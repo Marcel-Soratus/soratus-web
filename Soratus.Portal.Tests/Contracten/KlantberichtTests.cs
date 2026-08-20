@@ -266,6 +266,36 @@ public class KlantberichtTests
         Assert.DoesNotContain(MessageTruncation.Marker, geknipt, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ElkeKlantzichtbareVrijeTekstGaatLangsDezelfdeKnip()
+    {
+        // De tests hierboven meten de knip; deze meet de *vindplaatsen*. Er zijn drie velden met
+        // vrije tekst van een agentbouwer die een klant te zien krijgt, en ze zitten in drie
+        // verschillende projecties: het bericht van een logregel, de foutmelding op een rij van het
+        // runtabblad, en dezelfde foutmelding in de statusmelding onder de agentkop. Een knip die op
+        // twee van de drie staat is geen knip — de tekst komt dan langs de derde alsnog in de
+        // paginabron.
+        //
+        // Bij de runs weegt dat zwaarder dan bij de logs: logregels worden 30 dagen bewaard en runs
+        // 400. Elk rundocument dat er vandaag staat is weggeschreven vóór de knip aan de schrijfkant
+        // bestond, dus voor runs is de projectie voorlopig de enige knip die er is.
+        var bericht = Testruns.MeerregeligeFoutmelding;
+        var verwacht = MessageTruncation.Cut(bericht).Message;
+
+        var regel = Testlogregels.Regel(
+            id: "01K3F0MJ4T0000000000000009",
+            moment: Testgegevens.Nu,
+            niveau: LogLevel.Error,
+            bericht: bericht);
+
+        Assert.Equal(verwacht, CustomerLogLine.From(regel).Message);
+
+        var run = Testruns.Mislukt("r-7c04", Testgegevens.Nu, Testruns.Typenaam, bericht);
+
+        Assert.Equal(verwacht, CustomerRunRow.From(run).ErrorMessage);
+        Assert.Equal(verwacht, AgentRunSummary.From(run)!.ErrorMessage);
+    }
+
     /// <summary>Hoeveel UTF-16-eenheden in deze tekst geen geldig paar vormen.</summary>
     /// <param name="tekst">De tekst.</param>
     /// <returns>Nul als de tekenreeks geldig is.</returns>
