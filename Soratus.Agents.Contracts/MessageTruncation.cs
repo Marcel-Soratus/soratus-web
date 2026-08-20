@@ -74,7 +74,7 @@ public static class MessageTruncation
     public const int DefaultMaxLength = 8_000;
 
     /// <summary>
-    /// De ondergrens die een eigen <paramref name="maxLength"/> mag hebben. Daaronder past
+    /// De ondergrens die de <c>maxLength</c> van <see cref="Cut"/> mag hebben. Daaronder past
     /// <see cref="Marker"/> zelf niet meer en levert knippen onleesbare tekst op.
     /// </summary>
     public const int MinimumLength = 64;
