@@ -7,6 +7,7 @@ on:
       - 'Soratus.Portal/**'
       - 'Soratus.Portal.Tests/**'
       - 'Soratus.Agents.Contracts/**'
+      - 'Soratus.Agents.Telemetry.Tests/**'
       - 'Soratus.slnx'
       - 'NuGet.config'
       - '.github/workflows/deploy-portal.yml'
@@ -26,6 +27,14 @@ env:
   PROJECT: Soratus.Portal/Soratus.Portal.csproj
   TEST_PROJECT: Soratus.Portal.Tests/Soratus.Portal.Tests.csproj
   CONTRACTS_PROJECT: Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj
+  # De contractregels waar het portaal op leunt worden hier getest, niet in het
+  # portaalproject. Zonder deze stap gaat een kapotte MessageTruncation.Cut wél
+  # rood in ci-agents maar blijft deze deploy groen, en rolt het portaal uit met
+  # een gebroken grens. Het scherpste geval is niet de klantkant — die is op vier
+  # plekken in Soratus.Portal.Tests gedekt — maar de operatorkant: raakt Cut zijn
+  # overloop kwijt, dan verliest een operator stil zijn stacktraces bij een
+  # gefaalde run, want het portaal leest alleen het bericht.
+  AGENTS_TEST_PROJECT: Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj
   APP_NAME: app-soratus-portal-prod
   RESOURCE_GROUP: rg-soratus-prod
   HEALTH_URL: https://portal.soratus.com/healthz
@@ -48,15 +57,23 @@ jobs:
           dotnet restore ${{ env.CONTRACTS_PROJECT }}
           dotnet restore ${{ env.PROJECT }}
           dotnet restore ${{ env.TEST_PROJECT }}
+          dotnet restore ${{ env.AGENTS_TEST_PROJECT }}
 
       - name: Build
         run: |
           dotnet build ${{ env.CONTRACTS_PROJECT }} -c Release --no-restore
           dotnet build ${{ env.PROJECT }} -c Release --no-restore
           dotnet build ${{ env.TEST_PROJECT }} -c Release --no-restore
+          dotnet build ${{ env.AGENTS_TEST_PROJECT }} -c Release --no-restore
 
       - name: Test
         run: dotnet test ${{ env.TEST_PROJECT }} -c Release --no-build --verbosity normal
+
+      # Zie de opmerking bij AGENTS_TEST_PROJECT. Deze stap draait ook in
+      # ci-agents; dat is bewust dubbel, want daar bewaakt hij de bibliotheek en
+      # hier bewaakt hij de uitrol van het portaal.
+      - name: Test contractregels
+        run: dotnet test ${{ env.AGENTS_TEST_PROJECT }} -c Release --no-build --verbosity normal
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT }} -c Release -o ./publish --no-build
