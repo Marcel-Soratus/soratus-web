@@ -1,4 +1,3 @@
-using System.Reflection;
 using Microsoft.Extensions.Options;
 using Soratus.Portal.Data;
 using Soratus.Portal.Security;
@@ -10,10 +9,18 @@ namespace Soratus.Portal.Tests.Hulpmiddelen;
 /// </summary>
 /// <remarks>
 /// <para><c>ConfigurationCustomerDirectory</c> en <c>CustomerScopeResolver</c> zijn
-/// <c>internal</c>, en dat hoort zo: buiten het portaal bestaan ze niet. Het testproject bereikt
-/// ze daarom via reflectie in plaats van via een <c>InternalsVisibleTo</c> in
-/// <c>Soratus.Portal</c> — een testproject hoort de zichtbaarheidsgrenzen van de code die het test
-/// niet op te rekken.</para>
+/// <c>internal</c>, en dat hoort zo: buiten het portaal bestaan ze niet. Het testproject komt
+/// erbij via de <c>InternalsVisibleTo Soratus.Portal.Tests</c> die in
+/// <c>Soratus.Portal.csproj</c> staat — die is er met een reden: de klassen waar de autorisatie
+/// in zit zijn juist de klassen die een test hoort aan te roepen.</para>
+///
+/// <para>Er stond hier eerder <c>Activator.CreateInstance</c> op een typenaam als tekst. Dat gaf
+/// geen extra afscherming (de <c>InternalsVisibleTo</c> stond er al, en
+/// <see cref="Weergavelaag"/> gebruikt hem ook), en het kostte wél iets: een naamswijziging of een
+/// gewijzigde constructor in <c>Security/</c> viel dan pas tijdens een testrun op, als een
+/// mislukte test in plaats van als een bouwfout. Bij de overstap naar een Cosmos-klantenlijst in
+/// fase 2 is dat precies het verkeerde moment om het te merken. Nu breekt de bouw, op de regel
+/// die moet veranderen.</para>
 ///
 /// <para>De omweg via de configuratieklantenlijst is bewust: <c>CustomerRecord.Telemetry</c> heeft
 /// een <c>internal</c> setter, dus alleen die klasse kan een klant een opslaglocatie geven. Zo
@@ -24,8 +31,6 @@ internal static class Autorisatiebron
 {
     /// <summary>De endpoint die de testklanten delen. In fase 0 deelt iedereen er één.</summary>
     public const string StandaardEndpoint = "https://cosmos-test.documents.azure.com:443/";
-
-    private static readonly Assembly Portaal = typeof(CustomerScope).Assembly;
 
     /// <summary>
     /// Bouwt een resolver op een klantenlijst met een ingerichte opslag.
@@ -54,9 +59,8 @@ internal static class Autorisatiebron
         string? standaardEndpoint)
     {
         var directory = Klantenlijst(klanten, standaardEndpoint);
-        var type = Portaal.GetType("Soratus.Portal.Security.CustomerScopeResolver", throwOnError: true)!;
 
-        return (ICustomerScopeResolver)Maak(type, directory);
+        return new CustomerScopeResolver(directory);
     }
 
     /// <summary>
@@ -76,10 +80,7 @@ internal static class Autorisatiebron
             Database = "telemetry",
         });
 
-        var type = Portaal.GetType(
-            "Soratus.Portal.Security.ConfigurationCustomerDirectory", throwOnError: true)!;
-
-        return (ICustomerDirectory)Maak(type, opties, telemetrie);
+        return new CustomerDirectory(opties, telemetrie);
     }
 
     /// <summary>
@@ -158,14 +159,4 @@ internal static class Autorisatiebron
         Name = "Cordaan Zorg",
         Access = [new CustomerAccessRecord { Email = Testprincipals.KlantEmail }],
     };
-
-    private static object Maak(Type type, params object?[] argumenten) =>
-        Activator.CreateInstance(
-            type,
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            args: argumenten,
-            culture: null)
-        ?? throw new InvalidOperationException(
-            $"{type.FullName} kon niet worden gemaakt. Is de constructor gewijzigd?");
 }

@@ -17,20 +17,35 @@ namespace Soratus.Portal.Tests.Beveiliging;
 /// </remarks>
 public class StoreImplementatieTests
 {
-    [Fact]
-    public void ErIsPreciesEenImplementatieVanDeTelemetriestore()
+    /// <summary>
+    /// De opslaginterfaces waarvan er precies één implementatie hoort te bestaan.
+    /// </summary>
+    /// <remarks>
+    /// Fase 2 bracht er een tweede: <see cref="IPortalDataStore"/> voor klanten, contracten en
+    /// toegang. Die valt onder dezelfde regel en om dezelfde reden, dus staat hij hier in plaats van
+    /// in een tweede test die hetzelfde zegt.
+    /// </remarks>
+    public static TheoryData<Type> Opslaginterfaces =>
+    [
+        typeof(IAgentTelemetryStore),
+        typeof(IPortalDataStore),
+    ];
+
+    [Theory]
+    [MemberData(nameof(Opslaginterfaces))]
+    public void ErIsPreciesEenImplementatieVanDeOpslag(Type opslag)
     {
-        var implementaties = typeof(IAgentTelemetryStore).Assembly
+        var implementaties = opslag.Assembly
             .GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false })
-            .Where(typeof(IAgentTelemetryStore).IsAssignableFrom)
+            .Where(opslag.IsAssignableFrom)
             .Select(t => t.FullName!)
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 
         Assert.True(
             implementaties.Length == 1,
-            $"Er zijn {implementaties.Length} implementaties van IAgentTelemetryStore in " +
+            $"Er zijn {implementaties.Length} implementaties van {opslag.Name} in " +
             $"Soratus.Portal: {string.Join(", ", implementaties)}.\n\n" +
             "Er hoort er precies één te zijn. Een tweede implementatie — een mock, een " +
             "seed-store, een in-memory variant \"even voor de demo\" — wordt vanzelf de plek waar " +
@@ -40,7 +55,14 @@ public class StoreImplementatieTests
             "Testgegevens nodig? Zet ze met het seed-project in dezelfde Cosmos, in dezelfde " +
             "documentvorm. Dan kan het portaal het verschil niet zien, en dat is het punt.");
 
-        Assert.Equal("Soratus.Portal.Data.CosmosAgentTelemetryStore", implementaties[0]);
+        // En het is de Cosmos-implementatie en niet iets anders dat toevallig ook één is. De naam
+        // komt uit typeof en niet uit een letterlijke tekenreeks: een naamswijziging hoort een
+        // bouwfout te zijn en niet een mislukte test.
+        Assert.Equal(
+            opslag == typeof(IAgentTelemetryStore)
+                ? typeof(CosmosAgentTelemetryStore).FullName
+                : typeof(CosmosPortalDataStore).FullName,
+            implementaties[0]);
     }
 
     [Fact]

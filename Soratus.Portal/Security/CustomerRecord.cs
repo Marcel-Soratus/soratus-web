@@ -7,11 +7,16 @@ namespace Soratus.Portal.Security;
 /// opslag staat en wie er namens hem mag inloggen.
 /// </summary>
 /// <remarks>
-/// <para>In fase 0 komt dit uit configuratie (sectie <c>Portal:Customers</c>), niet uit een
-/// database. Dat is een bewuste keuze: de drie Cosmos-containers houden telemetrie en niets anders,
-/// en een vierde container voor klantgegevens zou vooruitlopen op fase 2. De vorm volgt §6 van de
-/// spec (<c>Customer</c> en <c>Access</c>), zodat fase 2 alleen de bron hoeft te vervangen en niet
-/// de aanroepers.</para>
+/// <para><strong>Dit is de vorm waarin de klantenlijst in het geheugen staat, en niet de vorm waarin
+/// hij wordt opgeslagen.</strong> Opgeslagen wordt <see cref="CustomerDocument"/> in de container
+/// <c>customers</c>; <see cref="CustomerDirectory"/> zet die documenten om naar dit type. Dat de twee
+/// gescheiden zijn, is bewust: hier hangt de uitgerekende <see cref="Telemetry"/> aan, daar hangt de
+/// <c>_etag</c> aan, en een type dat beide draagt zou een opslagdetail tot in de autorisatie
+/// meenemen.</para>
+///
+/// <para>De vorm volgt §6 van de spec (<c>Customer</c> en <c>Access</c>). Tot fase 1 kwam dit uit
+/// configuratie; die sectie is nu de terugval en de inhoud van de eenmalige migratie — zie
+/// <see cref="PortalCustomerOptions"/>.</para>
 ///
 /// <para>Deze registratie is meer dan presentatie: hij bepaalt <em>waar</em> de gegevens van een
 /// klant staan. Zodra elke klant zijn eigen Cosmos-account heeft, staat het verschil tussen twee
@@ -77,7 +82,7 @@ public sealed class CustomerRecord
     /// De uitgerekende opslaglocatie, of <c>null</c> als er geen endpoint bekend is.
     /// </summary>
     /// <remarks>
-    /// Wordt door <see cref="ConfigurationCustomerDirectory"/> gezet en niet uit configuratie
+    /// Wordt door <see cref="CustomerDirectory"/> gezet en niet uit configuratie
     /// gebonden. <c>null</c> betekent: deze klant staat in de registratie maar zijn opslag is niet
     /// ingericht. Hij verdwijnt daarmee niet van het overzicht — hij komt erop als "status
     /// onbekend" — maar er valt niets voor hem te lezen.

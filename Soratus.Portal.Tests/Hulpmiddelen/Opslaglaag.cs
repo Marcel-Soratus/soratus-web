@@ -13,8 +13,10 @@ namespace Soratus.Portal.Tests.Hulpmiddelen;
 /// soort ding dat op de grens fout gaat, dus hij hoort een test te hebben.</para>
 ///
 /// <para>Reflectie in plaats van de methode <c>internal</c> maken: een testproject hoort de
-/// zichtbaarheidsgrenzen van de code die het test niet op te rekken, en dezelfde afweging staat al
-/// bij <see cref="Autorisatiebron"/>. De prijs is dat een naamswijziging hier pas op looptijd
+/// zichtbaarheidsgrenzen van de code die het test niet op te rekken. Hier is er ook geen andere
+/// weg — de <c>InternalsVisibleTo</c> uit <c>Soratus.Portal.csproj</c> opent <c>internal</c> en
+/// niet <c>private</c>. Dat is het verschil met <see cref="Autorisatiebron"/>, waar de reflectie
+/// niets opleverde en daarom weg is. De prijs is dat een naamswijziging hier pas op looptijd
 /// opvalt; daarom is de melding bij het mislukken expliciet.</para>
 /// </remarks>
 internal static class Opslaglaag

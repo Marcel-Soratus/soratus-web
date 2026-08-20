@@ -597,7 +597,19 @@ internal sealed class CosmosPortalDataStore(
     internal async Task ReloadDirectoryAsync(CancellationToken cancellationToken)
     {
         var (customers, access) = await LoadDirectoryAsync(cancellationToken).ConfigureAwait(false);
-        directory.Replace(customers, access);
+
+        if (!directory.Replace(customers, access))
+        {
+            // De lezing lukte en leverde nul klanten op, terwijl er nog een lijst stond. Die lijst
+            // blijft staan — zie CustomerDirectory.Replace. Dit is een inrichtingstoestand en geen
+            // storing, maar hij hoort niet stil te zijn: hij betekent dat de container leeg is en dat
+            // het portaal op de configuratielijst draait.
+            logger.LogWarning(
+                "De portaalopslag bevat geen enkel klantdocument. De bestaande klantenlijst " +
+                "({Count} klant(en)) blijft staan. Heeft de eenmalige migratie gelopen, en heeft de " +
+                "identiteit schrijfrecht op de database?",
+                directory.All.Count);
+        }
     }
 
     // ── Binnenwerk ──────────────────────────────────────────────────────────────────────────────

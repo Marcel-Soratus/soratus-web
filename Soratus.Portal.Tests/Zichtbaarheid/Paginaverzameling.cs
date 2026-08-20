@@ -103,10 +103,75 @@ internal static class Paginaverzameling
     public const string Agentnaam = "factuur-intake";
 
     /// <summary>
+    /// De waarde die een onbekende parameternaam krijgt.
+    /// </summary>
+    /// <remarks>
+    /// Staat hier als constante zodat een test kan zien dát een parameter op de terugval is
+    /// uitgekomen. Dat is niet cosmetisch: een pagina die met een niet-bestaande sleutel rendert
+    /// toont een 404 of een lege staat, en dan controleert het vangnet op verboden woorden een
+    /// pagina waar niets op staat. Zie <see cref="VangnetdekkingTests"/>.
+    /// </remarks>
+    public const string Terugval = "test";
+
+    /// <summary>
+    /// De namen van de parameters in de routes van een pagina, zonder de constraints eromheen.
+    /// </summary>
+    /// <param name="pagina">Het paginatype.</param>
+    /// <returns>De namen zoals ze in de route staan, bijvoorbeeld <c>Slug</c>.</returns>
+    /// <remarks>
+    /// Uit het routesjabloon en niet uit de properties: een routeparameter die geen
+    /// <c>[Parameter]</c>-property heeft, of een die er wel is maar niet als <c>string</c>, is
+    /// precies het geval dat hier moet opvallen.
+    /// </remarks>
+    public static IReadOnlyList<string> Routeparameters(Type pagina) =>
+    [
+        .. Routes(pagina)
+            .SelectMany(r => r.Split('/', StringSplitOptions.RemoveEmptyEntries))
+            .Where(segment => segment.StartsWith('{') && segment.EndsWith('}'))
+            .Select(segment => segment[1..^1])
+            // {*rest} is een catch-all, {id:int} draagt een constraint en {id?} is optioneel.
+            .Select(naam => naam.TrimStart('*').TrimEnd('?').Split(':')[0])
+            .Where(naam => naam.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+    ];
+
+    /// <summary>
+    /// De routeparameters van een pagina die géén bestaande waarde krijgen: ze staan niet in
+    /// <see cref="Parameters"/>, of ze komen op <see cref="Terugval"/> uit.
+    /// </summary>
+    /// <param name="pagina">Het paginatype.</param>
+    /// <returns>De namen die niet zijn gevuld, met de reden erachter.</returns>
+    public static IReadOnlyList<string> ParametersZonderEchteWaarde(Type pagina)
+    {
+        var gevuld = Parameters(pagina);
+        var ontbreekt = new List<string>();
+
+        foreach (var naam in Routeparameters(pagina))
+        {
+            var sleutel = gevuld.Keys.FirstOrDefault(
+                k => string.Equals(k, naam, StringComparison.OrdinalIgnoreCase));
+
+            if (sleutel is null)
+            {
+                ontbreekt.Add(
+                    $"{naam} — geen [Parameter]-property van het type string met die naam");
+                continue;
+            }
+
+            if (Equals(gevuld[sleutel], Terugval))
+            {
+                ontbreekt.Add($"{naam} — valt terug op \"{Terugval}\"");
+            }
+        }
+
+        return ontbreekt;
+    }
+
+    /// <summary>
     /// De waarde die bij een parameternaam hoort.
     /// </summary>
     /// <param name="naam">De naam van de componentparameter.</param>
-    /// <returns>Een bestaande waarde, of <c>"test"</c> voor een naam die hier niet bekend is.</returns>
+    /// <returns>Een bestaande waarde, of <see cref="Terugval"/> voor een onbekende naam.</returns>
     /// <remarks>
     /// De vergelijking is hoofdletterongevoelig, en dat is geen kosmetiek. De route van het
     /// agentdetail heet <c>{Agentnaam}</c> met een kleine n; een ordinale vergelijking met
@@ -119,7 +184,7 @@ internal static class Paginaverzameling
         _ when Is(naam, "Slug", "CustomerId", "CustomerSlug", "KlantId") => Klantslug,
         _ when Is(naam, "AgentName", "AgentNaam", "Agent") => Agentnaam,
         _ when Is(naam, "RunId") => "r-8f3c",
-        _ => "test",
+        _ => Terugval,
     };
 
     private static bool Is(string naam, params string[] namen) =>

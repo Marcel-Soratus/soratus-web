@@ -38,6 +38,7 @@ internal sealed class ContractViews(
             DisplayName = scope.DisplayName,
             GeneratedAt = timeProvider.GetUtcNow(),
             IsInternal = scope.IsInternal,
+            Environment = scope.Environment,
             HasContract = contract is not null,
             Number = contract?.Number,
             Type = contract?.Type,

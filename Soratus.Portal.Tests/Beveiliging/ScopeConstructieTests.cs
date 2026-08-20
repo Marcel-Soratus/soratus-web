@@ -23,13 +23,78 @@ namespace Soratus.Portal.Tests.Beveiliging;
 /// </remarks>
 public class ScopeConstructieTests
 {
-    /// <summary>De scopetypen die alleen door de resolver gemaakt mogen worden.</summary>
-    public static TheoryData<Type> Scopetypen =>
+    /// <summary>
+    /// De scopetypen die alleen door de resolver gemaakt mogen worden.
+    /// </summary>
+    /// <remarks>
+    /// <para>Met opzet géén handmatige lijst, om dezelfde reden als bij
+    /// <c>Paginaverzameling</c>: een lijst die je zelf bijhoudt vergeet iemand aan te vullen, en dan
+    /// valt precies het nieuwste scopetype buiten de regels — het type waar nog niemand over heeft
+    /// nagedacht. Fase 2 voegde er twee toe (<see cref="PortalWriteScope"/> en
+    /// <see cref="CustomerWriteScope"/>) en die vielen hier stil buiten.</para>
+    ///
+    /// <para>De vorm is de afspraak: een scope is een publiek type in
+    /// <c>Soratus.Portal.Security</c> waarvan de naam op <c>Scope</c> eindigt.</para>
+    /// </remarks>
+    public static IReadOnlyList<Type> Alle { get; } =
     [
-        typeof(CustomerScope),
-        typeof(OperatorScope),
-        typeof(OperatorCustomerScope),
+        .. typeof(CustomerScope).Assembly
+            .GetTypes()
+            .Where(t => t is { IsClass: true, IsPublic: true, IsAbstract: false })
+            .Where(t => string.Equals(
+                t.Namespace, typeof(CustomerScope).Namespace, StringComparison.Ordinal))
+            .Where(t => t.Name.EndsWith("Scope", StringComparison.Ordinal))
+            .OrderBy(t => t.Name, StringComparer.Ordinal)
     ];
+
+    /// <summary>De scopetypen als theoriegegevens.</summary>
+    public static TheoryData<Type> Scopetypen
+    {
+        get
+        {
+            var data = new TheoryData<Type>();
+            foreach (var scopetype in Alle)
+            {
+                data.Add(scopetype);
+            }
+
+            return data;
+        }
+    }
+
+    /// <summary>De namen van de scopetypen, voor de tests die de broncode doorzoeken.</summary>
+    public static TheoryData<string> Scopenamen
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+            foreach (var scopetype in Alle)
+            {
+                data.Add(scopetype.Name);
+            }
+
+            return data;
+        }
+    }
+
+    [Fact]
+    public void ErZijnScopetypenGevondenOmTeControleren()
+    {
+        // Zonder deze test blijft alles hieronder groen zodra de reflectie niets meer vindt —
+        // bijvoorbeeld omdat de naamgeving of de naamruimte verandert. De twee polen staan er
+        // expliciet in: het leesbewijs van een klant en het schrijfbewijs van een operator. Vindt
+        // de reflectie die twee, dan kijkt hij naar het juiste.
+        Assert.Contains(typeof(CustomerScope), Alle);
+        Assert.Contains(typeof(PortalWriteScope), Alle);
+
+        Assert.True(
+            Alle.Count >= 5,
+            "Er zijn minder dan vijf scopetypen gevonden in Soratus.Portal.Security. Fase 2 heeft " +
+            "er vijf: CustomerScope, CustomerWriteScope, OperatorCustomerScope, OperatorScope en " +
+            "PortalWriteScope. Zijn er typen weggevallen uit de opsomming, dan controleren de " +
+            "tests hieronder minder dan ze beweren. Gevonden: " +
+            string.Join(", ", Alle.Select(t => t.Name)));
+    }
 
     /// <summary>
     /// Het enige bestand dat een scope mag maken, ten opzichte van de projectmap.
@@ -95,9 +160,7 @@ public class ScopeConstructieTests
     // ── De broncode ─────────────────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("CustomerScope")]
-    [InlineData("OperatorScope")]
-    [InlineData("OperatorCustomerScope")]
+    [MemberData(nameof(Scopenamen))]
     public void EenScopeWordtInHetHelePortaalMaarOpEenPlekGemaakt(string scopetype)
     {
         // internal dekt de hele assembly. Vandaag roept alleen de resolver de constructor aan; de
@@ -137,13 +200,15 @@ public class ScopeConstructieTests
     }
 
     [Theory]
-    [InlineData("CustomerScope")]
-    [InlineData("OperatorScope")]
-    [InlineData("OperatorCustomerScope")]
+    [MemberData(nameof(Scopenamen))]
     public void DeResolverMaaktDeScopeOokDaadwerkelijk(string scopetype)
     {
         // Zonder deze tegenhanger blijft de test hierboven groen als iemand de constructie
-        // helemaal weghaalt — of als het zoekpatroon nergens meer op past.
+        // helemaal weghaalt — of als het zoekpatroon nergens meer op past. Dat is niet theoretisch:
+        // een scopetype dat door niemand wordt gemaakt is een recht dat niet aan te vragen is, en
+        // dan staat het scherm eromheen stil zonder dat de zichtbaarheidstests iets merken. Dit is
+        // ook de spiegel van de klanttest bij de schrijfgrens: de operator moet het bewijs wél
+        // kunnen krijgen, anders is de functie stuk terwijl de grens klopt.
         var pad = Path.Combine(Broncode.Portaalproject.FullName, EnigeToegestaneBestand);
         var inhoud = File.ReadAllText(pad);
 

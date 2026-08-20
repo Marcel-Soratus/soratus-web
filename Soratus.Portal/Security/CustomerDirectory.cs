@@ -145,16 +145,30 @@ internal sealed class CustomerDirectory : ICustomerDirectory
     /// </summary>
     /// <param name="customers">De klantdocumenten.</param>
     /// <param name="access">Alle toegangsdocumenten, van alle klanten.</param>
+    /// <returns>
+    /// <c>true</c> als de momentopname is vervangen, <c>false</c> als de lezing niets opleverde
+    /// terwijl er nog een lijst stond. Zie de opmerkingen.
+    /// </returns>
     /// <remarks>
     /// <para>Eén veldtoewijzing, dus geen enkele lezer ziet een halve lijst. Wie <see cref="All"/>
     /// leest terwijl deze methode loopt, krijgt de oude of de nieuwe momentopname en nooit een
     /// mengeling.</para>
     ///
+    /// <para><strong>Een lezing die niets oplevert vervangt niets.</strong> Nul klanten is niet
+    /// hetzelfde als een lijst zonder klanten: het is wat je krijgt bij een verse container waarin
+    /// de migratie nog niet heeft gelopen, of niet kón lopen omdat het schrijfrecht nog niet stond.
+    /// Zou de lege uitkomst de lijst vervangen, dan kent het portaal daarna niemand meer — ook niet
+    /// de operator die het zou moeten repareren — en dat is precies de toestand die de terugval op de
+    /// configuratielijst hoort te voorkomen. De asymmetrie is bewust: van <em>n</em> naar nul is geen
+    /// beheeractie die dit portaal kent (een klant verwijderen bestaat niet), terwijl een lege lezing
+    /// een alledaagse inrichtingstoestand is. Van <em>n</em> naar <em>m</em> gaat gewoon door, ook
+    /// omlaag.</para>
+    ///
     /// <para><c>internal</c> en niet op <see cref="ICustomerDirectory"/>: die interface is publiek,
     /// en een publieke methode waarmee je de autorisatiebron kunt vervangen is een achterdeur.
     /// </para>
     /// </remarks>
-    internal void Replace(
+    internal bool Replace(
         IReadOnlyList<CustomerDocument> customers,
         IReadOnlyList<AccessDocument> access)
     {
@@ -205,7 +219,13 @@ internal sealed class CustomerDirectory : ICustomerDirectory
             records.Add(record);
         }
 
+        if (records.Count == 0 && _snapshot.All.Count > 0)
+        {
+            return false;
+        }
+
         _snapshot = Snapshot.From(records, fromStore: true);
+        return true;
     }
 
     /// <summary>

@@ -118,6 +118,19 @@ public sealed record CustomerContractView
     public required bool IsInternal { get; init; }
 
     /// <summary>
+    /// Korte omgevingsaanduiding, bijvoorbeeld <c>West-Europa</c>.
+    /// </summary>
+    /// <remarks>
+    /// Staat wél op de klantweergave, en dat is geen inconsistentie met
+    /// <see cref="EnvironmentDetail"/> op het operatortype. §2 maakt infrastructuur<em>details</em>
+    /// operator-only; de korte aanduiding is volgens fase 0 juist "het enige omgevingsveld dat een
+    /// klant te zien krijgt", en <see cref="CustomerAgentsView"/> draagt hem om dezelfde reden. De
+    /// grens loopt tussen "in welke regio staat mijn omgeving" en "in welke subscription en resource
+    /// group".
+    /// </remarks>
+    public string? Environment { get; init; }
+
+    /// <summary>
     /// Of er een contract is vastgelegd.
     /// </summary>
     /// <remarks>
