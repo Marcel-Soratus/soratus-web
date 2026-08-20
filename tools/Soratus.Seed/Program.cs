@@ -27,8 +27,12 @@ try
         return 0;
     }
 
-    // Bewaakt dat dit gereedschap tijden nog steeds als UTC met vaste breedte wegschrijft. Dat de
-    // vorm gelijk is aan die van de bibliotheek is een meting in de database, geen assertie hier.
+    // Bewaakt dat dit gereedschap tijden nog steeds als UTC met vaste breedte wegschrijft, op
+    // precies de opties die even later aan de Cosmos-SDK gaan. Hier stond dat "de vorm gelijk is aan
+    // die van de bibliotheek een meting in de database is, geen assertie hier". Dat gold zolang dit
+    // gereedschap een eigen kopie van de converter had; sinds de reparatie van de schrijfkant van
+    // het portaal is er één implementatie in TimestampNormalization en is gelijkheid geen meting
+    // meer maar een eigenschap van de code. Zie punt 25 van de fase-0-afwijkingen.
     SeedJson.AssertCanonicalUtc();
 
     // En dat de gedeelde knipregel op msg nog doet wat hij belooft. Die staat in het contract en

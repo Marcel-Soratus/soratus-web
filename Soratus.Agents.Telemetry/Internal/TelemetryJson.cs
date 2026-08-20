@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Soratus.Agents.Contracts;
 
 namespace Soratus.Agents.Telemetry.Internal;
@@ -20,15 +18,16 @@ namespace Soratus.Agents.Telemetry.Internal;
 /// vaste lengte. Dan is lexicografisch sorteren gelijk aan chronologisch sorteren. Dit wordt
 /// niet per aanroepplek geregeld maar in de serializer, want een <c>.ToUniversalTime()</c> op
 /// twintig plekken is er negentien te veel om te vergeten.
+///
+/// De converter en het formaat staan sinds de reparatie van de schrijfkant van het portaal in
+/// <see cref="TimestampNormalization"/>, in het contractproject. Ze golden namelijk al voor drie
+/// schrijvers — deze bibliotheek, het seed-gereedschap en het portaal — en van die drie had het
+/// portaal ze niet en had het seed-gereedschap een eigen kopie. Dezelfde afweging als bij
+/// <see cref="MessageTruncation"/>: een regel die op meer dan één plek moet gelden hoort één
+/// implementatie te hebben.
 /// </remarks>
 internal static class TelemetryJson
 {
-    /// <summary>
-    /// Vaste breedte, altijd UTC, altijd zeven decimalen. Verander dit formaat niet zonder de
-    /// sortering in het portaal opnieuw te beoordelen.
-    /// </summary>
-    internal const string UtcFormat = "yyyy-MM-ddTHH:mm:ss.fffffff'Z'";
-
     private static readonly Lazy<JsonSerializerOptions> LazyOptions = new(() =>
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -36,8 +35,7 @@ internal static class TelemetryJson
             WriteIndented = false,
         };
 
-        options.Converters.Add(new UtcDateTimeOffsetConverter());
-        options.Converters.Add(new UtcDateTimeConverter());
+        TimestampNormalization.Register(options);
         return options;
     });
 
@@ -49,13 +47,22 @@ internal static class TelemetryJson
     /// </summary>
     /// <remarks>
     /// Een assertie en geen test, omdat een test in een ander project staat en dus overgeslagen
-    /// kan worden. Dit loopt bij elke start van elke agent, kost één serialisatie, en werpt
+    /// kan worden. Dit loopt bij elke start van elke agent, kost een handvol serialisaties, en werpt
     /// meteen als iemand ooit een eigen <c>JsonSerializerOptions</c> doorgeeft of deze converter
     /// weghaalt. Zo kan de sorteerfout niet terugkomen zonder dat het opvalt.
+    ///
+    /// De vormcontrole zelf staat in <see cref="TimestampNormalization.AssertCanonical"/> en geldt
+    /// voor alle schrijvers. Wat hier bovenop komt is de proef op het echte contracttype, en dat is
+    /// geen dubbelop: een <c>[JsonConverter]</c> op een property gaat vóór een converter in de
+    /// opties, en een tijdveld dat als <c>string</c> in het contract belandt gaat langs de
+    /// normalisatie heen. Geen van beide is aan de opties te zien.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Als een tijd niet als UTC wordt geschreven.</exception>
     internal static void AssertCanonicalUtc()
     {
+        // Eerst de gedeelde vormcontrole op precies de opties waarmee geschreven wordt.
+        TimestampNormalization.AssertCanonical(SerializerOptions);
+
         // Bewust het echte contracttype en bewust precies de vormen uit het foute document: een
         // hartslag in UTC met zeven decimalen naast een nextRunAt in +02:00 zonder decimalen.
         var probe = new AgentRegistration
@@ -82,12 +89,15 @@ internal static class TelemetryJson
 
             // Vaste lengte én afsluitende Z: alleen dan is lexicografisch sorteren in Cosmos
             // hetzelfde als chronologisch sorteren.
-            if (value.Length != 28 || !value.EndsWith('Z') || value[10] != 'T' || value[19] != '.')
+            if (value.Length != TimestampNormalization.Width
+                || !value.EndsWith('Z')
+                || value[10] != 'T'
+                || value[19] != '.')
             {
                 throw new InvalidOperationException(
                     "De telemetrieserialisatie normaliseert tijden niet meer naar UTC met vaste precisie. " +
                     $"Daarmee sorteren de logtabel en de runlijst in het portaal stil verkeerd. Veld '{field}' " +
-                    $"werd '{value}', verwacht was de vorm '{UtcFormat}'.");
+                    $"werd '{value}', verwacht was de vorm '{TimestampNormalization.UtcFormat}'.");
             }
         }
 
@@ -97,37 +107,5 @@ internal static class TelemetryJson
             throw new InvalidOperationException(
                 "De telemetrieserialisatie rekent een tijd met offset verkeerd om naar UTC.");
         }
-    }
-
-    /// <summary>
-    /// Schrijft elke <c>DateTimeOffset</c> als UTC in <see cref="UtcFormat"/>, ongeacht de
-    /// offset waarin hij is aangeleverd.
-    /// </summary>
-    private sealed class UtcDateTimeOffsetConverter : JsonConverter<DateTimeOffset>
-    {
-        public override DateTimeOffset Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-            DateTimeOffset.Parse(
-                reader.GetString() ?? string.Empty,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
-
-        public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value.ToUniversalTime().ToString(UtcFormat, CultureInfo.InvariantCulture));
-    }
-
-    /// <summary>
-    /// Hetzelfde voor <c>DateTime</c>. Die komt niet in het contract voor, maar wel in de
-    /// structured-logging-state die een agent meestuurt, en daar moet dezelfde vorm gelden.
-    /// </summary>
-    private sealed class UtcDateTimeConverter : JsonConverter<DateTime>
-    {
-        public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-            DateTime.Parse(
-                reader.GetString() ?? string.Empty,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
-
-        public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value.ToUniversalTime().ToString(UtcFormat, CultureInfo.InvariantCulture));
     }
 }
