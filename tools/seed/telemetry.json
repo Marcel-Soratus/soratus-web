@@ -326,9 +326,9 @@
           ],
           "logs": [
             { "at": "-5h21m", "level": "info", "event": "run.completed", "msg": "Run afgerond — kosten van 7 resource groups opgehaald", "runId": "r-0b44e910", "extra": { "durationMs": 47600, "resourceGroups": 7, "month": "2026-08" } },
-            { "at": "-5h21m30s", "level": "info", "event": "cost.collected", "msg": "Kosten rg-soratus-vitaal opgehaald: € 900,61 tot nu toe deze maand", "runId": "r-0b44e910", "extra": { "resourceGroup": "rg-soratus-vitaal", "amount": 900.61, "currency": "EUR" } },
+            { "at": "-5h21m30s", "level": "info", "event": "cost.collected", "msg": "Kosten van Coöperatie Vitaal opgehaald: € 900,61 tot nu toe deze maand", "runId": "r-0b44e910", "extra": { "resourceGroup": "rg-soratus-vitaal", "amount": 900.61, "currency": "EUR" } },
             { "at": "-5h22m", "level": "info", "event": "run.started", "msg": "Run gestart — kosten per resource group", "runId": "r-0b44e910", "extra": { "trigger": "timer", "month": "2026-08" } },
-            { "at": "-53h20m", "level": "warn", "event": "api.retry", "msg": "Cost Management gaf 429 op rg-soratus-bakker, opnieuw geprobeerd na 4000 ms", "runId": "r-0b42ac35", "extra": { "attempt": 3, "backoffMs": 4000, "resourceGroup": "rg-soratus-bakker" } },
+            { "at": "-53h20m", "level": "warn", "event": "api.retry", "msg": "Cost Management gaf 429 bij Bakker Logistiek, opnieuw geprobeerd na 4000 ms", "runId": "r-0b42ac35", "extra": { "attempt": 3, "backoffMs": 4000, "resourceGroup": "rg-soratus-bakker" } },
             { "at": "-2h", "level": "info", "event": "heartbeat", "msg": "Container gezond", "extra": { "uptimeSec": 1953000, "memMb": 174 } }
           ]
         },

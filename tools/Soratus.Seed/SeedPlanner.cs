@@ -167,10 +167,50 @@ internal static class SeedPlanner
                 RolledBack = run.RolledBack,
                 Trigger = run.Trigger,
                 ErrorType = run.ErrorType,
-                ErrorMessage = run.ErrorMessage,
+                ErrorMessage = ErrorMessageOf(run, where),
                 Version = agent.Version,
             };
         }
+    }
+
+    /// <summary>
+    /// De foutmelding van een run, met dezelfde eis erop als op een logbericht: één regel.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="RunRecord.ErrorMessage"/> is klantzichtbaar — het portaal draagt hem op de
+    /// runrij en er is geen operator/klant-splitsing op runs zoals er wel één op logregels is. Er is
+    /// dus geen vangnet: wat hier in gaat, leest de klant. De bibliotheek knipt daarom ook dit veld
+    /// en niet alleen <c>msg</c>, en dit gereedschap schrijft runs zelf, dus zonder deze regel zou
+    /// de seed opnieuw het ene document met een halve pagina diagnostiek erin zijn.</para>
+    ///
+    /// <para><strong>En hier weigeren we in plaats van te knippen.</strong> Dat is een ander besluit
+    /// dan bij <c>msg</c>, met een reden. Bij de bibliotheek moet de knip zacht landen: een agent in
+    /// productie mag niet omvallen over de vorm van een foutmelding, en de volledige tekst blijft
+    /// daar bewaard in de bijbehorende <c>run.failed</c>-logregel onder <c>extra</c>. Hier is geen van
+    /// beide waar. Een <see cref="RunRecord"/> heeft geen veld voor vrije JSON, dus knippen zou de
+    /// rest wég gooien in plaats van verplaatsen — en de bron is een bestand dat een mens onderhoudt,
+    /// dus de goedkoopste plek om het op te lossen is dat bestand. Stil afkappen zou de auteur
+    /// nooit vertellen dat zijn tekst half in de database staat.</para>
+    /// </remarks>
+    private static string? ErrorMessageOf(SeedRun run, string where)
+    {
+        if (string.IsNullOrEmpty(run.ErrorMessage))
+        {
+            return run.ErrorMessage;
+        }
+
+        var (message, overflow) = MessageTruncation.Cut(run.ErrorMessage);
+
+        if (overflow is not null)
+        {
+            throw new SeedManifestException(
+                $"{where}: errorMessage bestaat uit meer dan één regel. Dat veld is klantzichtbaar en " +
+                "een RunRecord heeft geen extra om de rest in te bewaren, dus er valt hier niets te " +
+                "verplaatsen. Kort de melding in tot één zin en zet de techniek in de extra van de " +
+                "bijbehorende run.failed-logregel.");
+        }
+
+        return message;
     }
 
     private static IEnumerable<LogRecord> BuildLogs(SeedCustomer customer, SeedAgent agent, DateTimeOffset now)

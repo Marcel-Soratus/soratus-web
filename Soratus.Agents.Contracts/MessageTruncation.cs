@@ -137,6 +137,38 @@ public static class MessageTruncation
     }
 
     /// <summary>
+    /// Kort een waarde in tot <paramref name="maxLength"/> tekens, op een grafeemgrens, met
+    /// <see cref="Marker"/> erachter als er iets af is.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dit is niet <see cref="Cut"/>. Die knipt op de eerste regelovergang, want een bericht
+    /// hoort één zin te zijn. Deze bewaart regelovergangen juist: hij is bedoeld voor waarden die
+    /// mógen doorlopen — de overloop van een geknipt bericht, of een te grote context — en alleen
+    /// in een document moeten passen. Maak die twee niet "consistent" met elkaar; ze hebben een
+    /// verschillende opdracht.</para>
+    ///
+    /// <para>De grens ligt in de praktijk zo hoog dat hij bijna nooit afgaat, en dat is precies
+    /// waarom de knip hier op een grafeemgrens moet. Een halve surrogaat dwingt de serializer een
+    /// vervangingsteken te schrijven, en dan staat er iets anders dan er stond — in het veld dat de
+    /// stacktrace moet bewaren. "Dat komt nooit voor" is in dit werk vier keer onjuist gebleken.
+    /// </para>
+    /// </remarks>
+    public static string Shorten(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+        {
+            return value ?? string.Empty;
+        }
+
+        if (maxLength <= Marker.Length)
+        {
+            return value[..SafeCutIndex(value, maxLength)];
+        }
+
+        return value[..SafeCutIndex(value, maxLength - Marker.Length)] + Marker;
+    }
+
+    /// <summary>
     /// Geeft de grootste knipplek die binnen <paramref name="budget"/> past en op een grafeemgrens
     /// ligt.
     /// </summary>

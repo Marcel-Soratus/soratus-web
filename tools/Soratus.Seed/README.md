@@ -27,6 +27,26 @@ Daarom schrijft dit gereedschap ook geen zelfgemaakte JSON. Het bouwt `AgentRegi
 met dezelfde opties als de telemetriebibliotheek. Loopt het contract, dan loopt dit mee — of het
 compileert niet meer, en dat is precies de bedoeling.
 
+**"Dezelfde documentvorm" is gemeten, niet aangenomen.** De veldverzamelingen van de geseede
+documenten zijn in alle drie de containers naast die van `heartbeat-demo` gelegd — de agent die zijn
+telemetrie wél via de bibliotheek schrijft:
+
+| Container | Bibliotheek | Seed | Alleen bij één van de twee | Tijdvorm |
+|---|---|---|---|---|
+| `agents` | 1 doc | 19 docs | geen | 28 tekens, sluit op `Z` |
+| `runs` | 10 docs | 105 docs | geen | 28 tekens, sluit op `Z` |
+| `logs` | 98 docs | 121 docs | geen | 28 tekens, sluit op `Z` |
+
+Geen enkel veld dat de één heeft en de ander niet, en dezelfde vaste tijdvorm aan beide kanten. De
+enige verschillen die de vergelijking oplevert zijn velden die het contract als nullable bedoelt en
+waar de ene kant toevallig een `null` heeft en de andere niet — `nextRunAt` bij een agent zonder
+schema, `finishedAt` en `durationMs` bij de lopende run. Dat is het contract dat wordt uitgeoefend,
+geen vormverschil.
+
+Herhaal die meting als het contract of de serialisatie aan één van beide kanten verbouwd wordt. De
+assertie bij het opstarten dekt dit **niet**: die toetst deze kopie tegen een vastgelegde vorm en
+zou groen blijven als de bibliotheek verschuift. Zie de opmerking bij `SeedJson`.
+
 ## Draaien
 
 Inloggen met een account dat `Cosmos DB Built-in Data Contributor` heeft op
@@ -103,6 +123,15 @@ dat een klant wél ziet — `extra` is operator-only, `msg` niet. Bronpaden, end
 horen dus in `extra`. Bij elke run meldt de uitvoer hoeveel berichten er zijn geknipt en hoe lang
 het langste bericht is; blijft er na de knip toch een regelovergang staan, dan stopt hij en schrijft
 niets weg.
+
+**`errorMessage` op een run is óók één regel, en daar weigert de seeder.** Dat veld is net zo
+klantzichtbaar als `msg` — het portaal draagt het op de runrij en er is op runs géén
+operator/klant-splitsing zoals op logregels — maar een `RunRecord` heeft geen `extra` om een
+overloop in te bewaren. Knippen zou de rest dus weggooien in plaats van verplaatsen. Staat er een
+meerregelige `errorMessage` in het bestand, dan stopt de seeder met de naam van de run erbij en
+schrijft niets weg; kort de melding in tot één zin en zet de techniek in de `extra` van de
+bijbehorende `run.failed`-logregel. Dat is bewust een ander besluit dan in de bibliotheek, die daar
+zacht moet landen omdat een agent in productie niet mag omvallen over de vorm van een foutmelding.
 
 **Er zijn twee fixtures voor de logtabel, en ze hebben elk een eigen rol.** Bij
 `bakker-voorraad-sync`:

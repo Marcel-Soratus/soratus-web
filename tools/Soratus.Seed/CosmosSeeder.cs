@@ -83,20 +83,20 @@ internal sealed class CosmosSeeder(SeedSettings settings, TokenCredential creden
         // Wat er na deze seed hoort te staan. Alles daarbuiten — met een agentnaam uit het bestand —
         // is van een eerdere seed en moet weg, anders stapelen runs en logregels zich op bij elke
         // keer draaien en klopt de eindtoestand niet meer met het bestand.
-        var keep = new HashSet<string>(StringComparer.Ordinal);
+        var keep = new HashSet<DocumentKey>();
         foreach (var agent in plan.Agents)
         {
-            keep.Add(Key(settings.AgentsContainer, agent.Id, agent.PartitionKey));
+            keep.Add(new DocumentKey(settings.AgentsContainer, agent.PartitionKey, agent.Id));
         }
 
         foreach (var run in plan.Runs)
         {
-            keep.Add(Key(settings.RunsContainer, run.Id, run.PartitionKey));
+            keep.Add(new DocumentKey(settings.RunsContainer, run.PartitionKey, run.Id));
         }
 
         foreach (var log in plan.Logs)
         {
-            keep.Add(Key(settings.LogsContainer, log.Id, log.PartitionKey));
+            keep.Add(new DocumentKey(settings.LogsContainer, log.PartitionKey, log.Id));
         }
 
         var stale = new List<(Container Container, string Name, IReadOnlyList<DocumentRef> Documents)>
@@ -244,11 +244,11 @@ internal sealed class CosmosSeeder(SeedSettings settings, TokenCredential creden
     private static IReadOnlyList<DocumentRef> Filter(
         IReadOnlyList<DocumentRef> existing,
         string container,
-        HashSet<string> keep) =>
-        [.. existing.Where(document => !keep.Contains(Key(container, document.Id, document.PartitionKey)))];
-
-    private static string Key(string container, string id, string partitionKey) =>
-        $"{container} {partitionKey} {id}";
+        HashSet<DocumentKey> keep) =>
+    [
+        .. existing.Where(document =>
+            !keep.Contains(new DocumentKey(container, document.PartitionKey, document.Id)))
+    ];
 
     private async Task<IReadOnlyList<DocumentRef>> ExistingAsync(
         Container container,
@@ -397,6 +397,22 @@ internal sealed class CosmosSeeder(SeedSettings settings, TokenCredential creden
 
     /// <inheritdoc />
     public void Dispose() => _client.Dispose();
+
+    /// <summary>
+    /// Eén document, uniek aangeduid met de container, de partitiesleutel en de id.
+    /// </summary>
+    /// <param name="Container">De containernaam.</param>
+    /// <param name="PartitionKey">De partitiesleutel.</param>
+    /// <param name="Id">De documentsleutel.</param>
+    /// <remarks>
+    /// Bewust een record en geen samengestelde string. De vorige versie plakte de drie delen met een
+    /// scheidingsteken aan elkaar, en dan moet je een teken kiezen dat in geen van de drie kan
+    /// voorkomen — een spatie kan dat niet garanderen en <c>|</c> zit al ín elke partitiesleutel
+    /// (<c>agentnaam|dag</c>). Met drie losse velden bestaat die vraag niet. Een record struct geeft
+    /// bovendien gratis de juiste <c>Equals</c> en <c>GetHashCode</c> voor gebruik in een
+    /// <see cref="HashSet{T}"/>.
+    /// </remarks>
+    private readonly record struct DocumentKey(string Container, string PartitionKey, string Id);
 
     /// <summary>Genoeg van een document om het te kunnen verwijderen.</summary>
     private sealed record DocumentRef(string Id, string Pk, string? AgentName)
