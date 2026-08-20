@@ -2,6 +2,36 @@
 
 Werkdocument om verder mee te gaan. Vervangbaar; dit is geen ontwerpdocument.
 
+## Waar het werk stond aan het eind van 20 augustus
+
+Fase 0 tot en met 3 staan op `main` en zijn uitgerold. 1067 tests groen over vier
+projecten (868 portaal, 92 MCP, 75 contractregels, 32 site), nul waarschuwingen op een
+volledige rebuild.
+
+**Waar je morgen mee begint, in deze volgorde:**
+
+1. **Het portaalendpoint voor urenboekingen.** De MCP-server is af en getest maar kan
+   nergens naartoe schrijven. Wat er moet komen staat verderop onder "Wat de MCP-server
+   nog nodig heeft van het portaal" — endpoint, bearer-tokenvalidatie naast de
+   browsersessie, categorievalidatie, en een eigen public client in Entra.
+2. **`GenerateDocumentationFile` vastzetten.** Zie het besluit verderop. Meet eerst de
+   projecten die nog nooit met die vlag zijn gemeten; daarna omzetten. De sequentie is
+   het hele punt.
+3. **Fase 4a**: kosten, opslag, uren boven bundel en het maandoverzicht mailen. 4b
+   (SnelStart) wacht op de aanvraag — zet die in, want de doorlooptijd is weken.
+
+**Twee losse bestanden in de werkboom, bewust niet gecommit.** `fix-date2.py` in de
+repo-root is een wegwerpscript van een afgebroken sessie en kan weg. `tools/mutatie.py`
+is een mutatietest-hulpmiddel dat waarde heeft — dat vraagt een blik voordat het meegaat,
+want het is niet gereviewd.
+
+**De tijdstempelmigratie is uitgevoerd.** Alle acht documenten in `platform/customers`
+staan nu in de canonieke vorm; teruggemeten op nul afwijkingen, en de documenten zijn
+volledig gecontroleerd (alle velden aanwezig, `changedAt` nog `null` — de migratie heeft
+geen wijzigingsspoor verzonnen). Het verbod op `ORDER BY c.createdAt` blijft staan: dat
+rust nu niet meer op de tijdvorm maar op de tie-break, want bij een gelijk moment moet de
+sleutel de volgorde bepalen en dat kan een `ORDER BY` op één veld niet.
+
 ## Fase 0 is af en werkt
 
 Van eind tot eind bewezen op productie: aanmelden via Entra ID, rol herkend, echte
