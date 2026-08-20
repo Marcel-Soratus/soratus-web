@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -23,17 +24,25 @@ builder.Services
 // Microsoft.Identity.Web zelf instelt. Anders hangt het gedrag af van registratievolgorde.
 builder.Services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
 {
-    // Zet het mappen van inkomende claims uit. Dat mappen is een erfenis van WIF: het doopt
-    // JWT-claims om naar lange schema-URI's, waarbij `roles` bijvoorbeeld
-    // `http://schemas.microsoft.com/ws/2008/06/identity/claims/role` wordt. Met dat mappen aan
-    // én RoleClaimType op "roles" zoekt IsInRole naar een claimnaam die na het omdopen niet
-    // meer bestaat, en dan is elk rolbeleid stil dicht in plaats van luidruchtig kapot.
+    // Inkomende claims worden gemapt naar de lange WIF-schema-URI's, en dat is niet uit te
+    // zetten via OpenIdConnectOptions.MapInboundClaims: Microsoft.Identity.Web zet zijn eigen
+    // tokenhandler, waardoor die instelling geen effect heeft. Gemeten op een echt token uit
+    // deze tenant kwamen deze claimnamen aan:
     //
-    // Uit betekent: claims heten precies wat Entra ze noemt. Dat is deterministisch, en het
-    // maakt de twee regels hieronder waar in plaats van afhankelijk van een mappingtabel.
-    options.MapInboundClaims = false;
-
-    options.TokenValidationParameters.RoleClaimType = ClaimConstants.Roles;
+    //   aio · name · preferred_username · rh · sid · uti
+    //   http://schemas.microsoft.com/identity/claims/objectidentifier
+    //   http://schemas.microsoft.com/identity/claims/tenantid
+    //   http://schemas.microsoft.com/ws/2008/06/identity/claims/role
+    //   http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier
+    //
+    // De rol komt dus binnen als ClaimTypes.Role, niet als "roles". Stond RoleClaimType op
+    // "roles", dan zocht IsInRole naar een naam die na het mappen niet bestaat — en dan staat
+    // elk rolbeleid stil dicht in plaats van luidruchtig kapot. Dat is precies wat er gebeurde.
+    //
+    // Deze regel staat er expliciet, ook al is het de standaardwaarde: stopt een toekomstige
+    // versie met mappen, dan hoort dit hier aangepast te worden op basis van een nieuwe meting
+    // en niet stilzwijgend te verschuiven.
+    options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
     options.TokenValidationParameters.NameClaimType = "name";
 });
 

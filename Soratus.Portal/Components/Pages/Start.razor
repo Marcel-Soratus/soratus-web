@@ -1,7 +1,5 @@
 @page "/"
 @attribute [Authorize]
-@* TIJDELIJK, hoort bij de roldiagnose onderaan deze pagina. *@
-@using Microsoft.Identity.Web
 
 @* De landingsroute. Toont in het normale geval niets: hij stuurt door.
 
@@ -82,19 +80,6 @@ else if (_choices is { Count: 0 })
             Klopt dit niet, neem dan contact op met Soratus en geef het e-mailadres door waarmee
             u bent aangemeld.
         </p>
-
-        @* TIJDELIJK — diagnose van de rolclaims, weg zodra bevestigd is dat de rol aankomt.
-           Deze pagina is alleen bereikbaar voor iemand die is aangemeld, en toont uitsluitend
-           zijn eigen claimnamen. Reden dat dit er staat: met MapInboundClaims aan werden
-           claims omgedoopt naar schema-URI's en vond IsInRole de rol niet. Dit maakt zichtbaar
-           welke namen er werkelijk aankomen in plaats van dat we het aannemen. *@
-        @if (_claimDiagnose is { Count: > 0 })
-        {
-            <p class="meta">
-                <strong>Diagnose (tijdelijk).</strong> Claimnamen op dit token:
-                <span class="mono">@string.Join(" · ", _claimDiagnose)</span>
-            </p>
-        }
     </EmptyState>
 }
 
@@ -139,21 +124,5 @@ else if (_choices is { Count: 0 })
         _choices = own;
         _title = own.Count == 0 ? "Nog geen omgeving" : "Kies een omgeving";
         _who = user.Identity?.Name;
-
-        // TIJDELIJK, zie de opmerking in de markup. Alleen de claimnámen, met de waarde van de
-        // rolclaim erbij — die is geen geheim en juist het punt van de diagnose.
-        if (own.Count == 0)
-        {
-            _claimDiagnose =
-            [
-                .. user.Claims
-                    .Select(c => c.Type == ClaimConstants.Roles ? $"{c.Type}={c.Value}" : c.Type)
-                    .Distinct()
-                    .OrderBy(t => t, StringComparer.Ordinal)
-            ];
-        }
     }
-
-    /// <summary>TIJDELIJK — de claimnamen op het huidige token, voor de roldiagnose.</summary>
-    private IReadOnlyList<string>? _claimDiagnose;
 }
