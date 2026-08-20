@@ -40,12 +40,13 @@ internal sealed class LogRecordFactory(AgentIdentity identity, IOptions<SoratusT
 
         if (overflow is not null)
         {
+            // Shorten en niet overflow[..max]: de overloop mag meerregelig zijn, maar een ruwe
+            // slice zou een surrogaatpaar kunnen halveren — precies de fout waar de knip zelf
+            // tegen beschermt, hier opnieuw geïntroduceerd op de plek die hem begrenst.
             extra = ExtraJson.WithField(
                 extra,
                 MessageTruncation.OverflowKey,
-                overflow.Length <= _options.MaxExtraLength
-                    ? overflow
-                    : overflow[.._options.MaxExtraLength]);
+                MessageTruncation.Shorten(overflow, _options.MaxExtraLength));
         }
 
         return new LogRecord

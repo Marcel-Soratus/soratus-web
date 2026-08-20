@@ -24,7 +24,16 @@ namespace Soratus.Agents.Telemetry.Tests;
 /// </remarks>
 public class MsgKnipTests
 {
-    private const int Grens = 8_000;
+    /// <summary>
+    /// De grens waarmee getest wordt is de echte standaardwaarde, niet een kopie ervan.
+    /// </summary>
+    /// <remarks>
+    /// Hier stond <c>8_000</c>. Dat leest hetzelfde en test iets anders: zou iemand
+    /// <see cref="MessageTruncation.DefaultMaxLength"/> wijzigen, dan bleef deze suite de oude
+    /// grens uitoefenen en groen staan, terwijl de bibliotheek zich anders gedraagt. Een test die
+    /// zijn invoer hardcodeert, meet niet meer waar hij over beweert.
+    /// </remarks>
+    private const int Grens = MessageTruncation.DefaultMaxLength;
 
     private const string Frame =
         "   at Soratus.Sync.Validators.StockLineValidator.Validate(StockLine line) in /src/Sync/StockLineValidator.cs:line 42";
@@ -131,7 +140,7 @@ public class MsgKnipTests
         // Elke noot is twee UTF-16-tekens. Een knip op een oneven plek laat een losse surrogaat
         // achter; dat is ongeldige UTF-16 en breekt de serialisatie of de weergave. Dit defect is
         // aan de weergavekant al één keer echt aangetroffen, in een `message[..400]`.
-        string noten = string.Concat(Enumerable.Repeat("\U0001D11E", 6_000));
+        string noten = string.Concat(Enumerable.Repeat("\U0001D11E", Grens));
 
         (string bericht, string? overloop) = MessageTruncation.Cut(noten, Grens);
 
@@ -147,7 +156,7 @@ public class MsgKnipTests
         // Twee UTF-16-tekens die samen één glyph vormen. Knippen tussen de twee levert een andere
         // letter dan er stond. Met opzet de ontlede vorm: de vooraf samengestelde U+00E9 is één
         // teken en toont niets aan.
-        string accenten = string.Concat(Enumerable.Repeat(OntledeE, 6_000));
+        string accenten = string.Concat(Enumerable.Repeat(OntledeE, Grens));
 
         (string bericht, _) = MessageTruncation.Cut(accenten, Grens);
 
@@ -160,7 +169,7 @@ public class MsgKnipTests
     [Fact]
     public void HoudtHetBerichtBinnenDeHygienegrens()
     {
-        (string bericht, _) = MessageTruncation.Cut(new string('a', 20_000), Grens);
+        (string bericht, _) = MessageTruncation.Cut(new string('a', (Grens * 3) + 1), Grens);
 
         Assert.True(bericht.Length <= Grens, $"bericht was {bericht.Length} tekens");
         Assert.EndsWith(MessageTruncation.Marker, bericht, StringComparison.Ordinal);
@@ -179,6 +188,52 @@ public class MsgKnipTests
 
         Assert.NotNull(overloop);
         Assert.Equal(origineel, bericht[..^MessageTruncation.Marker.Length] + overloop);
+    }
+
+    [Fact]
+    public void ShortenLaatEenTekstBinnenDeGrensOngemoeid()
+    {
+        Assert.Equal("Eerste\nTweede", MessageTruncation.Shorten("Eerste\nTweede", 100));
+    }
+
+    [Fact]
+    public void ShortenBehoudtRegelovergangen()
+    {
+        // Shorten is voor tekst die meerregelig mág zijn — de overloop van Cut is dat geval.
+        string lang = string.Join('\n', Enumerable.Repeat(Frame, 200));
+
+        string kort = MessageTruncation.Shorten(lang, 1_000);
+
+        Assert.True(kort.Length <= 1_000, $"was {kort.Length}");
+        Assert.Contains('\n', kort);
+        Assert.EndsWith(MessageTruncation.Marker, kort, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShortenKniptNietMiddenInEenSurrogaatpaar()
+    {
+        // Dit is de plek waar de begrenzing van de overloop de fout maakte die Cut juist voorkomt:
+        // een ruwe value[..max] halveert hier een noot van twee UTF-16-tekens.
+        string noten = string.Concat(Enumerable.Repeat("\U0001D11E", 2_000));
+
+        string kort = MessageTruncation.Shorten(noten, 501);
+
+        Assert.True(kort.Length <= 501, $"was {kort.Length}");
+        Assert.Equal(
+            OperationStatus.Done,
+            Rune.DecodeLastFromUtf16(kort.AsSpan(0, kort.Length - MessageTruncation.Marker.Length), out _, out _));
+    }
+
+    [Fact]
+    public void ShortenKniptNietMiddenInEenSamengesteldeGlyph()
+    {
+        string accenten = string.Concat(Enumerable.Repeat(OntledeE, 2_000));
+
+        string kop = MessageTruncation.Shorten(accenten, 501)[..^MessageTruncation.Marker.Length];
+
+        Assert.Equal(0, kop.Length % 2);
+        Assert.Equal('e', kop[^2]);
+        Assert.Equal('́', kop[^1]);
     }
 
     [Fact]

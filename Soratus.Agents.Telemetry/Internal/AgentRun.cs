@@ -77,8 +77,18 @@ internal sealed class AgentRun : IAgentRun
     {
         ArgumentNullException.ThrowIfNull(exception);
 
+        // Het volledige typenaam blijft staan. Voor de operator is de naamruimte juist het nuttige
+        // deel — Sync.ValidationException is een ander defect dan Mail.ValidationException — en hier
+        // afkappen zou dat onherstelbaar weggooien. Of dit veld naar de klant geprojecteerd mag
+        // worden is een vraag voor het portaal, niet voor de schrijfkant.
         _errorType = exception.GetType().FullName;
-        _errorMessage = exception.Message;
+
+        // errorMessage is wél klantzichtbaar en krijgt daarom dezelfde knip als msg. Dit is geen
+        // theoretisch geval: de boodschap van een CosmosException is een halve pagina diagnostiek
+        // over meerdere regels, en die zou hier ongefilterd in een klantzichtbaar veld belanden.
+        // Er gaat niets verloren — de volledige boodschap staat hieronder in
+        // extra._exception.message van de run.failed-regel, en die is operator-only.
+        _errorMessage = MessageTruncation.Cut(exception.Message).Message;
 
         // De stacktrace hoort in extra: de operator ziet in het portaal de foutregel van de
         // gefaalde run en moet die kunnen uitklappen zonder eerst Application Insights te openen.
@@ -101,8 +111,15 @@ internal sealed class AgentRun : IAgentRun
 
     public void Fail(string errorType, string errorMessage)
     {
+        // Ook een zelf opgegeven boodschap wordt geknipt. Dat de bouwer hem zelf schreef maakt hem
+        // niet veiliger — hij kan er net zo goed een respons van een externe partij in doorgeven.
+        //
+        // Ook hier gaat niets verloren, maar langs een andere weg dan bij een uitzondering: er is
+        // geen extra._exception, en de rest belandt in extra.msgOverflow van de run.failed-regel
+        // hieronder. Dat werkt omdat die regel de onafgekapte boodschap in zijn tekst draagt en dus
+        // zelf langs de knip op msg gaat.
         _errorType = errorType;
-        _errorMessage = errorMessage;
+        _errorMessage = MessageTruncation.Cut(errorMessage).Message;
 
         _writer.Enqueue(_logs.Create(
             Contracts.LogLevel.Error,

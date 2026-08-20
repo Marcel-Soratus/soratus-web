@@ -70,12 +70,41 @@ Eén document per run, tweemaal geschreven: bij het starten en bij het afronden.
 | `itemsFailed` | int | ja (default 0) | Hoeveel items zijn afgekeurd of mislukt. |
 | `rolledBack` | bool | ja (default false) | Of de transactie is teruggedraaid. |
 | `trigger` | enum | ja | Waardoor deze run startte; zelfde waarden als `triggerKind`. |
-| `errorType` | string | nee | Het .NET-type van de uitzondering, als de run mislukte. |
-| `errorMessage` | string | nee | De boodschap van de uitzondering. |
+| `errorType` | string | nee | Het volledige .NET-type van de uitzondering, als de run mislukte. Zie [de audiëntie van de foutvelden](#wie-leest-de-foutvelden-van-een-run). |
+| `errorMessage` | string | nee | De boodschap van de uitzondering. Eén zin, één regel — **de klant leest dit.** |
 | `version` | string | ja | De agentversie die deze run draaide. Zo is te zien of een fout met een uitrol samenhangt. |
 
 Een run die op `running` blijft staan terwijl de hartslag doorloopt is zelf een signaal: het
 proces leeft, maar de run is nooit afgerond.
+
+#### Wie leest de foutvelden van een run
+
+`errorMessage` en `errorType` staan **op de run en niet in `extra`**, en een run heeft geen
+operator-only variant zoals een logregel die heeft. Ze hebben dus geen vangnet: wat je hier
+schrijft kan op het scherm van de klant komen — het portaal zet het in de tooltip van de
+resultaatbadge.
+
+- **`errorMessage` wordt door de klant gelezen.** Dezelfde eisen als aan `msg`: één zin, in het
+  Nederlands, geen bestandspaden of klassenamen. En dezelfde afdwinging — de bibliotheek knipt
+  alles ná de eerste regelovergang eraf. Dat is geen luxe: `exception.Message` van een
+  `CosmosException` is een halve pagina diagnostiek over meerdere regels. De volledige boodschap
+  blijft bewaard in de bijbehorende `run.failed`-logregel, en die is operator-only: bij een
+  uitzondering onder `extra._exception.message`, en bij een zelf opgegeven boodschap onder
+  `extra.msgOverflow` — want ook de tekst van die logregel gaat langs de knip op `msg`.
+- **`errorType` houdt zijn volledige typenaam**, inclusief naamruimte
+  (`SoratusAgent.Sync.ValidationException`). Dat is opzet en het tegendeel van de regel hierboven,
+  om één reden: voor de operator ís de naamruimte het nuttige deel — `Sync.ValidationException` is
+  een ander defect dan `Mail.ValidationException`, en na inkorten zijn die twee niet meer te
+  onderscheiden. Bij `errorMessage` blijft de volledige tekst elders bewaard, hier niet. Afkappen
+  bij het schrijven zou dus informatie weggooien in plaats van verplaatsen.
+
+Vul je `errorType` zelf via de tweede `Fail`-overload, zet er dan géén naamruimte in — een korte
+aanduiding als `Http502` volstaat, en die is voor beide lezers goed.
+
+> **Open punt.** Of `errorType` naar de klant geprojecteerd mag worden is een vraag voor het
+> portaal en niet voor de schrijfkant. Zolang het klanttype het veld draagt, ziet een klant onze
+> naamruimtestructuur. Gemeten: 7 van 112 runs hebben een `errorType`, alle drie de voorkomende
+> waarden bevatten een naamruimte, en twee ervan staan op documenten van een echte klant.
 
 ### 3. Logregel — `LogRecord`
 
@@ -97,6 +126,53 @@ Eén document per regel. Plat en klein, want dit leest een mens die wil weten of
 `debug` en `trace` horen niet in dit contract. Die zijn voor de ontwikkelaar en gaan naar
 Application Insights. Vijfhonderd debugregels per run maken het portaal niet informatiever maar
 onleesbaar.
+
+**Framework-categorieën komen pas vanaf `warn` door.** Alles onder `Microsoft.*`, `System.*` en
+`Azure.*` wordt op `info` volledig weggefilterd; `warn` en `error` komen wél door. Dezelfde
+redenering als bij debug en trace: op `info` vertelt de bibliotheek dingen over zichzelf, niet over
+het werk van de klant.
+
+Dit is niet theoretisch. Gemeten in de opslag schreef `Microsoft.Hosting.Lifetime` dit in `msg`,
+en `msg` wordt door de klant gelezen:
+
+```
+Content root path: D:\SORATUS\Website\...\bin\Debug\net10.0\
+```
+
+Een absoluut bestandspad, op één regel — dus de knip hierboven helpt er niet tegen. En het komt
+niet van een agentbouwer: het staat er bij élke agent die met een gewone host start.
+
+Dat `Application started` hiermee verdwijnt kost niets. Dat feit staat beter gemodelleerd in het
+registratiedocument, als `startedAt` en `lifecycle`: het portaal toont "draait sinds" daaruit, en
+een herstart geeft een nieuwe `startedAt`. Een feit in een veld verslaat een regel die je moet zien
+langskomen. Hetzelfde geldt voor `Hosting environment`, dat als `environment` in de registratie
+staat.
+
+`warn` en `error` blijven omdat een framework-melding dan over echt gedrag gaat.
+`HttpsRedirectionMiddleware — Failed to determine the https port for redirect` is onschadelijk,
+maar het is een echte melding en een operator hoort hem te kunnen vinden.
+
+De toets is de **categorie**, niet de inhoud van het bericht — met het punt erbij, dus `Azure` en
+`Azure.Identity` vallen eronder en een koppeling die je zelf `AzureKoppeling` noemt niet. Een
+patroon in de tekst zou vandaag op een pad met `D:\` letten en morgen een pad met `/srv/` missen.
+Dit wordt in de bibliotheek afgedwongen en niet met een instelbare logfilter: een contractregel die
+een agent kan uitzetten is geen regel.
+
+**Het is een lijst en geen patroon**, en dat is opzet. Het criterium is niet hoe een categorie
+heet maar wat er logt: een bibliotheek die zijn eigen werking beschrijft. Dat is geen eigenschap
+die je uit een naam kunt aflezen, dus er valt niets te matchen — je moet weten welke bibliotheek
+het is. Een patroon zou bovendien de kant op glijden van "namen die op een framework lijken", en
+dan filtert het de koppeling weg van een agentbouwer die zijn naamruimte ongelukkig heeft gekozen.
+
+Wie er iets bij wil zetten, toetst daarop: **logt deze bibliotheek op `info` over zichzelf** —
+endpoints, paden, versies, interne toestand — in plaats van over het werk van de klant? Zo ja, dan
+hoort hij in de lijst. Is het de naam van een koppeling of een domein, dan niet, hoe technisch hij
+ook klinkt.
+
+`Azure.*` staat erbij omdat `Azure.Identity` op `info` endpoints en tenant-id's noemt. Dat dit in
+`heartbeat-demo` al wegvalt via `"Azure": "Warning"` in `appsettings.json` was juist de reden om
+het hier te zetten en niet daar: dat is per-agent configuratie, en precies wat een volgende
+agentbouwer niet zet en niet hoeft te weten.
 
 #### Wie leest wat: `msg` is voor de klant, `extra` is voor ons
 
@@ -332,7 +408,8 @@ Dit hoef je niet te schrijven; `Soratus.Agents.Telemetry` doet het:
 - `msg` afknippen op de eerste regelovergang en de rest naar `msgOverflow` verhuizen, op elk
   schrijfpad: `AgentEvent`, een gewone `logger.LogInformation(...)`, en de foutboodschap van een
   uitzondering bij een mislukte run
-- `debug` en `trace` uit dit contract houden en naar Application Insights sturen
+- `debug` en `trace` uit dit contract houden en naar Application Insights sturen, en
+  framework-categorieën (`Microsoft.*`, `System.*`) pas vanaf `warn` doorlaten
 
 ## Hoe voldoe ik hieraan
 

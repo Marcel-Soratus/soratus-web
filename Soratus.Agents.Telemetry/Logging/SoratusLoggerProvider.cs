@@ -77,10 +77,44 @@ internal sealed class SoratusLoggerProvider(IServiceProvider services) : ILogger
     private static LogLevel MinimumFor(string category) =>
         IsFramework(category) ? LogLevel.Warning : LogLevel.Information;
 
+    /// <summary>
+    /// De naamruimten van bibliotheken die op <c>info</c> over zichzelf loggen.
+    /// </summary>
+    /// <remarks>
+    /// <para>Een lijst en geen patroon, en dat is opzet. Het criterium is niet hoe een categorie
+    /// heet maar wat er logt: een bibliotheek die zijn eigen werking beschrijft. Dat is geen
+    /// eigenschap die je uit een naam kunt aflezen, dus er valt niets te matchen — je moet weten
+    /// welke bibliotheek het is. Een patroon zou bovendien de kant op glijden van "namen die op een
+    /// framework lijken", en dan filtert het de koppeling van een agentbouwer weg die zijn
+    /// naamruimte ongelukkig heeft gekozen.</para>
+    ///
+    /// <para>Wie hier iets bij wil zetten, toetst daarop: logt deze bibliotheek op <c>info</c> over
+    /// zichzelf — endpoints, paden, versies, interne toestand — in plaats van over het werk van de
+    /// klant? Zo ja, dan hoort hij hier. Is het de naam van een koppeling of een domein, dan niet,
+    /// hoe technisch hij ook klinkt.</para>
+    ///
+    /// <para><c>Azure</c> staat erbij omdat <c>Azure.Identity</c> op <c>info</c> endpoints en
+    /// tenant-id's noemt. Dat het in <c>heartbeat-demo</c> al wegvalt via <c>"Azure": "Warning"</c>
+    /// in <c>appsettings.json</c> was juist de reden om het hier te zetten en niet daar: dat is
+    /// per-agent configuratie, en precies wat een volgende agentbouwer niet zet en niet hoeft te
+    /// weten.</para>
+    /// </remarks>
+    private static readonly string[] FrameworkNamespaces = ["Microsoft", "System", "Azure"];
+
     private static bool IsOwn(string category) => HasPrefix(category, OwnNamespace);
 
-    private static bool IsFramework(string category) =>
-        HasPrefix(category, "Microsoft") || HasPrefix(category, "System");
+    private static bool IsFramework(string category)
+    {
+        foreach (string prefix in FrameworkNamespaces)
+        {
+            if (HasPrefix(category, prefix))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Of <paramref name="category"/> de naamruimte <paramref name="prefix"/> is of erin valt.

@@ -67,7 +67,15 @@ public interface IAgentRun : IAsyncDisposable
     /// Meldt dat deze run is mislukt zonder dat er een uitzondering was, bijvoorbeeld omdat
     /// een externe partij een nette foutcode teruggaf.
     /// </summary>
-    /// <param name="errorType">Korte typeaanduiding, bijvoorbeeld <c>Http502</c>.</param>
-    /// <param name="errorMessage">Eén zin die uitlegt wat er misging.</param>
+    /// <param name="errorType">
+    /// Korte typeaanduiding, bijvoorbeeld <c>Http502</c>. Zet hier geen naamruimte of klassepad in:
+    /// dit veld staat op de run en niet in <c>extra</c>, dus het kan op het scherm van de klant
+    /// terechtkomen.
+    /// </param>
+    /// <param name="errorMessage">
+    /// Eén zin die uitlegt wat er misging, in het Nederlands en leesbaar voor wie de code niet kent
+    /// — dezelfde eisen als aan een logbericht, want dit veld wordt door de klant gelezen. Alles ná
+    /// de eerste regelovergang wordt eraf geknipt.
+    /// </param>
     void Fail(string errorType, string errorMessage);
 }

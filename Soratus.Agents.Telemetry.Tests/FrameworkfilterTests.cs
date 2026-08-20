@@ -36,6 +36,9 @@ public class FrameworkfilterTests
     [InlineData("Microsoft")]
     [InlineData("System.Net.Http.HttpClient")]
     [InlineData("System")]
+    [InlineData("Azure.Identity")]
+    [InlineData("Azure.Core")]
+    [InlineData("Azure")]
     public async Task EenFrameworkcategorieKomtOpInfoNietDoor(string categorie)
     {
         OpvangendeSink sink = await Proefagent.LogAsync(
@@ -78,16 +81,30 @@ public class FrameworkfilterTests
         Assert.Equal("Factuur INV-2291 verwerkt.", Assert.Single(sink.Logs).Message);
     }
 
-    [Fact]
-    public async Task EenAgentcategorieDieOpEenFrameworknaamLijktKomtWelDoor()
+    [Theory]
+    [InlineData("MicrosoftKoppeling.Mailtriage")]
+    [InlineData("AzureKoppeling.Facturen")]
+    [InlineData("SystemenBeheer.Voorraad")]
+    public async Task EenAgentcategorieDieOpEenFrameworknaamLijktKomtWelDoor(string categorie)
     {
         // Het voorvoegsel wordt met het punt erbij getoetst, dus een agentbouwer die zijn koppeling
-        // MicrosoftKoppeling noemt wordt niet per ongeluk het zwijgen opgelegd.
+        // AzureKoppeling noemt wordt niet per ongeluk het zwijgen opgelegd. Het criterium is welke
+        // bibliotheek er logt, niet hoe de naam klinkt.
         OpvangendeSink sink = await Proefagent.LogAsync(
-            "MicrosoftKoppeling.Mailtriage",
+            categorie,
             logger => logger.LogInformation("Twaalf berichten opgehaald."));
 
         Assert.Equal("Twaalf berichten opgehaald.", Assert.Single(sink.Logs).Message);
+    }
+
+    [Fact]
+    public async Task EenAzurecategorieKomtOpWarnWelDoor()
+    {
+        OpvangendeSink sink = await Proefagent.LogAsync(
+            "Azure.Identity",
+            logger => logger.LogWarning("Het vernieuwen van het token is mislukt."));
+
+        Assert.Equal(ContractLogLevel.Warn, Assert.Single(sink.Logs).Level);
     }
 
     [Theory]

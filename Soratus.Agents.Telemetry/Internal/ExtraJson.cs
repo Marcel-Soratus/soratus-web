@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Soratus.Agents.Contracts;
 
 namespace Soratus.Agents.Telemetry.Internal;
 
@@ -234,7 +235,9 @@ internal static class ExtraJson
             {
                 ["_truncated"] = true,
                 ["_originalLength"] = json.Length,
-                ["_preview"] = json[..Math.Min(json.Length, Math.Max(0, maxLength - 200))],
+                // Ook hier op een grafeemgrens: een losse surrogaat zou de serializer dwingen hem
+                // door een vervangingsteken te vervangen, en dan staat er iets anders dan er stond.
+                ["_preview"] = MessageTruncation.Shorten(json, Math.Max(64, maxLength - 200)),
             };
 
             return JsonSerializer.SerializeToElement(truncated, SerializerOptions);
