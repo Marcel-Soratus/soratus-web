@@ -101,13 +101,65 @@ internal sealed class TelemetryWriter : BackgroundService
             "registratie",
             cancellationToken);
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// Of het leegdraaipad gewapend is: staan de pompen, dan heeft <see cref="StopAsync"/> iets om
+    /// op te wachten.
+    /// </summary>
+    /// <remarks>
+    /// <para>Bestaat alleen om te meten, en dat is met opzet. De fout die dit veld blootlegt is
+    /// <em>niet</em> te betrappen met een test op het gedrag: die hangt af van de vraag of de planner
+    /// het lijf van <c>ExecuteAsync</c> heeft laten lopen vóór het afsluiten, en een test die van de
+    /// planner afhangt is flaky. Gemeten: met de reparatie weggehaald bleven alle 82 tests zes runs
+    /// op rij groen op Windows, terwijl dezelfde code op een Linux-runner rood ging.</para>
+    ///
+    /// <para>Wat er dan overblijft is de invariant zelf vastpinnen in plaats van zijn gevolg: als
+    /// <c>StartAsync</c> terugkomt, moet dit waar zijn. Dat is deterministisch, en het gaat rood
+    /// zodra iemand de pompen terugzet in <c>ExecuteAsync</c>.</para>
+    /// </remarks>
+    internal bool DrainPathArmed => _pumps is not null;
+
+    /// <summary>
+    /// Start de pompen, en wel hiér.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Ze stonden in <see cref="ExecuteAsync"/>, en dat verloor telemetrie.</strong>
+    /// Het lijf van <c>ExecuteAsync</c> van een <c>BackgroundService</c> is niet gegarandeerd
+    /// gelopen als <c>StartAsync</c> terugkomt — dat hangt van de planner af. Stopte een host
+    /// binnen dat venster, dan was <c>_pumps</c> nog <c>null</c>, sloeg
+    /// <see cref="StopAsync"/> het leegdraaien over, en was de inhoud van de kanalen weg.</para>
+    ///
+    /// <para>Dat is geen randgeval maar het gewone geval voor een kortlevende agent: een taak die
+    /// twee seconden werkt en afsluit, verliest zo <em>al</em> zijn telemetrie. En stil — de kanalen
+    /// worden netjes afgesloten, er valt niets in de drop-teller, en er staat geen waarschuwing in
+    /// de log. In het portaal ziet dat uit als een agent die niets te melden had.</para>
+    ///
+    /// <para>Gevonden doordat één van de drie regelovergangvarianten van
+    /// <c>MsgKnipViaSchrijfpadenTests</c> op een Linux-runner rood ging met een lége sink terwijl de
+    /// andere twee slaagden. Dat was dus geen verschil per regelovergang: die variant verloor de
+    /// race. Op Windows haalde het doorschrijfinterval van 20 ms het altijd.</para>
+    ///
+    /// <para>Dezelfde vorm is eerder in <c>HostedAgentsRegistrationService</c> gemeten en daar op
+    /// dezelfde manier opgelost: wat vóór het einde van <c>StartAsync</c> moet zijn gebeurd, hoort
+    /// in <c>StartAsync</c>.</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Annuleringstoken van de host.</param>
+    /// <returns>De taak van het opstarten.</returns>
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
-        // Bewust niet op stoppingToken lopen: bij afsluiten willen we leegdraaien, niet
-        // afbreken. StopAsync sluit de kanalen, waarna de lussen op eigen kracht eindigen.
-        _pumps = Task.WhenAll(PumpLogsAsync(_abort.Token), PumpDocumentsAsync(_abort.Token));
-        return _pumps;
+        // Bewust niet op stoppingToken lopen: bij afsluiten willen we leegdraaien, niet afbreken.
+        // StopAsync sluit de kanalen, waarna de lussen op eigen kracht eindigen.
+        _pumps ??= Task.WhenAll(PumpLogsAsync(_abort.Token), PumpDocumentsAsync(_abort.Token));
+
+        return base.StartAsync(cancellationToken);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Geeft de taak terug die <see cref="StartAsync"/> al heeft gemaakt. De null-vergevende
+    /// operator kan hier: <c>BackgroundService.StartAsync</c> roept dit aan, en dat is de
+    /// <c>base</c>-aanroep aan het einde van onze eigen <c>StartAsync</c> — dus na de toewijzing.
+    /// </remarks>
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => _pumps!;
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
