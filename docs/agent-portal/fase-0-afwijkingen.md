@@ -1060,18 +1060,335 @@ de sessie die de fout vond.
 
 ---
 
+## 26. Het urenendpoint gebruikt het bestaande bewijstype; de vaste regel hangt aan wat het pad níet kan
+
+**Wat er stond.** `mcp-uren.md` noemt onder "Wat de portaalkant nog moet regelen" één punt de zwaarste
+van allemaal: *"Een bewijstype voor een aanroeper die geen mens is — en dit is de echte ontbrekende
+schakel. `CustomerWriteScope` betekent 'operator die naar déze klant kijkt'. Deze server is dat
+niet."* Dezelfde tekst staat in de documentatie van `IPortalHoursStore` en in
+`HourEntryKeys.ForIntegration`, en hij is de reden dat er op die interface geen schrijfmethode voor een
+koppeling staat.
+
+**Waarom dat niet meer klopt.** Het is juist voor het ontwerp waarin de MCP-server een
+service-identiteit gebruikte. Het huidige ontwerp — vastgelegd in datzelfde document, onder
+"Autorisatie" — haalt via device-code een token op de identiteit van de **persoon** achter Claude Code.
+Er is geen sleutel, geen client secret en geen service-identiteit. De aanroeper is dus dezelfde
+operator die het boekformulier van §3.6 mag versturen, en dat document zegt het zelf: *"de autorisatie
+is letterlijk dezelfde als op het scherm."* Twee alinea's in één document die uit twee ontwerpen komen.
+
+**Besluit: het endpoint gebruikt `CustomerWriteScope`, langs
+`ICustomerScopeResolver.ResolveWriteAsync`.** Er komt geen nieuw scope-type. Dat levert bovendien twee
+dingen op die een nieuw type niet zou geven: de klantslug wordt in de klantenlijst opgezocht in plaats
+van uit het verzoek vertrouwd (anders staat er een urenregel in een partitie die geen klant is), en
+`by` komt uit `CustomerWriteScope.Actor` — precies dezelfde eigenschap die een boeking via het scherm
+op zijn naam zet.
+
+**Wat de vaste regel uit §5 dan vasthoudt, is niet het bewijstype maar wat er mee te doen is.** De zorg
+in `mcp-uren.md` is dat een aanroeper die "doet alsof hij een operator is" ook kan fiatteren. Dat is
+hier niet zo, en de reden is dat er geen HTTP-oppervlak voor bestaat:
+
+1. Het verzoektype heeft geen `status`, geen `by`, geen `source` en geen registratietijd. Niet op
+   `pending` vastgezet — afwezig. Dezelfde vorm als `CustomerLogLine` zonder `extra` (§12).
+2. Het endpoint heeft `IMcpHoursWriter` in handen en niet `IPortalHoursStore`. Die interface heeft
+   precies één methode, `BookPendingAsync`, en die heeft geen stand- en geen bronparameter. Fiatteren,
+   afwijzen en corrigeren zijn langs dit pad geen aanroep die je verkeerd doet maar een aanroep die niet
+   bestaat.
+3. Er is één endpoint. `POST /api/uren` en niets anders.
+
+Een eigen scope-type zou de *store* beschermen tegen een aanroep die vanaf hier niet te doen is.
+
+**Een meegestuurd veld wordt geweigerd en niet stil genegeerd.** Het verzoektype draagt
+`[JsonUnmappedMemberHandling(Disallow)]`. Zonder die regel slaat `System.Text.Json` een meegestuurde
+`"status": "approved"` over: het verzoek slaagt, de regel landt goed, en de aanroeper heeft geen enkele
+aanwijzing dat zijn veld is weggegooid — niet te onderscheiden van een portaal dat het veld wél
+overneemt. Dat verschil is of iemand op naam van een ander kan boeken. Nu is het antwoord een `400`.
+
+**Wat hieraan zwak is, en het staat hier zodat het niet wegzakt: dit is een tweede schrijver van
+`hourEntry`-documenten.** De juiste plek voor `BookPendingAsync` is `IPortalHoursStore`, naast de
+andere vijf schrijfpaden; dan bestaat er één klasse die weet hoe een urenregel wordt weggeschreven. Hij
+staat in `Soratus.Portal/Api/` omdat `Soratus.Portal/Data/` in deze sessie niet gewijzigd mocht worden.
+Wat er *niet* verdubbeld is: de documentvorm (`HourEntryDocument`), de sleutelregel (`HourEntryKeys`),
+de validatie (`HourBooking.Validate`) en de tijdvormnormalisatie (die zit op de opties van de
+Cosmos-SDK, §25). Wat wél verdubbeld is: de containerlezing en de foutafhandeling eromheen, zo'n dertig
+regels. Verhuizen is een bestandsverplaatsing en geen herontwerp — en met de verhuizing horen twee
+opmerkingen in `Data/` te worden bijgesteld: die van `IPortalHoursStore` en die van
+`HourEntryKeys.ForIntegration`, die beide zeggen dat het bewijstype nog niet bestaat.
+
+**Eén naam die niet klopt en die in `Data/` staat.** `HourEntryKeys.ForPortal` is niets anders dan het
+recept "tijdstempel plus vier bytes inhoudshash"; het endpoint gebruikt hem, want er is geen andere
+plek waar dat recept staat en een tweede exemplaar ervan levert twee documenten voor één boeking op.
+Zijn naam zegt dat hij bij het portaalformulier hoort. Herdopen naar iets bronneutraals hoort bij een
+wijziging in `Data/`.
+
+**Wat er van deze regel gemeten is.** `CosmosMcpHoursWriter.Build` is een eigen methode zodat de
+kernregel te meten is zónder naar Cosmos te schrijven. Dat is niet alleen gemak: een regel die alleen
+te meten is door naar productie te schrijven, wordt niet gemeten. De test kijkt naar `Status`,
+`Source`, `Counts`, `ApprovedAt`, `ApprovedBy` en de vorm van de id; de mutaties "pending → approved"
+en "mcp → portaal" maken hem rood.
+
+---
+
+## 27. Antiforgery raakt dit endpoint niet — en de foutpagina maakte van een 401 een 400
+
+Twee vragen over de middlewareketen die het endpoint met de formulieren deelt. De eerste had het
+antwoord dat je hoopt; de tweede niet.
+
+**Antiforgery: niets aan de hand, en dat is gemeten.** `app.UseAntiforgery()` valideert alleen als het
+endpoint `IAntiforgeryMetadata` draagt met validatie aan, en dat komt er bij een minimal-API-endpoint
+alleen op als het formulierinvoer bindt (`IFormCollection`, `IFormFile`, `[FromForm]`). Gemeten over de
+volledige routetabel van de draaiende app:
+
+```
+/api/uren               -> antiforgery=(geen metadata)
+/klant/{Slug}/uren      -> antiforgery=True
+/klant/{Slug}/contract  -> antiforgery=True
+/klanten/nieuw          -> antiforgery=True
+/overzicht, /, /Error   -> antiforgery=True
+/healthz, /_blazor/*    -> (geen metadata)
+```
+
+Elke Razor-pagina houdt zijn validatie; het endpoint vraagt er geen. Een POST met JSON en een
+bearer-token, zonder antiforgery-token, komt door de échte pijplijn — daar staat een test op.
+
+**Er is bewust géén `DisableAntiforgery()` aangeroepen.** Die aanroep zou vandaag niets doen, en het
+gevaar zit in wat hij morgen betekent: hij zet de validatie ook uit als dit endpoint ooit
+formulierinvoer gaat binden, en dan is er een gat waar niemand naar kijkt. Wat de toekomst afdekt is de
+meting, niet de aanroep: wordt validatie in een volgende .NET-versie de standaard voor élke POST, dan
+wordt de test rood en niet de eerste urenboeking van een operator. De tweede assertie in die test is de
+belangrijkere — dat de *andere* endpoints hun validatie nog hebben. Zou `UseAntiforgery()` zijn
+weggehaald of de mapping ervoor zijn verplaatst om het endpoint aan de praat te krijgen, dan slaagt de
+eerste assertie ook, en dan is er een gat in élk formulier van het portaal.
+
+**Een tweede reden dat CSRF hier geen vraag is, en hij staat in de code en niet in een gewoonte.** Het
+beleid op dit endpoint is vastgezet op het bearer-schema. Een cookie uit een browsersessie
+authenticeert er dus niet, ook niet met de operatorrol — een pagina op een andere site kan geen boeking
+doen op de sessie van een ingelogde operator, ook niet met `credentials: include`.
+
+**Wat wél stuk was: `UseStatusCodePagesWithReExecute` maakte van een 401 een 400.** Die middleware
+voert het oorspronkelijke verzoek opnieuw uit op `/not-found` — met dezelfde methode en hetzelfde
+lichaam. Een POST met JSON op een Razor-pagina levert daar `The request has an incorrect Content-type.`
+op met status 400, en omdat er dan al een lichaam is geschreven kan de oorspronkelijke code niet meer
+worden teruggezet. Gemeten op een aanroep zonder token:
+
+```
+voor:  STATUS=400  WWW-Authenticate=Bearer  body="The request has an incorrect Content-type."
+na:    STATUS=401  WWW-Authenticate=Bearer  body=(leeg)
+```
+
+**Waarom dat duur is.** De MCP-server onderscheidt vijf uitkomsten, en 400 en 401 vallen aan
+verschillende kanten van de belangrijkste grens. Op een 401 zegt hij "er is geen geldige aanmelding" en
+verwijst naar `soratus-uren aanmelden`; op een 400 zegt hij "NIET geboekt" met de reden uit het
+antwoord — en die reden was hier een klacht over een content-type. Dan zoekt een operator de fout in
+zijn boeking terwijl hij niet is aangemeld. Hetzelfde gold voor een 403, waar de melding over de
+ontbrekende app-rol `Operator` de enige aanwijzing is die iemand krijgt.
+
+**Oplossing: onder `/api` blijft de lege 401/403 staan zoals de autorisatiemiddleware hem schreef.** Eén
+`app.UseWhen` om de bestaande aanroep heen; voor de browser verandert er niets. De mutatie die de
+`UseWhen` weghaalt maakt vier tests rood.
+
+---
+
+## 28. De Entra-registratie in één blok, en twee grenzen die niet overeenkomen
+
+### Het blok
+
+Tenantniveau, dus dit doet Marcel. **Dit vervangt het blok in `mcp-uren.md` en is er de superset van**;
+er zijn twee verschillen, beide hieronder benoemd. Zet het abonnement er niet bij: dit is Graph, geen
+ARM. Er is bij het schrijven hiervan **niets aan de tenant gewijzigd** — alles hieronder is
+onbeproefd.
+
+```bash
+export MSYS_NO_PATHCONV=1   # Git Bash op Windows, anders verbouwt MSYS de Graph-paden
+```
+
+**1. De public client aanmaken.** Levert de `appId` op die in `SORATUS_UREN__CLIENT_ID` komt.
+`--is-fallback-public-client true` is wat device-code mogelijk maakt; zonder die vlag weigert Entra de
+flow met een melding over een ontbrekend client secret. Verwacht: een object met `appId` en `objectId`.
+Bewaar beide.
+
+```bash
+az ad app create \
+  --display-name "soratus-uren" \
+  --sign-in-audience AzureADMyOrg \
+  --is-fallback-public-client true \
+  --public-client-redirect-uris "http://localhost" \
+  --query "{appId:appId, objectId:id}"
+```
+
+**2. De service principal aanmaken.** Zonder dit object kan de tenant geen toestemming vastleggen.
+Verwacht: een object met een `id`. **Staat er `already in use` of `already exists`, dan is dat geen
+fout** — de principal bestond al, bijvoorbeeld omdat stap 1 eerder is gedraaid. Ga door.
+
+```bash
+az ad sp create --id <appId-uit-stap-1> --query "{id:id, appId:appId}"
+```
+
+**3. De object-id van de portaal-registratie opzoeken.** Niet dezelfde als de service-principal-id uit
+`infra.md`. Verwacht: één regel. Staan er meer, kies op `appId` en niet op naam.
+
+```bash
+az ad app list --display-name "soratus-portal" \
+  --query "[].{naam:displayName, appId:appId, objectId:id}" -o table
+```
+
+**4. Kijken wat er nu op de `api`-eigenschap staat, vóór je hem overschrijft.** Doe dit echt; de
+volgende stap vervangt de hele eigenschap. Verwacht op een onaangeroerde registratie een lege
+`oauth2PermissionScopes` en `requestedAccessTokenVersion: null`.
+
+```bash
+az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/applications/<objectId-uit-stap-3>?\$select=api,identifierUris"
+```
+
+**5. Eén `PATCH` die de scope blootstelt, de client vooraf autoriseert en de tokenversie vastzet.**
+
+> **Dit is het eerste verschil met `mcp-uren.md`, en het is de reden dat het één blok is.** Daar staan
+> de scope (stap 4) en de voorautorisatie (stap 6) als twee `PATCH`-aanroepen op dezelfde
+> `api`-eigenschap. Een Graph-`PATCH` op een complex type vervangt de waarde van dat type; de tweede
+> aanroep, die alleen `preAuthorizedApplications` meestuurt, loopt daarmee het risico de scopes uit de
+> eerste weer weg te halen — en dan faalt het aanmelden met een melding over een ontbrekende scope
+> terwijl je die scope net hebt aangemaakt. Eén `PATCH` met alles erin heeft dat risico niet, ongeacht
+> hoe Graph het precies doet. **Niet nagemeten** — er is geen tenantwijziging uitgevoerd — maar het is
+> de veilige vorm van de twee.
+
+> **Dit is het tweede verschil: `requestedAccessTokenVersion: 2`.** Zonder die instelling geeft Entra
+> een v1-access-token af, en dan is de `aud` de App ID URI (`api://soratus-portal`) in plaats van de
+> appId, en de `iss` `https://sts.windows.net/<tid>/` in plaats van het v2-endpoint waar
+> `AddMicrosoftIdentityWebApi` op is ingesteld. Het portaal accepteert beide `aud`-vormen — daar staat
+> een test op — maar één bekende vorm is beter dan twee mogelijke. Dit is veilig omdat er vandaag geen
+> enkele client een access-token voor deze API vraagt: de browseraanmelding gebruikt een id-token, en
+> die valt niet onder deze instelling.
+
+```bash
+SCOPE_ID=$(cat /proc/sys/kernel/random/uuid)   # of: python -c "import uuid;print(uuid.uuid4())"
+echo "Scope-id: $SCOPE_ID"                     # bewaar deze; stap 6 heeft hem nodig
+
+cat > /tmp/uren-api.json <<'JSONEINDE'
+{
+  "identifierUris": ["api://soratus-portal"],
+  "api": {
+    "requestedAccessTokenVersion": 2,
+    "oauth2PermissionScopes": [
+      {
+        "id": "VUL-SCOPE_ID-IN",
+        "value": "Uren.Boeken",
+        "type": "User",
+        "isEnabled": true,
+        "adminConsentDisplayName": "Uren boeken in het portaal",
+        "adminConsentDescription": "Staat de aanroeper toe uren te boeken als te fiatteren regel.",
+        "userConsentDisplayName": "Uren boeken",
+        "userConsentDescription": "Boekt uren die Soratus daarna moet fiatteren."
+      }
+    ],
+    "preAuthorizedApplications": [
+      {
+        "appId": "VUL-APPID-UIT-STAP-1-IN",
+        "delegatedPermissionIds": ["VUL-SCOPE_ID-IN"]
+      }
+    ]
+  }
+}
+JSONEINDE
+
+# De twee waarden erin zetten. Met een aanhalingsteken om JSONEINDE hierboven doet de shell niets
+# aan de inhoud van het bestand — dat is opzet, want inline quoting in Git Bash is hier al eerder
+# stukgelopen. sed vult ze daarna in, zodat er geen shell-expansie in de JSON nodig is.
+sed -i "s/VUL-SCOPE_ID-IN/$SCOPE_ID/g; s/VUL-APPID-UIT-STAP-1-IN/<appId-uit-stap-1>/g" /tmp/uren-api.json
+cat /tmp/uren-api.json          # nakijken vóór je hem verstuurt
+
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/<objectId-uit-stap-3>" \
+  --headers "Content-Type=application/json" \
+  --body @/tmp/uren-api.json
+```
+
+Verwacht: **geen uitvoer.** Een `PATCH` op Graph geeft `204 No Content` bij succes; uitvoer betekent
+hier dus een fout. Staat er al een scope op `soratus-portal` (stap 4 laat dat zien), zet die dan mee in
+dit bestand — anders is hij weg.
+
+De payload staat in een bestand en niet inline. Dat is niet netheid: `az ad app update --set api.x`
+werkt niet op subeigenschappen van `api`, en inline JSON met quoting is in Git Bash al eerder
+stukgelopen.
+
+**6. De permissie declareren op `soratus-uren`.** Dit is de stap die je zou overslaan, en dan faalt het
+aanmelden met een melding over ontbrekende scopes. `/.default` betekent "alles waarvoor deze client
+statisch toestemming heeft" — staat de permissie niet op de client, dan is dat niets. Verwacht: een
+waarschuwing dat je nog toestemming moet geven. Die is hier onnodig: de voorautorisatie uit stap 5 doet
+dat werk.
+
+```bash
+az ad app permission add \
+  --id <appId-uit-stap-1> \
+  --api <appId-van-soratus-portal-uit-stap-3> \
+  --api-permissions "$SCOPE_ID=Scope"
+```
+
+**7. Nakijken dat de boeker de app-rol `Operator` heeft.** Alleen lezen. Dit is de val uit
+`stand-van-zaken.md`: een toewijzing zonder rol (`appRoleId 00000000-…`) laat je wél binnen maar levert
+geen `roles`-claim, en dan geeft het portaal een `403` op een token dat verder in orde is. Verwacht:
+een regel met `appRoleId = e9290944-a9f0-4390-a69d-fb4ab0e5b7e0` — dat is `Operator`, uit
+`infra/entra/app-roles.json`.
+
+```bash
+az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/users/marcel@soratus.com/appRoleAssignments?\$select=appRoleId,resourceDisplayName" \
+  --query "value[?resourceDisplayName=='soratus-portal']" -o table
+```
+
+**8. Controleren, vanaf de machine waar de server komt te draaien.** Verwacht bij `controleer`: `aud`
+gelijk aan de portaal-appId (na stap 5 met `requestedAccessTokenVersion: 2`) en `Rollen: Operator`.
+Staat er `Rollen: (geen)`, dan mist de toewijzing uit stap 7. Afsluitcode 0 betekent bruikbaar.
+
+```bash
+export SORATUS_UREN__PORTAL=https://portal.soratus.com
+export SORATUS_UREN__SCOPE=api://soratus-portal/.default
+export SORATUS_UREN__CLIENT_ID=<appId-uit-stap-1>
+export SORATUS_UREN__TENANT_ID=091b5069-3bea-4abd-80ec-b1c3e6ed1d51
+
+dotnet run --project Soratus.Mcp.Uren -- aanmelden
+dotnet run --project Soratus.Mcp.Uren -- controleer
+```
+
+**Opruimen na afloop:** `rm /tmp/uren-api.json`. Er staat geen geheim in, maar wel de tenantstructuur.
+
+### Twee grenzen die niet overeenkomen, en die zo blijven
+
+`mcp-uren.md` legt de client vast op `uren ≤ 200` en `omschrijving 5–500 tekens`. De datalaag van het
+portaal staat 16 uur per regel toe (`HourLimits.MaximumPerEntry`) en 400 tekens
+(`HourLimits.MaximumNoteLength`). Er is dus een band waarin de client een boeking doorlaat en het
+portaal hem weigert: 17 tot 200 uur, en 401 tot 500 tekens.
+
+**Dat is geen storing en het wordt niet gerepareerd.** Het portaal is de eigenaar van deze grenzen —
+dat is de hele reden dat de validatie achter het endpoint staat — en de afwijzing komt met een leesbare
+Nederlandse reden bij de aanroeper terecht, dus die kan het in één ronde herstellen. Wat er wél niet
+klopt is de tabel in `mcp-uren.md`; die suggereert een grens die niet de bindende is. Er staat een test
+op de discrepantie (`DeGrenzenVanHetPortaalZijnStrakkerDanDieVanDeClient`), zodat hij niet stil de
+andere kant op wordt "opgelost" door de portaalgrens naar een getal uit een document op te rekken.
+
+### Wat er níet is overgenomen uit `mcp-uren.md`
+
+Het voorbeeldantwoord daar toont `geboekt door  Claude Code — Marcel`, en de documentatie van
+`HourEntryDocument.By` geeft dezelfde vorm als voorbeeld. Het portaal zet daar alleen de **naam uit het
+token** in. Reden: datzelfde document splitst `by` en `createdBy` — *"`createdBy` de koppeling die de
+regel wegschreef, naast `by` voor de mens die het werk deed"* — en §3.6 toont de bron al als eigen
+kolom (`Portaal · MCP/Claude Code · Azure DevOps`). Met "Claude Code" in `by` staat de koppeling in drie
+velden en de mens in geen enkel. `createdBy` is daarom `soratus-uren`.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Facturatie, sprint en support. Uit §9 van de spec staat daarmee nog één besluit open dat aan uren
 raakt: de Azure-uitsplitsing per dienst (fase 4). De audittrail op urencorrecties is met punt 16
 vervallen als aparte vraag.
 
-Binnen uren zelf staat één pad open: het **aannamepad van een koppeling**. De MCP-server
-`soratus-uren` en `devops-sync` schieten regels in die als `pending` landen (§5). De documentvorm
-en de sleutelregel liggen vast, maar er is nog geen bewijstype voor een aanroeper die geen mens is
-— `CustomerWriteScope` betekent "operator die naar deze klant kijkt", en dat is een koppeling niet.
-Zolang dat type niet bestaat, staat er ook geen schrijfmethode voor op `IPortalHoursStore`: een
-leesbaar type met een gat erachter is erger dan geen type.
+Binnen uren zelf stond één pad open: het **aannamepad van een koppeling**. Voor `soratus-uren` is dat
+gebouwd — `POST /api/uren`, zie punt 26 — en de vraag naar een eigen bewijstype is daarmee vervallen
+in plaats van beantwoord: de aanroeper is een mens met een token en dus dezelfde operator als op het
+scherm. Wat er van dat pad nog niet is: `devops-sync`. Dat is wél een aanroeper zonder mens
+erachter, en daar hoort de vraag opnieuw gesteld te worden voordat er een tweede aanroeper op
+`IMcpHoursWriter` komt te staan — een work item dat uren inschiet heeft geen token en geen naam uit
+Entra, en `by` is dan het work item en niet een persoon.
 
 ### Wat er van de urenopslag níet is gemeten
 

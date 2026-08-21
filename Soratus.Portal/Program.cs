@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using Soratus.Portal.Api;
 using Soratus.Portal.Components;
 using Soratus.Portal.Data;
 using Soratus.Portal.Security;
@@ -46,9 +47,19 @@ builder.Services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authe
     options.TokenValidationParameters.NameClaimType = "name";
 });
 
+// Naast de browsersessie een tweede aanmeldweg: een bearer-token voor de MCP-server soratus-uren.
+// AddMicrosoftIdentityWebApi naast AddMicrosoftIdentityWebApp, met dezelfde AzureAd-sectie. Zie
+// Api/HoursApi.cs — daar staat waarom dat een AddAuthentication() zonder schemanaam is, en welke
+// claims er op dít pad gemeten zijn (niet dezelfde handler als hierboven, dus niet dezelfde aanname).
+builder.Services.AddHoursApi(builder.Configuration);
+
 // ── Autorisatie ──────────────────────────────────────────────────────────────────────────────
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(PortalPolicies.Operator, policy => policy.RequireRole(PortalRoles.Operator))
+    // Beide operatorbeleiden krijgen hun rol-eis van dezelfde methode. Eén beleid voor het scherm en
+    // de API kan niet — een beleid bindt ook het aanmeldschema, en dat is hier een cookie en daar een
+    // bearer-token — maar de eis zelf hoort één keer te bestaan. Zie HoursApiPolicy.
+    .AddPolicy(PortalPolicies.Operator, HoursApiPolicy.RequireOperator)
+    .AddPolicy(HoursApiPolicy.OperatorBearer, HoursApiPolicy.RequireOperatorOnBearer)
     .AddPolicy(PortalPolicies.Customer, policy => policy.RequireRole(PortalRoles.Customer))
 
     // Standaard is alles geautoriseerd; anoniem is de uitzondering en moet expliciet worden
@@ -166,7 +177,21 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// De foutpagina's zijn voor de browser en niet voor de API, en dat is gemeten en geen voorzorg.
+// UseStatusCodePagesWithReExecute voert het oorspronkelijke verzoek opnieuw uit op /not-found — met
+// dezelfde methode en hetzelfde lichaam — en een POST met JSON op een Razor-pagina levert daar
+// "The request has an incorrect Content-type." op met status 400. Omdat er dan al een lichaam is
+// geschreven, kan de oorspronkelijke code niet meer worden teruggezet: een aanroep zonder token op
+// /api/uren kwam als 400 met platte tekst terug in plaats van als 401. De MCP-server leest dat als
+// "NIET geboekt" met een onbekende reden, waar hij "er is geen geldige aanmelding" hoort te zeggen —
+// en dan zoekt een operator de fout in zijn boeking in plaats van in zijn aanmelding.
+//
+// Onder /api blijft de lege 401/403 dus staan zoals de autorisatiemiddleware hem schreef, met de
+// WWW-Authenticate-kop erop. Voor de browser verandert er niets.
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api"),
+    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
+
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
@@ -188,7 +213,28 @@ app.MapGet("/healthz", () => Results.Text("ok", "text/plain"))
 
 app.MapControllers();
 
+// POST /api/uren — het schrijfpad van de MCP-server soratus-uren. Staat hier, ná UseAntiforgery, en
+// dat is geen omissie: zie de opmerkingen bij HoursApi voor de meting waarom dit endpoint geen
+// antiforgery-token nodig heeft en er ook niet op stuk loopt.
+app.MapHoursApi();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+/// <summary>
+/// Het toegangspunt van het portaal, expliciet publiek gemaakt.
+/// </summary>
+/// <remarks>
+/// Bestaat alleen zodat een test deze app kan <em>starten</em> in plaats van de wiring erboven na te
+/// bouwen. Een bestand met top-level statements levert een <c>internal</c> klasse op, en
+/// <c>WebApplicationFactory&lt;Program&gt;</c> kan die niet als typeargument van een publieke fixture
+/// dragen. Dit is de gedocumenteerde vorm daarvoor.
+///
+/// Waarom dat de moeite waard is: de dingen die hierboven gemeten moeten worden — dat het rolbeleid op
+/// het bearer-schema staat, dat de rolclaim gemapt aankomt, dat de antiforgery-middleware een POST met
+/// JSON doorlaat — zijn eigenschappen van deze registratie en deze middlewareorde. Een test die die
+/// orde zelf opbouwt, meet zijn eigen kopie.
+/// </remarks>
+public partial class Program;
