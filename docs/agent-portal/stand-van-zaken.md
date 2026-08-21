@@ -2,6 +2,57 @@
 
 Werkdocument om verder mee te gaan. Vervangbaar; dit is geen ontwerpdocument.
 
+## Waar het werk stond aan het eind van 21 augustus
+
+Zeventien commits, alles uitgerold. **1558 tests groen over vijf projecten**, nul waarschuwingen op
+een volledige rebuild. Fase 0 t/m 4a staan; fase 5 en 6 zijn begonnen.
+
+**Wat er vandaag bij is gekomen:** het urenendpoint waarop de MCP-server post, de Azure-scope als
+eigen veld met de kostencollector erachter, het maandoverzicht per mail, de verzendlaag met de
+storingsmelder als tweede aanroeper, de integratie waarmee een bestaande webapplicatie zich als
+agent-host meldt, de telemetrie-opslag voor MBV, en de maandsprints op het DevOps-board van MBV.
+
+**Waar je morgen mee begint.** Er staat werk in de boom dat niet is gecommit: de sessie die het
+portaal zich als agent-host laat melden (het eerste stuk van fase 6). De build was schoon toen we
+stopten. Lees haar rapport voordat je iets aanraakt — er staat één open ontwerpvraag in: of een
+agent die op een klok draait binnen een webhost met de bestaande vorm is uit te drukken, of dat het
+agentcontract iets mist. Die sessie heeft `Soratus.Agents.Telemetry` op zeven plekken aangeraakt en
+`appsettings.json` gewijzigd; dat laatste bestand is vanuit de hoofdsessie niet leesbaar, dus dat
+komt uit haar beschrijving.
+
+Daarna: de sprintweergave op de maandsprints, en de supportpagina met de eerstelijnsagent. Die
+laatste is nog niet ontworpen, en de moeilijke eis staat vast — hij mag niets verzinnen en moet
+escaleren als hij het niet zeker weet.
+
+### Vier dingen die op een mens wachten
+
+- **Een adres voor de storingsmelding** (`PortalAlerts__Recipients__0`, als parameter in
+  `infra/portal/`). Zonder dat kijkt de melder wel maar mailt hij niet.
+- **De custom role op `acs-soratus-prod`** — het `az`-blok staat in punt 29.10, met de grens die
+  erin genoemd staat: `az role definition create` is een schrijfactie op abonnementsniveau en valt
+  buiten de twee resource groups waar wij mogen schrijven.
+- **Hoe `Soratus.Agents.Telemetry` in een klantcodebase komt.** Dit blokkeert de hartslag bij MBV, en
+  dus of MBV agents in het portaal krijgt. Vier uitwegen staan verderop; de makkelijkste — broncode
+  meekopiëren — is wat punt 13 verbiedt.
+- **De SnelStart-vraag** over de scope `orders:*`. Bepaalt of fase 4b bestaat.
+
+### Wat de dag heeft geleerd, en het is drie keer dezelfde les
+
+1. **`/healthz` bewijst niet dat het portaal staat.** Die controle raakt met opzet geen enkele
+   afhankelijkheid, dus hij kan een kapotte configuratie of DI niet zien. Vandaag gaf hij 200 terwijl
+   het portaal op het punt stond om te vallen, en de uitrolpijplijn deed dezelfde meting en meldde
+   succes. Er staat nu een tweede smoke test op `/` die een 302 verwacht. Wil je weten of het
+   portaal werkelijk staat: vraag `/` op.
+2. **Wat vóór het einde van `StartAsync` moet zijn gebeurd, hoort in `StartAsync`.** Drie keer
+   voorgekomen in de telemetriebibliotheek. Het lijf van `ExecuteAsync` van een `BackgroundService`
+   is niet gegarandeerd gelopen als `StartAsync` terugkomt — gemeten op .NET 10, twee keer
+   onafhankelijk. Eén keer verloor een kortlevende agent daardoor al zijn telemetrie, en één keer
+   meldde hij zich helemaal niet.
+3. **Meet de invariant en niet zijn gevolg**, als het gevolg van de planner afhangt. Een test op het
+   gevolg bleef hier zes runs groen terwijl de fout er was. En kijk *welke* tests rood worden, niet
+   hoeveel: ik heb bijna een correcte diagnose teruggedraaid omdat ik een aantal las in plaats van
+   een lijst.
+
 ## Waar het werk stond aan het eind van 20 augustus
 
 Fase 0 tot en met 3 staan op `main` en zijn uitgerold. 1067 tests groen over vier
