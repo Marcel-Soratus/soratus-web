@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>Soratus.Agents.AspNetCore</RootNamespace>
+    <!--
+      Als in Soratus.Agents.Contracts, en om dezelfde reden: dit project reist mee naar de
+      applicatie van een klant. Een waarschuwing die alleen zichtbaar is als de compiler toevallig
+      volledig loopt, is geen waarschuwing.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Dít is waarom dit een eigen project is en geen map in Soratus.Agents.Telemetry.
+
+      Een FrameworkReference naar Microsoft.AspNetCore.App is besmettelijk: elk project dat deze
+      assembly gebruikt moet op de ASP.NET Core shared framework draaien. Zou deze verwijzing in
+      Soratus.Agents.Telemetry staan, dan zou agents/heartbeat-demo — een consoleagent — de
+      webruntime nodig hebben om te kunnen starten. Gemeten: de runtimeconfig.json van
+      heartbeat-demo vraagt vandaag alleen Microsoft.NETCore.App, en met die verwijzing erin
+      vraagt hij ook Microsoft.AspNetCore.App.
+
+      De rest van het geval — meerdere agents in één proces, een hartslag van de host, een run per
+      aanroep — heeft niets met ASP.NET Core te maken en staat daarom wél in de telemetrie-
+      bibliotheek. Alleen het antwoord op de vraag "welke agents herbergt dit proces" is
+      hostspecifiek, en dat antwoord komt hier vandaan.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Soratus.Agents.Telemetry\Soratus.Agents.Telemetry.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Soratus.Agents.AspNetCore.Tests" />
+  </ItemGroup>
+
+</Project>

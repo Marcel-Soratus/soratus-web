@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Soratus.Agents.Contracts;
 
@@ -17,7 +16,9 @@ internal sealed class AgentRun : IAgentRun
     private readonly TelemetryWriter _writer;
     private readonly LogRecordFactory _logs;
     private readonly AgentRun? _previous;
-    private readonly Stopwatch _stopwatch;
+    private readonly TimeProvider _clock;
+    private readonly Action? _onCompleted;
+    private readonly long _startTimestamp;
     private readonly string _partitionKey;
 
     private int _itemsProcessed;
@@ -26,26 +27,57 @@ internal sealed class AgentRun : IAgentRun
     private string? _errorType;
     private string? _errorMessage;
     private int _disposed;
+    private TimeSpan _elapsed;
 
+    /// <summary>
+    /// Opent een run. De klok komt als <see cref="TimeProvider"/> binnen en wordt nooit
+    /// rechtstreeks gelezen, zodat de duur en de tijdstempels van een run te meten zijn zonder
+    /// te wachten.
+    /// </summary>
+    /// <param name="identity">Wie deze run draait. Bij een geherbergde agent is dat niet het proces.</param>
+    /// <param name="writer">De bufferlaag naar de opslag.</param>
+    /// <param name="logs">De logfabriek van dezelfde agent, zodat een <c>run.failed</c>-regel bij hem hoort.</param>
+    /// <param name="trigger">Waardoor deze run startte.</param>
+    /// <param name="clock">De klok.</param>
+    /// <param name="onCompleted">
+    /// Wordt precies één keer aangeroepen zodra de run is afgesloten, ná het wegschrijven van het
+    /// definitieve document. Hiermee houdt een geherbergde agent bij hoeveel aanroepen er lopen;
+    /// die telling bepaalt zijn gemelde levensfase.
+    /// </param>
     internal AgentRun(
         AgentIdentity identity,
         TelemetryWriter writer,
         LogRecordFactory logs,
-        TriggerKind trigger)
+        TriggerKind trigger,
+        TimeProvider clock,
+        Action? onCompleted = null)
     {
         _identity = identity;
         _writer = writer;
         _logs = logs;
         _previous = RunScope.Current;
+        _clock = clock;
+        _onCompleted = onCompleted;
 
         RunId = UlidGenerator.NewRunId();
-        StartedAt = DateTimeOffset.UtcNow;
+        StartedAt = clock.GetUtcNow();
         Trigger = trigger;
         _partitionKey = RunRecord.BuildPartitionKey(identity.AgentName, StartedAt);
-        _stopwatch = Stopwatch.StartNew();
+        _startTimestamp = clock.GetTimestamp();
     }
 
     public string RunId { get; }
+
+    /// <summary>
+    /// De logfabriek van de agent die deze run draait.
+    /// </summary>
+    /// <remarks>
+    /// Hierlangs vindt een gewone <c>ILogger</c>-aanroep binnen een run de juiste agentnaam. In
+    /// een host met één agent is dat dezelfde fabriek als die in de container staat; in een host
+    /// met meerdere agents is dit de enige manier om te weten voor wie er gelogd wordt, want de
+    /// <c>ILogger</c> van de aanroeper weet daar niets van.
+    /// </remarks>
+    internal LogRecordFactory Logs => _logs;
 
     public DateTimeOffset StartedAt { get; }
 
@@ -106,7 +138,7 @@ internal sealed class AgentRun : IAgentRun
             "run.failed",
             $"Run {RunId} is mislukt: {exception.Message}",
             extra,
-            DateTimeOffset.UtcNow));
+            _clock.GetUtcNow()));
     }
 
     public void Fail(string errorType, string errorMessage)
@@ -126,7 +158,7 @@ internal sealed class AgentRun : IAgentRun
             "run.failed",
             $"Run {RunId} is mislukt: {errorMessage}",
             extra: null,
-            DateTimeOffset.UtcNow));
+            _clock.GetUtcNow()));
     }
 
     /// <summary>Schrijft het openingsdocument met <see cref="RunResult.Running"/>.</summary>
@@ -144,7 +176,7 @@ internal sealed class AgentRun : IAgentRun
         }
 
         RunScope.Current = _previous;
-        _stopwatch.Stop();
+        _elapsed = _clock.GetElapsedTime(_startTimestamp);
 
         RunResult result = _errorType is not null
             ? RunResult.Failed
@@ -152,7 +184,12 @@ internal sealed class AgentRun : IAgentRun
                 ? RunResult.Skipped
                 : RunResult.Ok;
 
-        _writer.Enqueue(BuildRecord(result, DateTimeOffset.UtcNow));
+        _writer.Enqueue(BuildRecord(result, _clock.GetUtcNow()));
+
+        // Ná het wegschrijven, zodat een teller die op nul springt niet vóór het document van
+        // deze run kan aankomen: dan zou de hartslag 'wacht op werk' melden terwijl de laatst
+        // afgeronde run nog niet bestaat, en dat is precies één tel lang de verkeerde waarheid.
+        _onCompleted?.Invoke();
         return ValueTask.CompletedTask;
     }
 
@@ -164,7 +201,7 @@ internal sealed class AgentRun : IAgentRun
         AgentName = _identity.AgentName,
         StartedAt = StartedAt,
         FinishedAt = finishedAt,
-        DurationMs = finishedAt is null ? null : _stopwatch.ElapsedMilliseconds,
+        DurationMs = finishedAt is null ? null : (long)_elapsed.TotalMilliseconds,
         Result = result,
         ItemsProcessed = ItemsProcessed,
         ItemsFailed = ItemsFailed,

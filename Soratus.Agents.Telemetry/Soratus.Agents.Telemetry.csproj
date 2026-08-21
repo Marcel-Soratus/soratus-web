@@ -36,6 +36,13 @@
       stil fout kunnen gaan. Het testproject mag er daarom bij.
     -->
     <InternalsVisibleTo Include="Soratus.Agents.Telemetry.Tests" />
+    <!--
+      En het testproject van de ASP.NET Core-laag, om precies dezelfde reden: het vervangt
+      ITelemetrySink door een opvangende variant en meet daarmee wat er écht wordt weggeschreven,
+      in plaats van wat er zou moeten worden weggeschreven. Zonder die naad zou de meting bij de
+      publieke API stoppen — bij het interessante deel, namelijk het document.
+    -->
+    <InternalsVisibleTo Include="Soratus.Agents.AspNetCore.Tests" />
   </ItemGroup>
 
 </Project>

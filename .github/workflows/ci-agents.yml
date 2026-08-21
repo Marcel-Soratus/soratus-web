@@ -22,6 +22,8 @@ on:
       - 'Soratus.Agents.Contracts/**'
       - 'Soratus.Agents.Telemetry/**'
       - 'Soratus.Agents.Telemetry.Tests/**'
+      - 'Soratus.Agents.AspNetCore/**'
+      - 'Soratus.Agents.AspNetCore.Tests/**'
       - 'Soratus.Mcp.Uren/**'
       - 'Soratus.Mcp.Uren.Tests/**'
       - 'agents/**'
@@ -34,6 +36,8 @@ on:
       - 'Soratus.Agents.Contracts/**'
       - 'Soratus.Agents.Telemetry/**'
       - 'Soratus.Agents.Telemetry.Tests/**'
+      - 'Soratus.Agents.AspNetCore/**'
+      - 'Soratus.Agents.AspNetCore.Tests/**'
       - 'Soratus.Mcp.Uren/**'
       - 'Soratus.Mcp.Uren.Tests/**'
       - 'agents/**'
@@ -62,6 +66,8 @@ jobs:
           dotnet restore Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj
           dotnet restore Soratus.Agents.Telemetry/Soratus.Agents.Telemetry.csproj
           dotnet restore Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj
+          dotnet restore Soratus.Agents.AspNetCore/Soratus.Agents.AspNetCore.csproj
+          dotnet restore Soratus.Agents.AspNetCore.Tests/Soratus.Agents.AspNetCore.Tests.csproj
           dotnet restore agents/heartbeat-demo/heartbeat-demo.csproj
           dotnet restore Soratus.Mcp.Uren/Soratus.Mcp.Uren.csproj
           dotnet restore Soratus.Mcp.Uren.Tests/Soratus.Mcp.Uren.Tests.csproj
@@ -71,6 +77,8 @@ jobs:
           dotnet build Soratus.Agents.Contracts/Soratus.Agents.Contracts.csproj -c Release --no-restore
           dotnet build Soratus.Agents.Telemetry/Soratus.Agents.Telemetry.csproj -c Release --no-restore
           dotnet build Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj -c Release --no-restore
+          dotnet build Soratus.Agents.AspNetCore/Soratus.Agents.AspNetCore.csproj -c Release --no-restore
+          dotnet build Soratus.Agents.AspNetCore.Tests/Soratus.Agents.AspNetCore.Tests.csproj -c Release --no-restore
           dotnet build agents/heartbeat-demo/heartbeat-demo.csproj -c Release --no-restore
           dotnet build Soratus.Mcp.Uren/Soratus.Mcp.Uren.csproj -c Release --no-restore
           dotnet build Soratus.Mcp.Uren.Tests/Soratus.Mcp.Uren.Tests.csproj -c Release --no-restore
@@ -80,6 +88,15 @@ jobs:
       # hier rood te worden en niet pas bij een uitrol.
       - name: Test
         run: dotnet test Soratus.Agents.Telemetry.Tests/Soratus.Agents.Telemetry.Tests.csproj -c Release --no-build --verbosity normal
+
+      # De ASP.NET Core-laag heeft een eigen teststap en niet een tweede project achter de regel
+      # hierboven, om dezelfde reden als de MCP-server hieronder: valt hij om, dan hoort in de
+      # uitslag te staan dat het de webhostlaag is. Zijn tests zetten een echte verzoekpijplijn op
+      # en meten daarmee twee dingen die alleen dáár bestaan — de metadata van het endpoint dat
+      # routing koos, en het moment waarop de endpointlijst gevuld is. Dat tweede is al één keer
+      # een gemeten race gebleken.
+      - name: Test ASP.NET Core-laag
+        run: dotnet test Soratus.Agents.AspNetCore.Tests/Soratus.Agents.AspNetCore.Tests.csproj -c Release --no-build --verbosity normal
 
       # De MCP-server heeft een eigen teststap en niet een tweede project in de regel
       # hierboven: valt hij om, dan hoort in de uitslag te staan dat het de MCP-server

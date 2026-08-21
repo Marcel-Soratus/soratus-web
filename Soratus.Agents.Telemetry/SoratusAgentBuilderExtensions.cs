@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Soratus.Agents.Contracts;
+using Soratus.Agents.Telemetry.HostedAgents;
 using Soratus.Agents.Telemetry.Internal;
 using Soratus.Agents.Telemetry.Logging;
 using Soratus.Agents.Telemetry.Scheduling;
@@ -55,6 +56,16 @@ public static class SoratusAgentBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        if (IsRegistered<HostedAgentRegistry>(builder.Services))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(AddSoratusHostedAgents)} is al aangeroepen op deze host. De twee vormen " +
+                "sluiten elkaar uit: de eerste publiceert één agent met een levensfase die de agent " +
+                "zelf meldt, de tweede publiceert er meerdere met een levensfase die uit de lopende " +
+                "aanroepen volgt. Samen zouden ze twee hartslagen met verschillende betekenis over " +
+                "hetzelfde proces schrijven.");
+        }
+
         if (builder.Services.Any(static descriptor => descriptor.ServiceType == typeof(AgentIdentity)))
         {
             return builder;
@@ -74,6 +85,7 @@ public static class SoratusAgentBuilderExtensions
         builder.Services.AddSingleton(new AgentSchedule(identity.Schedule, identity.ScheduleTimeZone));
         builder.Services.AddSingleton<AgentLifecycleState>();
         builder.Services.AddSingleton<LogRecordFactory>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddSingleton<TokenCredential>(static _ => new DefaultAzureCredential());
         builder.Services.AddSingleton<ITelemetrySink, CosmosTelemetrySink>();
         builder.Services.AddSingleton<TelemetryWriter>();
@@ -120,6 +132,132 @@ public static class SoratusAgentBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Sluit een host aan die <em>meerdere</em> agents herbergt die geen eigen proces en geen eigen
+    /// lus hebben: diensten die draaien wanneer ze worden aangeroepen.
+    /// </summary>
+    /// <param name="builder">De hostbouwer.</param>
+    /// <param name="configure">Optionele bijstelling van de knoppen, ná de configuratie.</param>
+    /// <returns>Dezelfde bouwer, zodat je door kunt ketenen.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Als verplichte configuratie ontbreekt, als er een schema is gezet, of als
+    /// <see cref="AddSoratusAgent(IHostApplicationBuilder, Action{SoratusTelemetryOptions})"/> al is
+    /// aangeroepen.
+    /// </exception>
+    /// <remarks>
+    /// <para><strong>Wat er anders is dan bij de gewone vorm.</strong> Er is geen enkelvoudige agent
+    /// en dus geen <see cref="ISoratusAgent"/> in de container; er is
+    /// <see cref="ISoratusHostedAgents"/>, en daaruit haal je per aanroep de agent op wiens naam het
+    /// werk gebeurt. De levensfase meldt de bouwer niet: die volgt uit het aantal lopende aanroepen,
+    /// want de bibliotheek opent en sluit ze zelf en weet het daarmee beter.</para>
+    ///
+    /// <para><strong>Welke agents het zijn, wordt niet hier opgegeven.</strong> Dat komt uit de
+    /// geregistreerde <see cref="IHostedAgentSource"/>-bronnen — in een webapplicatie is dat de
+    /// metadata op de endpoints zelf. Eén lijst op één plek, en die plek is de plek waar het werk
+    /// staat: dan kan er geen tweede lijst zijn die ermee uit de pas loopt.</para>
+    ///
+    /// <para><strong>Waarom een schema hier een fout is en niet een instelling.</strong> Een
+    /// geherbergde agent draait op een aanroep. Zou <c>SORATUS_AGENT__SCHEDULE</c> hier iets mogen
+    /// zeggen, dan staat er een cron-expressie in de configuratie die niets plant, en zulke
+    /// expressies worden geloofd.</para>
+    /// </remarks>
+    public static IHostApplicationBuilder AddSoratusHostedAgents(
+        this IHostApplicationBuilder builder,
+        Action<SoratusTelemetryOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (IsRegistered<HostedAgentRegistry>(builder.Services))
+        {
+            return builder;
+        }
+
+        if (IsRegistered<AgentLifecycleState>(builder.Services))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(AddSoratusAgent)} is al aangeroepen op deze host. De twee vormen sluiten " +
+                "elkaar uit: de eerste publiceert één agent met een levensfase die de agent zelf " +
+                "meldt, de tweede publiceert er meerdere met een levensfase die uit de lopende " +
+                "aanroepen volgt. Samen zouden ze twee hartslagen met verschillende betekenis over " +
+                "hetzelfde proces schrijven.");
+        }
+
+        // Dezelfde twee asserties als bij de gewone vorm, en om dezelfde reden: dit zijn de twee
+        // eigenschappen die stil fout gaan.
+        TelemetryJson.AssertCanonicalUtc();
+        MessageTruncation.AssertContract();
+
+        if (Read(builder.Configuration, AgentScheduleKey) is { } schedule)
+        {
+            throw new InvalidOperationException(
+                $"{AgentScheduleKey} staat op '{schedule}', maar deze host herbergt agents die op een " +
+                "aanroep draaien en niet op een schema. Er is niets dat deze expressie uitvoert, dus " +
+                "hij zou als feit op het scherm staan zonder er een te zijn. Haal hem weg.");
+        }
+
+        // De identiteit van de host zelf. Hij wordt niet als registratiedocument gepubliceerd — er is
+        // geen vierde rij "de webhost" — maar hij levert de klant, de versie, de omgeving en het
+        // moment waarop dit proces startte aan elke geherbergde agent.
+        AgentIdentity host = ResolveIdentity(builder.Configuration, builder.Environment);
+        SoratusTelemetryOptions options = ResolveOptions(builder.Configuration, configure);
+
+        builder.Services.AddSingleton(host);
+        builder.Services.AddSingleton(Options.Create(options));
+        builder.Services.TryAddSingleton(TimeProvider.System);
+        builder.Services.TryAddSingleton<TokenCredential>(static _ => new DefaultAzureCredential());
+        builder.Services.AddSingleton<ITelemetrySink, CosmosTelemetrySink>();
+        builder.Services.AddSingleton<TelemetryWriter>();
+        builder.Services.AddSingleton<HostedAgentRegistry>();
+        builder.Services.AddSingleton<ISoratusHostedAgents>(
+            static sp => sp.GetRequiredService<HostedAgentRegistry>());
+
+        // Volgorde telt, net als bij de gewone vorm: diensten stoppen in omgekeerde volgorde van
+        // registratie, dus de schrijver staat vooraan zodat hij als laatste stopt en de afsluitende
+        // registraties nog kan wegschrijven.
+        builder.Services.AddSingleton<IHostedService>(static sp => sp.GetRequiredService<TelemetryWriter>());
+        builder.Services.AddSingleton<HostedAgentsRegistrationService>();
+        builder.Services.AddSingleton<IHostedService>(
+            static sp => sp.GetRequiredService<HostedAgentsRegistrationService>());
+
+        // Geen LogRecordFactory in de container: er is geen enkelvoudige agentnaam om hem op te
+        // bouwen. De provider ziet dat en haalt de fabriek van de lopende aanroep. Zie
+        // SoratusLoggerProvider.ResolveFactory.
+        builder.Services.AddSingleton<ILoggerProvider, SoratusLoggerProvider>();
+        builder.Logging.AddFilter<SoratusLoggerProvider>(null, Microsoft.Extensions.Logging.LogLevel.Information);
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Kondigt één geherbergde agent aan die niet uit een andere bron volgt.
+    /// </summary>
+    /// <param name="services">De container.</param>
+    /// <param name="declaration">De aankondiging.</param>
+    /// <returns>Dezelfde container.</returns>
+    /// <exception cref="ArgumentNullException">Als een van beide <c>null</c> is.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Als de aankondiging niet door <see cref="HostedAgentDeclaration.Validate"/> komt.
+    /// </exception>
+    /// <remarks>
+    /// Voor een host waar de agents niet uit iets bestaands af te lezen zijn. Waar dat wél kan — de
+    /// endpoints van een webapplicatie — is een <see cref="IHostedAgentSource"/> beter: dan bestaat
+    /// er geen tweede lijst die met de eerste uit de pas kan lopen.
+    /// </remarks>
+    public static IServiceCollection AddSoratusHostedAgent(
+        this IServiceCollection services,
+        HostedAgentDeclaration declaration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(declaration);
+        declaration.Validate();
+
+        services.AddSingleton<IHostedAgentSource>(new StaticHostedAgentSource(declaration));
+        return services;
+    }
+
+    private static bool IsRegistered<T>(IServiceCollection services) =>
+        services.Any(descriptor => descriptor.ServiceType == typeof(T));
 
     private static AgentIdentity ResolveIdentity(IConfiguration configuration, IHostEnvironment hostEnvironment)
     {
@@ -351,7 +489,7 @@ public static class SoratusAgentBuilderExtensions
     }
 
     /// <summary>Maakt van <c>factuur-intake</c> een leesbare typeaanduiding: <c>Factuur intake</c>.</summary>
-    private static string Humanise(string agentName)
+    internal static string Humanise(string agentName)
     {
         string spaced = agentName.Replace('-', ' ').Replace('_', ' ');
         return spaced.Length == 0 ? agentName : char.ToUpperInvariant(spaced[0]) + spaced[1..];

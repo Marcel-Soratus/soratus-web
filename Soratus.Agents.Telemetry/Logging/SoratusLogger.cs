@@ -14,12 +14,19 @@ namespace Soratus.Agents.Telemetry.Logging;
 /// <c>ILogger</c> werkt, verschijnt zonder één regel wijziging in het portaal: de
 /// structured-logging-state komt in <c>extra</c>, de uitzondering levert een stacktrace, en de
 /// runId wordt uit de asynchrone stroom gehaald.
+///
+/// De logfabriek komt als functie binnen en niet als waarde. In een host met één agent levert die
+/// functie altijd dezelfde fabriek; in een host met meerdere geherbergde agents levert hij de
+/// fabriek van de agent wiens aanroep op deze asynchrone stroom loopt. Levert hij <c>null</c>, dan
+/// hoort deze regel bij geen enkele agent en gaat hij niet naar het portaal — zie
+/// <see cref="SoratusLoggerProvider"/> voor waarom dat beter is dan een gegokte agentnaam.
 /// </remarks>
 internal sealed class SoratusLogger(
     string category,
     LogLevel minimum,
-    LogRecordFactory factory,
+    Func<LogRecordFactory?> factory,
     TelemetryWriter writer,
+    TimeProvider clock,
     Func<IExternalScopeProvider?> scopeProvider) : ILogger
 {
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
@@ -48,6 +55,16 @@ internal sealed class SoratusLogger(
             return;
         }
 
+        // Geen agent op deze stroom, dus geen agentnaam om deze regel op te schrijven. Die naam
+        // verzinnen zou erger zijn dan de regel niet naar het portaal schrijven: hij zou onder een
+        // andere dienst opduiken dan waar hij vandaan komt. De regel gaat wél door de rest van de
+        // ILogger-keten, dus hij blijft in de console en in Application Insights staan.
+        LogRecordFactory? logs = factory();
+        if (logs is null)
+        {
+            return;
+        }
+
         ContractLogLevel level = Map(logLevel);
         var agentEvent = state as AgentEventState;
 
@@ -61,9 +78,9 @@ internal sealed class SoratusLogger(
             category: category,
             eventId: eventId,
             scopeProvider: scopeProvider(),
-            maxLength: factory.MaxExtraLength);
+            maxLength: logs.MaxExtraLength);
 
-        writer.Enqueue(factory.Create(level, eventName, message, extra, DateTimeOffset.UtcNow));
+        writer.Enqueue(logs.Create(level, eventName, message, extra, clock.GetUtcNow()));
     }
 
     private static ContractLogLevel Map(LogLevel logLevel) => logLevel switch

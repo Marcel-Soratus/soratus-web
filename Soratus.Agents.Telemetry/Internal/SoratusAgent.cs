@@ -8,19 +8,20 @@ internal sealed class SoratusAgent(
     TelemetryWriter writer,
     LogRecordFactory logs,
     AgentSchedule schedule,
-    AgentLifecycleState lifecycle) : ISoratusAgent
+    AgentLifecycleState lifecycle,
+    TimeProvider clock) : ISoratusAgent
 {
     public AgentIdentity Identity => identity;
 
     public string? CurrentRunId => RunScope.Current?.RunId;
 
-    public DateTimeOffset? NextRunAt => schedule.GetNextOccurrence(DateTimeOffset.UtcNow);
+    public DateTimeOffset? NextRunAt => schedule.GetNextOccurrence(clock.GetUtcNow());
 
     public Task<IAgentRun> StartRunAsync(TriggerKind trigger, CancellationToken cancellationToken = default)
     {
         // Bewust geen enkele await: alleen dan komt de AsyncLocal met de runId bij de aanroeper
         // terecht. Wegschrijven gebeurt toch gebufferd, dus er valt hier niets af te wachten.
-        var run = new AgentRun(identity, writer, logs, trigger);
+        var run = new AgentRun(identity, writer, logs, trigger, clock);
         run.Begin();
         return Task.FromResult<IAgentRun>(run);
     }

@@ -26,8 +26,9 @@ internal sealed class SoratusLoggerProvider(IServiceProvider services) : ILogger
     private readonly ConcurrentDictionary<string, ILogger> _loggers = new(StringComparer.Ordinal);
 
     private IExternalScopeProvider? _scopeProvider;
-    private LogRecordFactory? _factory;
+    private Func<LogRecordFactory?>? _factory;
     private TelemetryWriter? _writer;
+    private TimeProvider? _clock;
 
     public ILogger CreateLogger(string categoryName) =>
         _loggers.GetOrAdd(categoryName, static (category, provider) => provider.Build(category), this);
@@ -43,10 +44,34 @@ internal sealed class SoratusLoggerProvider(IServiceProvider services) : ILogger
             return NullLogger.Instance;
         }
 
-        _factory ??= services.GetRequiredService<LogRecordFactory>();
+        _factory ??= ResolveFactory();
         _writer ??= services.GetRequiredService<TelemetryWriter>();
+        _clock ??= services.GetService<TimeProvider>() ?? TimeProvider.System;
 
-        return new SoratusLogger(category, MinimumFor(category), _factory, _writer, () => _scopeProvider);
+        return new SoratusLogger(category, MinimumFor(category), _factory, _writer, _clock, () => _scopeProvider);
+    }
+
+    /// <summary>
+    /// Bepaalt waar de agentnaam van een logregel vandaan komt.
+    /// </summary>
+    /// <remarks>
+    /// <para>Twee gevallen, en de container zegt welk van de twee het is. Staat er een
+    /// <c>LogRecordFactory</c> in de container, dan herbergt dit proces één agent en hoort elke
+    /// regel bij hem — ook een regel buiten elke run. Staat hij er niet, dan herbergt dit proces
+    /// meerdere agents en is er geen vanzelfsprekende eigenaar; dan komt de fabriek van de run op
+    /// de huidige asynchrone stroom.</para>
+    ///
+    /// <para>Buiten een run levert dat tweede geval <c>null</c>, en dan wordt de regel niet naar het
+    /// portaal geschreven. Dat is een bewust verlies: het alternatief is de regel aan een
+    /// wíllekeurige van de geherbergde agents toeschrijven, en dan staat er in de logtabel van de
+    /// declaratie-inlezing een melding die uit de chat kwam. Een ontbrekende regel is te vinden in
+    /// de console van de host; een regel onder de verkeerde agent is een verkeerd antwoord op de
+    /// vraag "wat deed deze dienst".</para>
+    /// </remarks>
+    private Func<LogRecordFactory?> ResolveFactory()
+    {
+        LogRecordFactory? single = services.GetService<LogRecordFactory>();
+        return single is not null ? () => single : static () => RunScope.Current?.Logs;
     }
 
     /// <summary>

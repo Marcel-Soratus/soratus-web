@@ -2652,6 +2652,276 @@ verzoek uitlokken kan niet.
 
 ---
 
+## 42. Een agent kan een endpoint zijn: de hartslag komt dan van de host, en dat is niet hetzelfde als "hij werkt"
+
+**Spec:** §4 en §5 gaan uit van agents met een eigen proces — een container met een schema, een lus, en
+een hartslag die uit dat proces komt. Punt 1 verving de bron (Cosmos in plaats van Log Analytics) maar
+liet die vorm staan: één proces, één agent, één schema.
+
+**Werkelijkheid bij de eerste echte klant.** Er zijn geen achtergrondagents. Zijn drie "agents" zijn
+diensten binnen één bestaande ASP.NET Core-webapplicatie, aangeroepen per verzoek: een chat tegen een
+boekhoudkoppeling, een financieel overzicht, en het inlezen van declaraties uit Excel. Geen schema, geen
+eigen proces, geen eigen lus. Wat er wél is: die webapplicatie draait op een App Service met **Always On
+aan** op een Premium-plan, dus het proces is continu in leven.
+
+Daaruit volgt het hele ontwerp.
+
+### Wat er gebouwd is
+
+- **De hartslag komt van de host, niet van het werk.** Eén achtergronddienst
+  (`HostedAgentsRegistrationService`) klopt namens elke agent die het proces herbergt. Alle drie de
+  hartslagen zijn per constructie even oud: er is één proces om over te kloppen.
+- **De levensfase is een waarneming en geen mededeling.** Loopt er geen aanroep, dan is de fase
+  `IdleWaiting`; met een verse hartslag levert `AgentStatusCalculator` daar `Idle` op — rang 1, dus een
+  wachtende dienst tilt de klant in het overzicht nooit naar boven. Loopt er een aanroep, dan `Running`.
+  Bij een agent met een eigen lus meldt de agent dat zelf, omdat een leeg wachtinterval van buiten niet
+  van een vastgelopen lus te onderscheiden is; hier is dat onderscheid er wél, want de bibliotheek opent
+  en sluit elke aanroep zelf. Een `ReportLifecycle` op een geherbergde agent zou een tweede, afwijkende
+  waarheid over dezelfde toestand toestaan en bestaat daarom niet.
+- **Elke aanroep is een run.** Eén chatgesprek, één inlezing: één `RunRecord`, tweemaal geschreven
+  (`Running` bij het begin, de afloop bij het einde). Een mislukte inlezing wordt `Failed`, en dat weegt
+  in de statusberekening zwaarder dan `Idle` — gemeten: een dienst met een verse hartslag, levensfase
+  `IdleWaiting` en één mislukte run komt uit op `Failed`.
+- **`TriggerKind` is nooit `timer`.** `Schedule` blijft leeg, `NextRunAt` blijft `null`. Een
+  aankondiging met `timer` wordt geweigerd in plaats van stil gecorrigeerd: de documentatie van
+  `AgentRegistration.Schedule` belooft bij een timer-agent een cron-expressie, en dan zou er in het
+  portaal een agent op schema staan zonder schema.
+
+### Waar het staat, en waarom in twee delen
+
+Het geval splitst netjes in twee stukken, en de scheidslijn is de afhankelijkheid en niet het
+gebruiksgeval:
+
+1. **In `Soratus.Agents.Telemetry`** (`HostedAgents/`, plus vier internal typen): meerdere agents in één
+   host, een hartslag van de host, een run per aanroep, en de logroutering. Daar zit niets van een
+   webframework in. Een wachtrijhost met drie abonnementen heeft exact dezelfde vorm; er staan tests in
+   `Soratus.Agents.Telemetry.Tests` die die laag zonder ASP.NET aandrijven, en dat is precies wat ze
+   bewijzen.
+2. **In `Soratus.Agents.AspNetCore`** (nieuw project, vijf typen): het antwoord op de enige vraag die
+   hostspecifiek is — *welke* agents herbergt dit proces — plus de laag die een verzoek in een run zet.
+
+Het scharnier daartussen is `IHostedAgentSource`: één methode, `GetAgents()`.
+
+**Waarom een eigen project en geen map in de telemetriebibliotheek, gemeten.** Een
+`FrameworkReference` naar `Microsoft.AspNetCore.App` is besmettelijk. De `runtimeconfig.json` van
+`agents/heartbeat-demo` — een consoleagent — vraagt vandaag één framework:
+
+```
+"framework": { "name": "Microsoft.NETCore.App", "version": "10.0.0" }
+```
+
+Met die verwijzing in `Soratus.Agents.Telemetry` erbij gezet, opnieuw gebouwd en gemeten, vraagt hij er
+twee:
+
+```
+"frameworks": [ { "name": "Microsoft.NETCore.App", … }, { "name": "Microsoft.AspNetCore.App", … } ]
+```
+
+Elke consoleagent zou dan de webruntime nodig hebben om te kunnen starten. Dat is de hele afweging; het
+experiment is teruggedraaid en na terugdraaien opnieuw gemeten.
+
+`Soratus.Agents.Contracts` is niet aangeraakt en heeft geen webafhankelijkheid gekregen.
+
+### Wat een aanroeper moet doen
+
+Eén registratie, één regel in de pijplijn, één regel per endpoint:
+
+```csharp
+builder.AddSoratusWebAgents();
+
+app.UseRouting();
+app.UseSoratusAgentRuns();
+
+var chat      = app.MapPost("/api/chat", …).WithSoratusAgent("boekhoud-chat", "Chat", "POST /api/chat");
+var overzicht = app.MapGet("/api/financieel", …).WithSoratusAgent("financieel-overzicht", "Rapportage");
+var import    = app.MapPost("/api/declaraties", …).WithSoratusAgent("declaraties-import", "Document-intake");
+```
+
+De bestaande handlers worden niet aangeraakt. Wil een handler melden hoeveel regels hij verwerkte, dan
+kost dat één regel: `context.SoratusAgentRun()?.Processed(regels)`.
+
+**De lijst met agents staat maar op één plek, en dat is de plek waar het werk staat.** De hartslag leest
+dezelfde endpoint-metadata als de aanroeplaag (`EndpointHostedAgentSource` over `EndpointDataSource`).
+Er is dus geen tweede lijst in de opstartcode die met de eerste uit de pas kan lopen — en de fout die
+dán ontstaat is een dienst die aanroepen verwerkt zonder in het portaal te staan, of een dienst in het
+portaal die niet bestaat.
+
+**Waarom middleware en niet een endpoint-filter.** Een filter zou nul extra regels kosten: hij kan mee in
+dezelfde `WithSoratusAgent`-aanroep. Twee dingen wegen zwaarder. Een filter draait alleen om een
+minimal-API-handler, dus een MVC-controller met dezelfde metadata krijgt een hartslag en nooit een run —
+en in het portaal ziet dat eruit als een dienst die niemand aanroept, wat de duurste fout is die dit
+contract kan maken. En een filter is klaar zodra de handler zijn resultaat teruggeeft, terwijl het
+wegschrijven daarvan er nog na komt; bij een chat die zijn antwoord in stukjes stuurt is dat het grootste
+deel van de duur.
+
+**En die ene regel is niet weg te automatiseren.** Een `IStartupFilter` kan middleware alleen vóór of ná
+de hele gebruikerspijplijn hangen: vóór `UseRouting` is het endpoint nog onbekend, en ná de endpointlaag
+komt hij nooit meer aan de beurt. Vergeten wordt daarom niet stil gemaakt maar luid: `EndpointWiringCheck`
+kijkt op `ApplicationStarted` of er endpoints een agent aankondigen terwijl de aanroeplaag niet in de
+pijplijn staat, en schrijft dan per betrokken agent één `error`-logregel — "Deze dienst legt geen aanroepen
+vast; de koppeling in de webapplicatie is niet volledig ingericht." Geen uitzondering: dit loopt in de
+webapplicatie van een klant, en telemetrie mag zijn app niet neerhalen. Rood in het portaal, app in de
+lucht.
+
+### Wat "gezond" hier betekent, en wat het niet betekent
+
+Dit is de kern, en het is een echte beperking en geen detail.
+
+Een verse hartslag bewijst **dat het proces leeft en dat de weg naar de opslag open is**. Dat is precies
+wat een klant over zijn webapplicatie wil weten, en het is niet weinig. Hij bewijst **niet** dat een van
+deze drie diensten doet waarvoor hij er is. Een endpoint dat niemand meer aanroept, of dat achter een
+kapotte inlog staat, of waarvan de knop uit de gebruikersinterface is verdwenen, klopt even trouw door als
+een endpoint dat de hele dag werk verzet.
+
+Dus: **`Idle` betekent hier letterlijk "de host leeft en er loopt geen aanroep", en niet "deze agent
+werkt".** Het enige bewijs dat een agent op aanvraag werkt is zijn **laatste geslaagde run**.
+
+Wat een operator uit een grijze `Idle`-stip op deze drie diensten wél mag concluderen:
+
+- het webproces leeft en heeft in de laatste twee minuten iets weggeschreven;
+- er liep op dat moment geen aanroep;
+- de laatst afgeronde aanroep is niet mislukt (was hij dat wel, dan stond er `Failed`).
+
+Wat hij er **niet** uit mag concluderen:
+
+- dat de dienst vandaag is aangeroepen;
+- dat de dienst ooit is aangeroepen;
+- dat de dienst, als hij aangeroepen zou worden, zou werken.
+
+Die drie staan in de kolom **laatste run**, en nergens anders.
+
+**Het onderscheid is in de gegevens te maken, zonder nieuw veld.** Het handschrift van een agent op
+aanvraag is een drietal: `triggerKind` is `http` (of `queue`/`webhook`), `schedule` is leeg en `nextRunAt`
+is leeg. Bij een agent met dat drietal zegt de status niets over het werk; bij een agent met een schema
+zegt hij dat wél, want daar is een gemiste run zichtbaar doordat `nextRunAt` in het verleden ligt. Het
+portaal kan die twee dus onderscheiden met wat er nu al in het document staat.
+
+### Wat het contract hiervoor mist — gemeld en niet zelf toegevoegd
+
+Twee dingen zijn vandaag niet uit te drukken. Beide zijn bewust níet in `Soratus.Agents.Contracts`
+bijgebouwd; ze staan hier als besluit voor de eigenaar van het contract.
+
+1. **Er is geen verwachting van aanroep.** Bij een timer-agent is stilte te beoordelen: er staat een
+   `nextRunAt`, en als die voorbij is zonder run is er iets mis. Bij een agent op aanvraag is er niets om
+   stilte tegen af te meten, dus "drie maanden niet aangeroepen omdat de knop weg is" en "vanmiddag
+   twintig keer aangeroepen en nu even niets" leveren exact hetzelfde document op. Wat zou helpen is één
+   optioneel veld van de vorm "verwacht hoogstens zoveel tijd tussen twee runs", door de bouwer gezet en
+   door het portaal gelezen. Dat is een contractuitbreiding met gevolgen voor het scherm, de statusrangen
+   en de storingsmelder, en die keuze is niet aan deze sessie.
+2. **`RunResult` heeft geen waarde voor "de aanroeper haakte af".** Een gebruiker die zijn tabblad
+   sluit halverwege een chat levert een run op die niet `Ok` is (het werk is niet klaar), niet `Failed`
+   (er is niets stuk, en rood dat afgaat op een dichtgeklapt tabblad is binnen een week niets meer waard)
+   en niet `Skipped` (er was wél werk). Vandaag wordt het `Skipped`, met één `warn`-regel `run.aborted`
+   erbij die vertelt wat er echt gebeurde. De uitkomst is goed — geen valse storing — en de reden is
+   onnauwkeurig. Dezelfde vorm als de openstaande `StatementRefusal` in punt 29.
+
+### De afhankelijkheid die niemand ziet: Always On
+
+Deze hartslag bestaat alleen zolang het proces geladen blijft. Op een App Service is dat een **instelling
+buiten de code**: staat Always On uit, dan laadt het platform de app na ongeveer twintig minuten zonder
+verkeer uit, stopt de hartslag, en meldt het portaal na twee minuten stilte een storing terwijl er niets
+aan de hand is. Eén vinkje in een ander scherm draait de betekenis van deze code om.
+
+Daar is in code niets tegen te doen — een uitgeladen proces kan niets meer melden. Wat er wél kan is het
+**afleesbaar maken**, en dat is gedaan zonder een veld te verzinnen dat het contract niet heeft:
+
+1. **`startedAt` is het moment waarop het proces startte, gelijk op alle geherbergde agents.** Dat is een
+   veld dat al bestond, en het is het diagnostische paar: schuift `startedAt` na elke stilte op, dan wordt
+   het proces telkens uitgeladen en opnieuw gestart; blijft `startedAt` staan terwijl de hartslag stokt,
+   dan is er iets mis met het proces zelf. Twee verschillende diagnoses uit één bestaand veld.
+2. **Eén `host.started`-regel per agent per processtart.** Eén zo'n regel per uitrol is normaal. Staat hij
+   elke twintig minuten opnieuw in de logtabel, dan is dát het patroon. De uitleg gaat operator-only mee in
+   `extra`, want de lezer die het patroon aantreft zoekt op dat moment de betekenis en niet de
+   documentatie: *"Deze regel hoort één keer per uitrol te staan. Staat hij elke twintig minuten opnieuw,
+   dan wordt dit proces telkens uitgeladen en stopt de hartslag daartussen; op een Azure App Service is
+   dat de instelling Always On."* In `msg` staat die uitleg níet — dat veld leest de klant, en die heeft
+   aan een Azure-instelling niets (punten 13 en 14).
+
+Verder staat de afhankelijkheid opgeschreven op de plek waar iemand komt kijken als de hartslag stopt: in
+de `<remarks>` van `HostedAgentsRegistrationService`, naast de lus die klopt.
+
+**Wat hier een aanname is en geen meting:** of Azure een app bij het uitladen netjes afsluit. Zo ja, dan
+schrijft deze dienst nog een laatste document met `stoppedCleanly` en staat elke dienst na twintig minuten
+stilte eerst op `Idle` en daarna op `Degraded`. Zo nee, dan blijft de laatste hartslag staan en wordt het
+meteen `Degraded`. Dat verschil is hier niet te meten en het is niet nagerekend.
+
+### Kleinere besluiten, met de reden
+
+**Geen vierde rij "de webhost".** De verleiding is groot: de host is immers wat de hartslag echt bewijst.
+Maar zijn status zou per constructie gelijk zijn aan die van de drie diensten, dus die rij voegt een regel
+toe zonder een feit toe te voegen — en de klant heeft drie diensten en zou er vier zien. De hostidentiteit
+bestaat wel (hij levert klant, versie, omgeving en `startedAt` aan de drie), maar wordt niet gepubliceerd.
+
+**5xx is een storing, 4xx niet.** Een antwoord met een 5xx-code maakt de run `Failed`, ook als er geen
+uitzondering ontsnapte: dan is de dienst zelf omgevallen. Een 4xx níet: dan heeft de aanroeper iets
+verkeerd meegestuurd en heeft de dienst juist goed gewerkt door het te weigeren. Zou dat rood worden, dan
+kleurt het portaal zodra een gebruiker een verkeerd Excel-bestand aanbiedt, en dan is rood niets meer waard.
+Wie het anders wil, roept `Fail` zelf aan op de run.
+
+**Een logregel buiten een aanroep gaat niet naar het portaal.** In een host met één agent hoort elke regel
+bij die agent. In een host met drie is er buiten een aanroep geen eigenaar, en de bibliotheek verzint er
+geen: dan zou er in de logtabel van de declaratie-inlezing een melding staan die uit de chat kwam. De regel
+blijft wel in de gewone log van de host (console, Application Insights). Voor een mededeling van de host
+die tóch aan een agent hoort — zoals `host.started` — is er `ISoratusHostedAgent.ReportEvent`.
+
+**De twee vormen van de bibliotheek sluiten elkaar uit.** `AddSoratusAgent` en `AddSoratusHostedAgents`
+naast elkaar zou twee hartslagen met verschillende betekenis over hetzelfde proces schrijven; de tweede
+aanroep werpt. En `SORATUS_AGENT__SCHEDULE` op een host met diensten op aanvraag werpt ook: een
+cron-expressie die niets plant wordt geloofd.
+
+### Wat het meten opleverde
+
+**Een echte race, en hij was intermittent.** De eerste versie publiceerde de registraties één keer bij het
+starten van de achtergronddienst. Gemeten over vijf opstarts van dezelfde applicatie: **twee keer nul
+agents, drie keer drie agents** — `EndpointDataSource` was op dat moment nog leeg, omdat de
+verzoekpijplijn door een ándere achtergronddienst wordt gebouwd en de volgorde daarvan niet van ons is. In
+de twee slechte gevallen zou het portaal een halve minuut niets van de diensten weten, en dat is op het
+scherm geen fout maar afwezigheid. Opgelost door óók op `ApplicationStarted` te publiceren (het document is
+een upsert, dus dat kost één schrijfactie per agent) en door de bronnen bij elke hartslag opnieuw te vragen
+in plaats van één keer. Met de mutatie die de tweede publicatie weghaalt vallen 12 van de 31 tests om.
+
+**En een tweede, die daaronder lag.** De eerste melding stond in `ExecuteAsync` van de
+achtergronddienst, met de gedachte dat een `BackgroundService` zijn lijf synchroon begint. Dat is niet zo,
+en het is gemeten: zes opstarts van dezelfde host, elke keer direct na `StartAsync` geteld, **zes keer nul
+agents bekend**. De host wacht op `StartAsync` en niet op wat er in `ExecuteAsync` gebeurt, dus alles wat
+"bij het starten" moet gebeuren en waar iemand op mag rekenen, hoort in een `StartAsync`-override.
+Zichtbaar gevolg vóór de reparatie: vier van de tien testruns rood, met een lege opslag en niets in de
+log — de duurste soort rood, want het lijkt op een toevalligheid. Na de reparatie zes runs op rij groen,
+en de gemeten telling direct na `StartAsync` is één van één.
+
+Diezelfde eigenschap zit in `AgentRegistrationService`, het pad met één agent: ook daar staat de eerste
+registratie in `ExecuteAsync`. In productie is het verschil een handvol milliseconden en er is geen test
+die erop leunt, dus het is hier niet meeveranderd — maar het is dezelfde vorm, en wie daar ooit een test
+op zet die vlak na `StartAsync` kijkt, krijgt dezelfde flakiness.
+
+**Een val in de configuratie van de bibliotheek, gevonden en niet gerepareerd.** De foutmelding bij een
+ontbrekende omgeving zegt: *"Zet `SORATUS_AGENT__ENVIRONMENT` expliciet op prod, acc of dev."* Wie dat
+letterlijk doet, krijgt bij het opstarten: *"heeft de waarde 'prod', maar dat is geen geldige
+AgentEnvironment. Geldig zijn: Production, Acceptance, Development."* De lezing gaat via `Enum.TryParse` en
+kent dus de enumnamen, terwijl `prod`/`acc`/`dev` de namen zijn waarmee het veld in het JSON-document
+staat. De melding wijst een weg die de parser weigert. Dat is een bestaand gedrag van het pad met één
+agent en het veranderen ervan verandert welke configuratiewaarden geldig zijn, dus het staat hier als
+melding en niet als wijziging.
+
+### Twee dingen voor wie hier straks op verder bouwt
+
+**Er zit geen betekenis in een naam.** De agentnaam wordt door de aanroeper opgegeven en nergens
+ontleed: niet uit de route, niet uit de naam van de handler, niet uit de HTTP-methode. Wie
+`WithSoratusAgent("declaraties-import")` schrijft, krijgt die naam en verder niets. De enige plek waar
+uit een naam iets wordt afgeleid is de terugvaloptie voor de typeaanduiding
+(`declaraties-import` → `Declaraties import`), en dat is presentatie: hij staat in `displayType`, wordt
+door niets gelezen dat een besluit neemt, en verdwijnt zodra de bouwer zelf een type opgeeft.
+
+**Wat een storingsmelder van deze drie diensten moet weten om niet drie keer te mailen.** Ze zitten in
+één proces. Valt dat proces uit, dan worden alle drie tegelijk `Degraded` — één oorzaak, drie agents. Het
+veld waaraan dat te zien is, is `startedAt`: dat is bij geherbergde agents de start van het *proces* en
+dus exact gelijk op alle drie de documenten (er is een test die dat vastpint). Een melder die groepeert op
+`customerId` plus `startedAt` ziet daarmee "één host met drie diensten" en kan één bericht sturen in
+plaats van drie. Zonder die groepering stuurt hij er drie, en dan is de derde mail de reden dat de eerste
+ook niet meer gelezen wordt.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Facturatie, sprint en support. Uit §9 van de spec staat daarmee nog één besluit open dat aan uren

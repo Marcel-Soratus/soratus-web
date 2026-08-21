@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- De testnamen zijn Nederlands en bevatten geen underscores; net als in de andere testprojecten. -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Dezelfde versies als Soratus.Agents.Telemetry.Tests. -->
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!--
+      Een echte host met een echte verzoekpijplijn, zonder poort. Dat is hier de kern van het
+      meten: de aanroeplaag hangt aan endpoint-metadata die pas bestaat nadat routing heeft
+      gelopen, en een test die de middleware met een verzonnen HttpContext aanroept bewijst
+      precies dat deel niet.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Soratus.Agents.AspNetCore\Soratus.Agents.AspNetCore.csproj" />
+    <ProjectReference Include="..\Soratus.Agents.Contracts\Soratus.Agents.Contracts.csproj" />
+    <ProjectReference Include="..\Soratus.Agents.Telemetry\Soratus.Agents.Telemetry.csproj" />
+  </ItemGroup>
+
+</Project>
