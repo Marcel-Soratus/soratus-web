@@ -26,14 +26,50 @@ internal sealed class AgentRegistrationService(
     private readonly SoratusTelemetryOptions _options = options.Value;
     private int _finalWritten;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// Of deze agent zich heeft aangemeld. Bestaat om te meten.
+    /// </summary>
+    /// <remarks>
+    /// De invariant die hieronder wordt afgedwongen: als <see cref="StartAsync"/> terugkomt, is dit
+    /// waar. Dat is deterministisch te meten, en het gevolg — "staat de registratie in de opslag" —
+    /// is dat niet: dat hangt af van de planner. Zie <c>TelemetryWriter.DrainPathArmed</c>, waar
+    /// dezelfde afweging staat en waar dezelfde fout zat.
+    /// </remarks>
+    internal bool Announced { get; private set; }
+
+    /// <summary>
+    /// Meldt de agent aan en zet het vangnet voor het afsluiten, vóór <c>StartAsync</c> terugkomt.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Dit stond in <see cref="ExecuteAsync"/>, en dat maakte een kortlevende agent
+    /// onzichtbaar.</strong> Het lijf van <c>ExecuteAsync</c> van een <c>BackgroundService</c> is
+    /// niet gegarandeerd gelopen als <c>StartAsync</c> terugkomt. Een agent die start, werkt en
+    /// binnen dat venster afsluit, meldde zich dus helemaal niet — en dan bestaat hij niet in het
+    /// portaal. Dat is erger dan een ontbrekende logregel: er is geen rij om iets aan te zien.</para>
+    ///
+    /// <para>Het vangnet voor het afsluiten hing aan hetzelfde lijf en ontbrak dus in precies dat
+    /// geval waarin het nodig was.</para>
+    ///
+    /// <para>Dezelfde vorm en dezelfde reparatie als in <c>TelemetryWriter</c> en
+    /// <c>HostedAgentsRegistrationService</c>. Het is nu drie keer opgetreden in deze bibliotheek:
+    /// wat vóór het einde van <c>StartAsync</c> moet zijn gebeurd, hoort in <c>StartAsync</c>.</para>
+    /// </remarks>
+    /// <param name="cancellationToken">Annuleringstoken van de host.</param>
+    /// <returns>De taak van het opstarten.</returns>
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
         RegisterShutdownFallback();
 
         // Het proces meldt zich meteen, niet pas na het eerste interval. Anders staat een net
         // uitgerolde agent een halve minuut op 'unknown'.
         writer.Enqueue(BuildRegistration());
+        Announced = true;
 
+        return base.StartAsync(cancellationToken);
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
         using var timer = new PeriodicTimer(AgentStatusThresholds.HeartbeatInterval);
 
         try

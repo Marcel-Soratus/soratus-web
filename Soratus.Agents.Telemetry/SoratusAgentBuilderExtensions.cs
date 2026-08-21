@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Serialization;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Configuration;
@@ -390,6 +391,30 @@ public static class SoratusAgentBuilderExtensions
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
+    /// <summary>
+    /// Leest een enumwaarde uit configuratie, in de naam van het lid én in de vorm die in de
+    /// documenten staat.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Beide vormen, en dat is een reparatie.</strong> Dit accepteerde alleen de
+    /// C#-naam van het lid — <c>Production</c>, <c>Acceptance</c>, <c>Development</c> — terwijl élk
+    /// telemetriedocument en élk scherm de JSON-vorm laat zien: <c>prod</c>, <c>acc</c>, <c>dev</c>.
+    /// Een operator die overtypt wat hij voor zich ziet, kreeg dus een inrichtingsfout.</para>
+    ///
+    /// <para>En de melding die hem verder moest helpen wees een dérde weg: bij een agent in Azure
+    /// zonder omgevingsvariabele stond er "zet deze sleutel op prod, acc of dev" — precies de vorm
+    /// die deze functie weigerde. Wie die aanwijzing volgde kreeg de fout hieronder te zien.</para>
+    ///
+    /// <para>De uitweg is verruimen en niet de tekst bijwerken: beide vormen zijn ondubbelzinnig,
+    /// niets wat eerder werkte stopt, en de inconsistentie tussen configuratie en documenten
+    /// verdwijnt in plaats van dat er een derde plek bijkomt waar hij is opgeschreven. De opsomming
+    /// in de foutmelding noemt de documentvorm, want dat is wat een lezer heeft gezien.</para>
+    /// </remarks>
+    /// <typeparam name="TEnum">Het enumtype.</typeparam>
+    /// <param name="value">De gelezen waarde, of <c>null</c>.</param>
+    /// <param name="key">De configuratiesleutel, voor de foutmelding.</param>
+    /// <param name="fallback">Wat het wordt als er niets is gezet.</param>
+    /// <returns>De waarde.</returns>
     private static TEnum ParseEnum<TEnum>(string? value, string key, TEnum fallback)
         where TEnum : struct, Enum
     {
@@ -403,10 +428,32 @@ public static class SoratusAgentBuilderExtensions
             return parsed;
         }
 
+        foreach (TEnum kandidaat in Enum.GetValues<TEnum>())
+        {
+            if (string.Equals(DocumentName(kandidaat), value, StringComparison.OrdinalIgnoreCase))
+            {
+                return kandidaat;
+            }
+        }
+
         throw new InvalidOperationException(
             $"{key} heeft de waarde '{value}', maar dat is geen geldige {typeof(TEnum).Name}. " +
-            $"Geldig zijn: {string.Join(", ", Enum.GetNames<TEnum>())}.");
+            $"Geldig zijn: {string.Join(", ", Enum.GetValues<TEnum>().Select(DocumentName))}.");
     }
+
+    /// <summary>
+    /// De naam die deze enumwaarde in een telemetriedocument krijgt, of zijn C#-naam als er geen
+    /// eigen naam is opgegeven.
+    /// </summary>
+    /// <typeparam name="TEnum">Het enumtype.</typeparam>
+    /// <param name="waarde">De waarde.</param>
+    /// <returns>De naam zoals een lezer hem ziet.</returns>
+    private static string DocumentName<TEnum>(TEnum waarde)
+        where TEnum : struct, Enum =>
+        typeof(TEnum).GetField(waarde.ToString())
+            ?.GetCustomAttribute<JsonStringEnumMemberNameAttribute>()
+            ?.Name
+        ?? waarde.ToString();
 
     /// <summary>
     /// Omgevingsvariabelen die alleen bestaan als dit proces in Azure draait.
