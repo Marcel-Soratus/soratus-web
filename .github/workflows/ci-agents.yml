@@ -27,6 +27,7 @@ on:
       - 'agents/**'
       - 'Soratus.slnx'
       - 'NuGet.config'
+      - 'Directory.Build.props'
       - '.github/workflows/ci-agents.yml'
   pull_request:
     paths:
@@ -36,6 +37,7 @@ on:
       - 'Soratus.Mcp.Uren/**'
       - 'Soratus.Mcp.Uren.Tests/**'
       - 'agents/**'
+      - 'Directory.Build.props'
   workflow_dispatch:
 
 permissions:

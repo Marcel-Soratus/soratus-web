@@ -10,6 +10,7 @@ on:
       - 'Soratus.Web.Tests/**'
       - 'Soratus.slnx'
       - 'NuGet.config'
+      - 'Directory.Build.props'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 

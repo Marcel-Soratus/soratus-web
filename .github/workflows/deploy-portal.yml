@@ -10,6 +10,7 @@ on:
       - 'Soratus.Agents.Telemetry.Tests/**'
       - 'Soratus.slnx'
       - 'NuGet.config'
+      - 'Directory.Build.props'
       - '.github/workflows/deploy-portal.yml'
   workflow_dispatch:
 
