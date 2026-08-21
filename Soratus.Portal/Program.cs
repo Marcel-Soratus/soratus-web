@@ -221,6 +221,22 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddCascadingAuthenticationState();
 
+// De doelpoort van UseHttpsRedirection, expliciet. Zonder dit meldt de middleware bij élke start
+// "Failed to determine the https port for redirect" en stuurt hij niets door: achter de
+// App Service-proxy luistert Kestrel alleen op HTTP, dus er is geen HTTPS-poort om af te leiden.
+//
+// Het gevolg was onschadelijk — httpsOnly staat aan op de App Service, dus de site is toch alleen
+// via TLS bereikbaar — maar het is een waarschuwing bij elke start, en ruis is precies wat later
+// een échte waarschuwing onzichtbaar maakt. De middleware weghalen zou ook werken en is
+// verleidelijker; dat maakt de TLS-afdwinging alleen een eigenschap van een instelling in Azure
+// die niemand in deze code ziet staan.
+//
+// Niet in Development: daar luistert Kestrel zelf op een HTTPS-poort en vindt de middleware hem.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHttpsRedirection(options => options.HttpsPort = 443);
+}
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
