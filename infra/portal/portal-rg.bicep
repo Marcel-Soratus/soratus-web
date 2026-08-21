@@ -82,6 +82,23 @@ param alertRecipients array = []
 // waarin de configuratiebinder een lijst leest uit platte sleutels. Als variabele en niet inline:
 // Bicep staat een for-expressie niet toe binnen een concat. Een lege array levert géén sleutel op,
 // en dan heeft de melder geen ontvangers en verstuurt hij niets — hij valt niet om.
+// Een optioneel adres hoort te ONTBREKEN als het er niet is, en niet leeg te zijn.
+//
+// Dit heeft het portaal plat gelegd. De sleutel stond hier onvoorwaardelijk met een lege waarde,
+// de configuratiebinder maakte daar "" van, en op dat veld staat een e-mailadresvalidatie — die
+// een lege string afkeurt waar hij null doorlaat. Gevolg: een OptionsValidationException bij de
+// eerste keer dat de mailinstellingen werden opgevraagd, en omdat dat in een achtergronddienst
+// gebeurt legde die de hele host neer. De app was al gestart en /healthz had al 200 gegeven,
+// want die raakt met opzet geen enkele afhankelijkheid.
+//
+// Dit is dezelfde fout als punt 15, nu in een template: leeg en afwezig zijn niet hetzelfde.
+var replyToSetting = empty(mailReplyToAddress) ? [] : [
+  {
+    name: 'PortalMail__ReplyToAddress'
+    value: mailReplyToAddress
+  }
+]
+
 var alertRecipientSettings = [
   for (recipient, index) in alertRecipients: {
     name: 'PortalAlerts__Recipients__${index}'
@@ -549,10 +566,6 @@ resource portalApp 'Microsoft.Web/sites@2024-04-01' = {
           value: mailFromAddress
         }
         {
-          name: 'PortalMail__ReplyToAddress'
-          value: mailReplyToAddress
-        }
-        {
           name: 'PortalMail__DryRun'
           value: string(mailDryRun)
         }
@@ -560,7 +573,7 @@ resource portalApp 'Microsoft.Web/sites@2024-04-01' = {
           name: 'PortalMail__PortalBaseUri'
           value: 'https://${portalHostName}'
         }
-      ], alertRecipientSettings)
+      ], replyToSetting, alertRecipientSettings)
     }
   }
 }

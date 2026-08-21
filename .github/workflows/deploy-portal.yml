@@ -135,3 +135,38 @@ jobs:
           done
           echo "::error::Smoke test mislukt. $HEALTH_URL gaf na $attempts pogingen (~$((attempts * delay / 60)) min) geen HTTP 200; laatste status was $code. De deploy is wél uitgevoerd — controleer de app en rol zo nodig terug (zie docs/agent-portal/deploy.md)."
           exit 1
+
+      # /healthz raakt met opzet geen enkele afhankelijkheid: geen Cosmos, geen configuratie, geen
+      # DI. Dat is goed — een portaal dat draait terwijl één klantopslag hapert is gezond, en een
+      # gezondheidscontrole die dat anders beoordeelt rolt bij elke hapering de vorige versie terug.
+      #
+      # Maar het betekent dat deze stap een hele klasse storingen niet ziet. Gemeten, op productie:
+      # een lege app-setting op een veld met een e-mailadresvalidatie liet de optiebinding falen bij
+      # de eerste opvraging, en omdat dat in een achtergronddienst gebeurt legde die de host neer.
+      # /healthz gaf 200, deze stap werd groen, en daarna was het portaal 503. De uitrol meldde dus
+      # succes over een app die op het punt stond om te vallen.
+      #
+      # Vandaar deze tweede controle. / vraagt een aanmelding, dus het goede antwoord is een 302 naar
+      # Entra — en om dat te geven moet de app de container hebben gebouwd, de configuratie hebben
+      # gebonden en de aanmeldketen hebben opgezet. Een host die is omgevallen geeft 503.
+      #
+      # Wat deze controle nog steeds niet ziet: een achtergronddienst die pas na deze meting omvalt.
+      # Een crashlus vangt hij wél, want dan mislukt het merendeel van de verzoeken.
+      - name: Smoke test / (bouwt de container en bindt de configuratie)
+        shell: bash
+        run: |
+          attempts=12
+          delay=10
+          code=000
+          for i in $(seq 1 $attempts); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 https://portal.soratus.com/ || echo 000)
+            if [ "$code" = "302" ]; then
+              echo "OK: / gaf $code (doorstuur naar de aanmelding)"
+              exit 0
+            fi
+            echo "poging $i: / gaf $code, opnieuw over ${delay}s"
+            sleep $delay
+          done
+          echo "::error::/ gaf $code na $attempts pogingen. Een 503 betekent dat de host is omgevallen; kijk in de AppServiceConsoleLogs op een onbehandelde uitzondering bij het opstarten."
+          exit 1
+

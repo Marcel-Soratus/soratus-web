@@ -57,7 +57,11 @@ public sealed class PortalMailOptions
     /// </para>
     /// </remarks>
     [EmailAddress(ErrorMessage = "PortalMail:FromAddress is geen e-mailadres.")]
-    public string? FromAddress { get; set; }
+    public string? FromAddress
+    {
+        get => _fromAddress;
+        set => _fromAddress = Leeg(value);
+    }
 
     /// <summary>
     /// Het adres waar een antwoord van de klant heen gaat, of leeg voor geen <c>Reply-To</c>.
@@ -68,7 +72,38 @@ public sealed class PortalMailOptions
     /// van Soratus te landen en niet in een postbus die niemand leest.
     /// </remarks>
     [EmailAddress(ErrorMessage = "PortalMail:ReplyToAddress is geen e-mailadres.")]
-    public string? ReplyToAddress { get; set; }
+    public string? ReplyToAddress
+    {
+        get => _replyToAddress;
+        set => _replyToAddress = Leeg(value);
+    }
+
+    private string? _fromAddress;
+    private string? _replyToAddress;
+
+    /// <summary>
+    /// Een leeg of blanco adres wordt <c>null</c>: afwezig, en niet ongeldig.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Dit heeft het portaal plat gelegd, en de reparatie hoort daarom hier en niet
+    /// alleen in de template.</strong> Een app-setting met een lege waarde bindt als <c>""</c>, en
+    /// <c>[EmailAddress]</c> keurt een lege string áf waar hij <c>null</c> doorlaat. Gevolg: een
+    /// <c>OptionsValidationException</c> bij de eerste keer dat deze instellingen werden opgevraagd
+    /// — en omdat dat in een achtergronddienst gebeurt, legde die de hele host neer.</para>
+    ///
+    /// <para>Voor een optioneel adres betekenen leeg en afwezig hetzelfde, dus ze horen ook
+    /// hetzelfde te zijn. Dat is niet in tegenspraak met punt 15: dáár gaat het om een bedrag,
+    /// waar nul een afspraak is en niets-ingevuld geen afspraak — twee verschillende uitspraken.
+    /// Bij een adres is er maar één betekenis van leeg.</para>
+    ///
+    /// <para>De template zet de sleutel nu ook niet meer als hij leeg is. Dit is de tweede laag: een
+    /// lege waarde kan ook uit een omgevingsvariabele of een portaalinstelling komen, en dan is er
+    /// geen template die hem tegenhoudt.</para>
+    /// </remarks>
+    /// <param name="waarde">De gelezen waarde.</param>
+    /// <returns>De waarde, of <c>null</c> als er niets in stond.</returns>
+    private static string? Leeg(string? waarde) =>
+        string.IsNullOrWhiteSpace(waarde) ? null : waarde.Trim();
 
     /// <summary>
     /// Of het portaal in proefdraaimodus staat: opmaken en tonen wat er zou worden verstuurd, en
