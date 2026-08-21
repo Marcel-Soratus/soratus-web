@@ -21,7 +21,13 @@
 @inject IAgentDetailViews Details
 @inject NavigationManager Navigation
 
-<PageTitle>@_agentName · Agent Portal</PageTitle>
+@* Binnen de rolcontrole en niet erboven — zie de opmerking bij Agents.razor en PaginatitelTests.
+   Hier weegt het zwaarder dan elders: deze titel is de agentnaam, en dat is een gegeven van de
+   klant achter die slug. *@
+@if (_operatorDetail is not null || _customerDetail is not null)
+{
+    <PageTitle>@_agentName · Agent Portal</PageTitle>
+}
 
 @if (_operatorDetail is { } operatorDetail)
 {

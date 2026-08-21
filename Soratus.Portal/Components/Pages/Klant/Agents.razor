@@ -23,7 +23,15 @@
 @inject IPortalViews Views
 @inject NavigationManager Navigation
 
-<PageTitle>@_title · Agent Portal</PageTitle>
+@* Binnen de rolcontrole en niet erboven. Een PageTitle rendert in de HeadOutlet en dus niet in de
+   markup van de pagina, waardoor het vangnet op verboden woorden hem niet ziet — de gebruiker wel,
+   in zijn tabblad, zijn geschiedenis en zijn bladwijzers. Rendert deze pagina niets (een klant die
+   naar de slug van een ándere klant kijkt), dan hoort er ook geen titel te staan: wat niet wordt
+   gerenderd kan niet lekken. Zie PaginatitelTests, waar dit is gemeten in plaats van bedacht. *@
+@if (_operatorView is not null || _customerView is not null)
+{
+    <PageTitle>@_title · Agent Portal</PageTitle>
+}
 
 @if (_operatorView is { } operatorView)
 {

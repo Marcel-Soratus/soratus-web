@@ -95,7 +95,11 @@
 @inject TimeProvider Clock
 @inject NavigationManager Navigation
 
-<PageTitle>Uren · @_title · Agent Portal</PageTitle>
+@* Binnen de rolcontrole en niet erboven — zie de opmerking bij Agents.razor en PaginatitelTests. *@
+@if (_operatorView is not null || _customerView is not null)
+{
+    <PageTitle>Uren · @_title · Agent Portal</PageTitle>
+}
 
 @if (_operatorView is { } operatorView)
 {

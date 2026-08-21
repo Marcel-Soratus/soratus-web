@@ -40,7 +40,13 @@
 @inject IContractViews Contracts
 @inject NavigationManager Navigation
 
-<PageTitle>Contract · @_title · Agent Portal</PageTitle>
+@* Binnen de rolcontrole en niet erboven — zie de opmerking bij Agents.razor en PaginatitelTests.
+   Zonder deze voorwaarde stond er "Contract · Contract · Agent Portal" op een pagina die niets
+   rendert: het sjabloon degradeert dan zichtbaar, en dat is de zachte versie van hetzelfde gebrek. *@
+@if (_write is not null || _view is not null)
+{
+    <PageTitle>Contract · @_title · Agent Portal</PageTitle>
+}
 
 @if (_write is { } write)
 {

@@ -74,6 +74,98 @@ public class PaginatitelTests : Portaalrendertest
             "erbij in de opmerking. Eén regel verplaatsen is genoeg.");
     }
 
+    /// <summary>
+    /// De slug van een klant waar de testklantgebruiker géén toegang tot heeft.
+    /// </summary>
+    /// <remarks>
+    /// Met opzet een klant die wél bestáát in de klantenlijst en niet een verzonnen naam. Een
+    /// onbekende slug lost nergens op en dan valt er ook niets te lekken; juist een bestaande klant
+    /// levert een naam op die in een titel terecht zou kunnen komen.
+    /// </remarks>
+    private const string VreemdeKlant = "bakker-bv";
+
+    /// <summary>Elke pagina met een klant-slug in de route.</summary>
+    public static TheoryData<Type> PaginasMetSlug
+    {
+        get
+        {
+            var data = new TheoryData<Type>();
+            foreach (var pagina in Paginaverzameling.Alle()
+                .Where(pagina => Paginaverzameling.Routeparameters(pagina).Contains("Slug", StringComparer.Ordinal)))
+            {
+                data.Add(pagina);
+            }
+
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(PaginasMetSlug))]
+    public void OpDeSlugVanEenVreemdeKlantZetGeenPaginaEenTitel(Type pagina)
+    {
+        // Deze theorie bestaat omdat de eerste er een gat in liet, en dat gat is gemeten en niet
+        // bedacht. Die eerste slaat elke pagina over die voor een rechthebbende klant inhoud
+        // rendert — en dat zijn juist de klantpagina's. Een mutatie die de PageTitle van het
+        // facturatiescherm buiten de rolcontrole zette, maakte niets rood: de theorie kwam niet
+        // verder dan zijn eigen return, de titel bevatte geen verboden woord, en de pagina stond
+        // vóór en ná de mutatie in dezelfde vastgelegde lijst.
+        //
+        // Het geval dat misgaat is het geval dat niemand rendeerde: een klant die de slug van een
+        // ándere klant opvraagt. Dan lost de autorisatie niets op, rendert de pagina niets, en zou
+        // een titel buiten de rolcontrole alsnog in de HeadOutlet staan — met de naam van een klant
+        // waar deze gebruiker geen recht op heeft, in zijn tabblad en in zijn geschiedenis. Dat is
+        // geen cosmetisch punt: vier van de vijf klantpagina's zetten de klantnaam in hun titel.
+        MeldKlantAan();
+
+        var cut = RenderPagina(pagina, VreemdeKlant);
+
+        Assert.True(
+            string.IsNullOrWhiteSpace(cut.Markup),
+            $"De pagina {pagina.Name} rendert inhoud op de slug van een klant waar deze gebruiker " +
+            "geen toegang tot heeft. Dat is een zwaarder probleem dan een titel en het hoort in het " +
+            "klantvangnet thuis, niet hier.");
+
+        var titels = cut.FindComponents<PageTitle>();
+
+        Assert.True(
+            titels.Count == 0,
+            $"De pagina {pagina.Name} " +
+            $"({string.Join(", ", Paginaverzameling.Routes(pagina))}) rendert niets op de slug van " +
+            $"een vreemde klant, maar zet wel een paginatitel: \"{Titel(cut)}\".\n\n" +
+            "Een PageTitle rendert in de HeadOutlet en niet in de markup, dus het vangnet op " +
+            "verboden woorden ziet hem niet — de gebruiker ziet hem wel, in zijn tabblad, zijn " +
+            "geschiedenis en zijn bladwijzers. Staat de klantnaam in die titel, dan is dit een lek " +
+            "van gegevens van een andere klant.\n\n" +
+            "De reparatie is één regel: zet de PageTitle binnen dezelfde voorwaarde als de inhoud. " +
+            "NieuweKlant en Facturatie doen dat al, met die reden erbij in de opmerking.");
+    }
+
+    [Fact]
+    public void DePaginasMetEenKlantSlugStaanVast()
+    {
+        // Zonder deze lijst kan de theorie hierboven stil leeg raken: een routeparameter die anders
+        // gaat heten haalt élke pagina uit de verzameling, en dan meet hij niets meer terwijl hij
+        // groen blijft. Dat is exact hoe het vorige gat is ontstaan — een theorie die per pagina
+        // besluit of hij iets meet, kan alles overslaan en toch groen zijn.
+        var verwacht = new[]
+        {
+            "Soratus.Portal.Components.Pages.Klant.AgentDetail",
+            "Soratus.Portal.Components.Pages.Klant.Agents",
+            "Soratus.Portal.Components.Pages.Klant.Contract",
+            "Soratus.Portal.Components.Pages.Klant.Facturatie",
+            "Soratus.Portal.Components.Pages.Klant.Uren",
+        };
+
+        var werkelijk = Paginaverzameling.Alle()
+            .Where(pagina => Paginaverzameling.Routeparameters(pagina).Contains("Slug", StringComparer.Ordinal))
+            .Select(pagina => pagina.FullName!)
+            .OrderBy(naam => naam, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(verwacht, werkelijk);
+    }
+
     [Theory]
     [MemberData(nameof(Paginas))]
     public void DeTitelDieEenKlantKrijgtBevatGeenOperatorwoord(Type pagina)
