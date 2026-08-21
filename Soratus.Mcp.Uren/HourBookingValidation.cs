@@ -39,11 +39,23 @@ public static partial class HourBookingValidation
 {
     /// <summary>Het maximum aantal uren op één regel.</summary>
     /// <remarks>
-    /// Een werkmaand is ruwweg 168 uur. 200 laat een uitschieter door en houdt de typefout tegen
-    /// die er het meest voorkomt: een getal met een cijfer te veel. Meer dan dit boeken kan nog
-    /// steeds — in twee regels, en dan heeft iemand het twee keer bedoeld.
+    /// <para>Dezelfde waarde als <c>HourLimits.MaximumPerEntry</c> in het portaal, en dat is de
+    /// bedoeling: het portaal is de plek waar deze grens geldt, en deze controle is er alleen om
+    /// hem uit te leggen vóór er een netwerkaanroep aan te pas komt.</para>
+    ///
+    /// <para><strong>Hier stond 200, en dat was het verkeerde getal.</strong> Het was gekozen op de
+    /// gedachte dat een werkmaand ruwweg 168 uur is — maar deze grens geldt per <em>regel</em> en
+    /// niet per maand. Het portaal kent met opzet geen maandgrens: een drukke maand is
+    /// ongebruikelijk maar niet onmogelijk, en een grens die je daar tegenkomt wordt omzeild door de
+    /// uren over twee maanden te verdelen, waarna de administratie verkeerd staat in plaats van dat
+    /// de invoer geweigerd wordt. Per regel is meer dan twee werkdagen wél een typefout.</para>
+    ///
+    /// <para>Het gevolg van die 200 was geen lek maar een band waarin deze server doorliet en het
+    /// portaal weigerde. Dat kostte een netwerkronde en een foutmelding op afstand, precies wat deze
+    /// controle hoort te voorkomen. Loopt deze waarde ooit weer uiteen met het portaal, dan is dat
+    /// hier de plek om hem gelijk te trekken en niet daar.</para>
     /// </remarks>
-    public const decimal MaxHours = 200m;
+    public const decimal MaxHours = 16m;
 
     /// <summary>Het maximum aantal decimalen op het aantal uren.</summary>
     /// <remarks>
@@ -57,7 +69,12 @@ public static partial class HourBookingValidation
     public const int MinNoteLength = 5;
 
     /// <summary>De langste omschrijving.</summary>
-    public const int MaxNoteLength = 500;
+    /// <remarks>
+    /// Dezelfde waarde als <c>HourLimits.MaximumNoteLength</c> in het portaal. Hier stond 500 en het
+    /// portaal weigert boven 400; die honderd tekens waren een band waarin deze server doorliet en de
+    /// afwijzing pas na een netwerkronde kwam.
+    /// </remarks>
+    public const int MaxNoteLength = 400;
 
     /// <summary>De langste categorienaam die als categorie wordt aangenomen.</summary>
     /// <remarks>
@@ -234,9 +251,9 @@ public static partial class HourBookingValidation
         if (hours > MaxHours)
         {
             errors.Add(
-                $"uren: {Format(hours)} is meer dan {Format(MaxHours)} uur op één regel. Een werkmaand " +
-                "is ruwweg 168 uur, dus dit is meestal een cijfer te veel. Klopt het toch, boek het " +
-                "dan in meerdere regels.");
+                $"uren: {Format(hours)} is meer dan {Format(MaxHours)} uur op één regel. Meer dan twee " +
+                "werkdagen op één regel is meestal een cijfer te veel. Klopt het toch, boek het dan " +
+                "in meerdere regels — er is geen grens op wat een maand mag optellen.");
             return;
         }
 

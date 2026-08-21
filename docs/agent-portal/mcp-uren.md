@@ -19,9 +19,9 @@ uren_boeken({ klant, maand, uren, categorie, omschrijving })
 |---|---|---|
 | `klant` | string | Klantslug in kleine letters, zoals in `/klant/<slug>/…`. Niet de bedrijfsnaam |
 | `maand` | string | `jjjj-MM`. Niet in de toekomst, niet vóór 2024 |
-| `uren` | number | `> 0`, `≤ 200` per regel, maximaal twee decimalen |
+| `uren` | number | `> 0`, `≤ 16` per regel, maximaal twee decimalen |
 | `categorie` | string | Een categorie die het portaal kent |
-| `omschrijving` | string | Eén zin, 5–500 tekens, één regel. **De klant leest dit** |
+| `omschrijving` | string | Eén zin, 5–400 tekens, één regel. **De klant leest dit** |
 
 **De tool heet `uren_boeken` en niet `uren.boeken`.** Dat is de enige afwijking van de letterlijke
 notatie in §5, en hij kan niet anders. De Messages-API van Anthropic eist dat een toolnaam op
@@ -304,8 +304,18 @@ Wat hier wordt geweigerd, met de reden:
   (dat vangt `2016-08` voor `2026-08`, met een voorstel erbij).
 - **Nul of negatieve uren.** Een correctie naar beneden is portaalwerk; zie het voorstel in
   `fase-0-afwijkingen.md` over de categorie `Correctie`.
-- **Meer dan 200 uur op één regel.** Een werkmaand is ruwweg 168 uur. Dit vangt het cijfer te veel en
-  laat een legitieme uitschieter door — in twee regels, en dan heeft iemand het twee keer bedoeld.
+- **Meer dan 16 uur op één regel.** Dezelfde waarde als `HourLimits.MaximumPerEntry` in het portaal,
+  en dáár wordt hij afgedwongen; deze controle bestaat alleen om hem uit te leggen vóór er een
+  netwerkaanroep aan te pas komt. Meer dan twee werkdagen op één regel is meestal een cijfer te veel;
+  klopt het toch, dan gaat het in meerdere regels. Er is met opzet **geen** grens op wat een maand mag
+  optellen: een drukke maand is ongebruikelijk maar niet onmogelijk, en een grens die je daar tegenkomt
+  wordt omzeild door de uren over twee maanden te verdelen — waarna de administratie verkeerd staat in
+  plaats van dat de invoer geweigerd wordt.
+
+  Hier stond eerst 200, gekozen op de gedachte dat een werkmaand ruwweg 168 uur is. Dat is het
+  verkeerde vergelijk: deze grens geldt per regel en niet per maand. Het gevolg was geen lek maar een
+  band waarin deze server doorliet en het portaal weigerde, met een foutmelding die pas na een
+  netwerkronde kwam — precies wat deze controle hoort te voorkomen.
 - **Meer dan twee decimalen.** Er wordt **niet** stil afgerond. Stil afronden verandert een bedrag
   zonder dat iemand het heeft gezien.
 - **Een lege of meerregelige omschrijving.** De klant leest dit veld op zijn specificatie. Dezelfde

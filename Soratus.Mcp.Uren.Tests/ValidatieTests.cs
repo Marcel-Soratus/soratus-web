@@ -127,7 +127,41 @@ public class ValidatieTests
     {
         string melding = Assert.Single(Keur(uren: 350m));
 
-        Assert.Contains("168 uur", melding, StringComparison.Ordinal);
+        // Op de grens en op het herstelpad, niet op de volzin. Deze test pinde eerder de tekst
+        // "168 uur" vast, en die stond er op grond van een verkeerde gedachte: 168 is een
+        // werkmáánd, terwijl deze grens per regel geldt. Toen het getal werd gecorrigeerd viel de
+        // test om op de formulering en niet op het gedrag — 350 werd nog steeds geweigerd.
+        Assert.Contains("uren:", melding, StringComparison.Ordinal);
+        Assert.Contains("meer dan 16 uur op één regel", melding, StringComparison.Ordinal);
+        Assert.Contains("meerdere regels", melding, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(16)]
+    [InlineData(8)]
+    [InlineData(0.25)]
+    public void TotEnMetDePortaalgrensMagHetDoor(decimal uren)
+    {
+        // De spiegel van de test hierboven. Zonder deze zou een grens van nul ook groen zijn: dan
+        // wordt álles geweigerd en staat er netjes een foutmelding.
+        Assert.Empty(Keur(uren: uren));
+    }
+
+    [Fact]
+    public void DeGrenzenZijnDezelfdeAlsDieVanHetPortaal()
+    {
+        // Deze twee getallen staan in het portaal in HourLimits.MaximumPerEntry en
+        // HourLimits.MaximumNoteLength, en dáár worden ze afgedwongen. Deze server controleert ze
+        // alleen om ze uit te leggen vóór er een netwerkaanroep aan te pas komt.
+        //
+        // Dat dit een letterlijke waarde is en geen verwijzing, is een bekende zwakte: dit project
+        // verwijst niet naar Soratus.Portal en kan het dus niet door de compiler laten nakijken.
+        // Wat deze test wél doet, is de waarden op één plek benoemen met de vindplaats erbij, zodat
+        // wie er één verandert de ander tegenkomt. Ze liepen eerder uiteen — 200 tegen 16 en 500
+        // tegen 400 — en het gevolg was een band waarin deze server doorliet en het portaal
+        // weigerde, met een foutmelding die pas na een netwerkronde kwam.
+        Assert.Equal(16m, HourBookingValidation.MaxHours);
+        Assert.Equal(400, HourBookingValidation.MaxNoteLength);
     }
 
     [Fact]
