@@ -230,6 +230,46 @@ Twee dingen die de acceptatie van §7 niet halen en die dus een tekstwijziging i
 **gefactureerd** — en de betaaldatum bestaat er niet, alleen `openstaandSaldo`. De echte datum kost
 `boekhouden:read` op het hele grootboek voor één veld.
 
+## MBV — de eerste echte klant
+
+Aangemaakt via `/klanten/nieuw` door een mens, en dat is meteen het bewijs van de acceptatie
+van fase 2: de container ging van 8 naar 11 documenten, dus klant, contract en toegangen zijn
+in één transactie weggeschreven. De tijdstempel die dat opleverde staat in de canonieke vorm
+met een afsluitende `Z` — de reparatie van punt 25, bewezen door een echte handeling in
+productie in plaats van door een test.
+
+**Wat MBV werkelijk is, gemeten en niet aangenomen.** Geen verzameling achtergrondagents maar
+een webapplicatie: drie App Services op één Premium-plan met Always On aan, twee Cosmos-accounts
+met hun applicatiegegevens, een Key Vault, een AI Foundry-project en een CIAM-directory. In de
+codebase (`D:\soratus\mbv`, .NET 10) staat **geen enkele achtergronddienst**. De drie agents zijn
+endpoints: `/api/declaraties/agent`, `/api/jaarverslag/chat` en `/api/jaarverslag/snapshot`.
+`MBV.SftpCheck` is géén vierde agent — dat is een ontwikkelaarshulpmiddel dat je met de hand
+start om een SFTP-verbinding te controleren.
+
+**Telemetrie-opslag staat en is nagemeten:** `cosmos-mbv-prod`, database `telemetry`, drie
+containers met de bewaartermijnen van de blauwdruk, local auth uit, en beide dataplane-rollen
+op de database in plaats van het account. Het klantdocument wijst erheen.
+
+### Wat MBV nog nodig heeft van een mens
+
+- **Een distributiekanaal voor `Soratus.Agents.Telemetry`.** Dit is de blokkade voor de hartslag
+  en hij is nieuw: onze bibliotheken zijn geen NuGet-pakket, en de `nuget.config` van MBV wist
+  bewust alle overgeërfde feeds en laat alleen nuget.org toe. Vier uitwegen — publiek op
+  nuget.org, een privéfeed op Azure Artifacts, GitHub Packages met een token in hun pijplijn, of
+  de broncode meekopiëren. Dat laatste is wat punt 13 verbiedt: zo liep de knipregel drie keer
+  uit elkaar. Het raakt hun bouwpijplijn, dus het is geen technische keuze alleen.
+- **Toestemming om in hun repo te werken en om die app opnieuw uit te rollen.** Code schrijven is
+  één ding; een productie-app van een klant deployen is een ander. De integratie wordt daarom
+  eerst in ónze repo gebouwd, zodat de wijziging bij MBV een paar regels plus een pakketreferentie
+  is.
+- **Twee bevindingen in hun omgeving die niets met ons werk te maken hebben**, gemeld omdat ze in
+  de omgeving staan die we nu aansluiten: op `mbv-dbaccount` én `mbv-dbaccount2` staat **local
+  auth aan**, dus er kunnen accountsleutels bestaan naast hun applicatiegegevens. En twee accounts
+  met elk één container `mbv` ziet uit als een overblijfsel.
+- **Always On moet aan blijven.** Gaat hij uit, dan laadt Azure de app na twintig minuten stilte
+  uit, stopt de hartslag, en meldt het portaal alarm terwijl er niets aan de hand is. Een
+  instelling buiten de code die de betekenis van de code omdraait.
+
 ## Drie manieren waarop een meting vandaag loog
 
 Alle drie gebeurd, alle drie kostten werk. Ze staan hier omdat ze niets met de code te maken
