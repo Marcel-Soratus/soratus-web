@@ -39,6 +39,56 @@ param portalIdentityName string = 'id-soratus-portal'
 @description('Principal-id (object-id) van de portal-identity.')
 param portalIdentityPrincipalId string = 'e48ffac5-672c-4e2b-aab9-340871fb2d62'
 
+// ---------------------------------------------------------------------------
+// Mail: het maandoverzicht aan de klant en de storingsmelding aan Soratus
+// ---------------------------------------------------------------------------
+// Deze instellingen staan hier en niet als losse `az webapp config appsettings set`, en dat is
+// geen voorkeur. De appSettings hieronder staan in deze template als vólledige array, en dat is
+// in ARM een vervanging: elke met de hand gezette sleutel wordt door de volgende uitrol gewist.
+// Dat is een stille storing van de ergste soort — je zet de configuratie, het werkt, en na de
+// volgende uitrol zegt het portaal dat mailen niet is ingericht. Dat leest als een
+// configuratiefout en niet als een uitrol die hem heeft opgegeten.
+//
+// Geen van deze waarden is een geheim: een ACS-endpoint is een adres en de authenticatie loopt
+// via de managed identity, met een custom role die alleen lezen en schrijven mag — met opzet
+// niet Contributor, want die geeft ListKeys erbij en is dan machtiger dan het geheim dat we
+// juist wilden vermijden.
+
+@description('Endpoint van de Communication Service waarlangs het portaal mailt.')
+param mailEndpoint string = 'https://acs-soratus-prod.europe.communication.azure.com'
+
+@description('Afzender. Moet een geverifieerd domein van de Communication Service zijn.')
+param mailFromAddress string = 'DoNotReply@soratus.com'
+
+@description('Antwoordadres op de mail aan de klant. Leeg laten om er geen te zetten.')
+param mailReplyToAddress string = ''
+
+@description('''
+Proefdraaien: valideren en loggen, niets versturen. Staat standaard uit in deze template en
+standaard áán in de code — die kant op, omdat een standaard-uit vlag een storing is die zich
+voordoet als werkende functionaliteit. Hier moet hij dus expliciet uit, zodat er in de template
+te zien staat dát er werkelijk gemaild wordt.
+''')
+param mailDryRun bool = false
+
+@description('''
+Waar de storingsmeldingen naartoe gaan. Leeg betekent: geen ontvangers, en dan verstuurt de
+melder niets — hij valt niet om, hij heeft niets om te doen. Dit is de enige weg waarlangs een
+adres bij de melder komt; er is geen parameter waarin een klantadres past.
+''')
+param alertRecipients array = []
+
+// De ontvangers van de storingsmelding, als PortalAlerts__Recipients__0, __1, … Dat is de vorm
+// waarin de configuratiebinder een lijst leest uit platte sleutels. Als variabele en niet inline:
+// Bicep staat een for-expressie niet toe binnen een concat. Een lege array levert géén sleutel op,
+// en dan heeft de melder geen ontvangers en verstuurt hij niets — hij valt niet om.
+var alertRecipientSettings = [
+  for (recipient, index) in alertRecipients: {
+    name: 'PortalAlerts__Recipients__${index}'
+    value: recipient
+  }
+]
+
 param keyVaultName string = 'kv-soratus-prod'
 param cosmosAccountName string = 'cosmos-soratus-prod'
 param cosmosDatabaseName string = 'telemetry'
@@ -455,7 +505,11 @@ resource portalApp 'Microsoft.Web/sites@2024-04-01' = {
       // Zinloos op Linux, maar de site heeft deze waarde staan en de ARM-standaard
       // is v4.6. Expliciet, zodat een deploy hem niet omzet.
       netFrameworkVersion: 'v4.0'
-      appSettings: [
+      // concat van twee lijsten: de vaste sleutels, en de ontvangers van de storingsmelding als
+      // genummerde sleutels. Let op dat deze hele array een vervánging is in ARM — met de hand
+      // gezette app-settings verdwijnen bij de volgende uitrol. Wat het portaal nodig heeft, hoort
+      // dus hier te staan en niet in een los commando.
+      appSettings: concat([
         {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: 'Production'
@@ -486,7 +540,27 @@ resource portalApp 'Microsoft.Web/sites@2024-04-01' = {
           name: 'AZURE_CLIENT_ID'
           value: portalIdentity.properties.clientId
         }
-      ]
+        {
+          name: 'PortalMail__Endpoint'
+          value: mailEndpoint
+        }
+        {
+          name: 'PortalMail__FromAddress'
+          value: mailFromAddress
+        }
+        {
+          name: 'PortalMail__ReplyToAddress'
+          value: mailReplyToAddress
+        }
+        {
+          name: 'PortalMail__DryRun'
+          value: string(mailDryRun)
+        }
+        {
+          name: 'PortalMail__PortalBaseUri'
+          value: 'https://${portalHostName}'
+        }
+      ], alertRecipientSettings)
     }
   }
 }
