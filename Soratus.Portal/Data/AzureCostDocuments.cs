@@ -47,6 +47,34 @@ public static class AzureCostDocumentKeys
     /// mutatie. Zie <see cref="AzureCostDocument.MeasuredAt"/>.</para>
     /// </remarks>
     public static string ForMonth(string month) => $"azureCost-{month}";
+
+    /// <summary>
+    /// De documentsoort van de dagclaim van de kostencollector.
+    /// </summary>
+    /// <remarks>
+    /// camelCase en enkelvoud, net als <see cref="Kind"/>: één document is één dag en geen verzameling.
+    /// Zie <see cref="AzureCostRunDocument"/> voor waarom dit document bestaat.
+    /// </remarks>
+    public const string RunKind = "costRun";
+
+    /// <summary>
+    /// De id van de dagclaim, binnen de gereserveerde partitie.
+    /// </summary>
+    /// <param name="day">De dag waarop de run hoort te lopen.</param>
+    /// <returns>Bijvoorbeeld <c>costRun-2026-08-21</c>.</returns>
+    /// <remarks>
+    /// <para><strong>Afgeleid van de dag, en dat is het slot op twee collectors.</strong> Hetzelfde
+    /// mechanisme als bij <c>StatementDocumentKeys.Id</c>: het document wordt geschreven vóór de
+    /// handeling, met een <c>CreateItemAsync</c> en geen upsert, dus de tweede instantie krijgt een
+    /// <c>409</c> en doet niets. Zie <see cref="AzureCostRunDocument"/> voor het belangrijke verschil
+    /// met die mailclaim — daar is de claim een slot op een onherhaalbare handeling, hier is hij een
+    /// slot op een schaars aanroepbudget.</para>
+    ///
+    /// <para>De dag staat er leesbaar in en niet als hash: deze sleutel komt in een logregel terecht en
+    /// <c>costRun-2026-08-21</c> is daar het antwoord op de vraag welke dag het was.</para>
+    /// </remarks>
+    public static string ForDay(DateOnly day) =>
+        $"{RunKind}-{day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)}";
 }
 
 /// <summary>

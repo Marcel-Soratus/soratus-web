@@ -126,6 +126,12 @@ internal sealed class CosmosPortalDataStore(
             IsInternal = request.IsInternal,
             Environment = Clean(request.Environment),
             EnvironmentDetail = Clean(request.EnvironmentDetail),
+
+            // Gevalideerd door request.Validate() hierboven, dus wat hier langskomt is leeg of een
+            // bruikbaar ARM-pad. Clean() en niet AzureScope.Path: de schrijfwijze van de
+            // resourcegroepnaam blijft die van de operator, want deze tekenreeks komt terug op het
+            // scherm als "bevraagd: …". Zie AzureScope.
+            AzureScope = Clean(request.AzureScope),
             TelemetryEndpoint = Clean(request.TelemetryEndpoint),
             TelemetryDatabase = Clean(request.TelemetryDatabase),
             CreatedAt = now,
@@ -236,6 +242,12 @@ internal sealed class CosmosPortalDataStore(
             IsInternal = current?.IsInternal ?? edit.IsInternal,
             Environment = Clean(edit.Environment),
             EnvironmentDetail = Clean(edit.EnvironmentDetail),
+
+            // Wél uit de bewerking en niet uit het bestaande document, anders dan IsInternal hierboven.
+            // Dit is een gegeven dat een operator hoort te kunnen corrigeren; IsInternal is dat niet.
+            // Een leeg veld betekent hier dus werkelijk leeg — "niet meer ingericht" — en dat is de
+            // enige manier om een verkeerde scope weg te halen zonder in Cosmos te hoeven.
+            AzureScope = Clean(edit.AzureScope),
             TelemetryEndpoint = Clean(edit.TelemetryEndpoint),
             TelemetryDatabase = Clean(edit.TelemetryDatabase),
             CreatedAt = current?.CreatedAt ?? now,

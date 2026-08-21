@@ -207,8 +207,90 @@ public class ContractschermTests : Portaalrendertest
             .BuildContractAsync(await Weergavelaag.Schrijfscope());
 
         Assert.Equal(Vasteportaalopslag.Omgevingsdetail, weergave.EnvironmentDetail);
+        Assert.Equal(Vasteportaalopslag.Standaardscope, weergave.AzureScope);
         Assert.Equal(Autorisatiebron.StandaardEndpoint, weergave.TelemetryEndpoint);
         Assert.Equal("telemetry", weergave.TelemetryDatabase);
+    }
+
+    [Fact]
+    public void EenOperatorKanDeAzureScopeInvullenEnCorrigeren()
+    {
+        // Náást de weergavetekst en niet in plaats daarvan: envFull is wat een mens leest, dit is wat de
+        // collector gebruikt. Als invoerveld en niet als tekst, om precies de reden die bij het
+        // omgevingsblok staat: een tikfout in een scope was anders alleen met de hand in Cosmos te
+        // herstellen — en een verkeerde scope geeft HTTP 200 met nul rijen, dus hij meldt zich niet.
+        MeldOperatorAan();
+
+        var markup = RenderPagina(Contractpagina).Markup;
+
+        Assert.Contains("Azure-scope", markup, StringComparison.Ordinal);
+        Assert.Contains(
+            $"value=\"{Vasteportaalopslag.Standaardscope}\"",
+            markup,
+            StringComparison.Ordinal);
+
+        // En de weergavetekst staat er nog. De twee velden vervangen elkaar niet.
+        Assert.Contains(
+            $"value=\"{Vasteportaalopslag.Omgevingsdetail}\"",
+            markup,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenKlantZietDeAzureScopeNiet()
+    {
+        // De spiegel, en dezelfde grens als bij envFull: §2 wijst de volledige omgeving aan de operator
+        // toe. Dit veld noemt het abonnement en de resource group in de exacte vorm waarin een API ze
+        // aanneemt, dus het is die grens in scherpere vorm.
+        MeldKlantAan();
+
+        var markup = RenderPagina(Contractpagina).Markup;
+
+        Assert.DoesNotContain(Vasteportaalopslag.Standaardscope, markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Azure-scope", markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EenOmgevingMetScopeEnZonderWeergaveTekstMeldtDatOpHetScherm()
+    {
+        // Ze mogen uiteenlopen en dat is geen fout. Wat wél iets betekent is dat er één van de twee is:
+        // dan denkt iemand dat de omgeving is vastgelegd terwijl er niet wordt gemeten, of omgekeerd.
+        // Een regel op het scherm en geen blokkade — een blokkade zou van "mag uiteenlopen" een leugen
+        // maken.
+        Opslag.EenAndereOperatorWijzigtDeKlant(klant => klant with { EnvironmentDetail = null });
+
+        MeldOperatorAan();
+
+        Assert.Contains(
+            "geen omgeving voor een mens",
+            RenderPagina(Contractpagina).Markup,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenOmgevingZonderScopeMeldtDatErNietsWordtGemeten()
+    {
+        Opslag.EenAndereOperatorWijzigtDeKlant(klant => klant with { AzureScope = null });
+
+        MeldOperatorAan();
+
+        Assert.Contains(
+            "geen Azure-scope",
+            RenderPagina(Contractpagina).Markup,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MetBeideVeldenStaatErGeenLetOpRegel()
+    {
+        // De spiegel van de twee tests hierboven. Zonder deze test mag de regel er altijd staan, en dan
+        // zegt hij niets meer — en een waarschuwing die altijd staat wordt niet meer gelezen.
+        MeldOperatorAan();
+
+        var markup = RenderPagina(Contractpagina).Markup;
+
+        Assert.DoesNotContain("geen omgeving voor een mens", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("geen Azure-scope", markup, StringComparison.Ordinal);
     }
 
     [Fact]

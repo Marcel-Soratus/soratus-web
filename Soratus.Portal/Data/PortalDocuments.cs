@@ -192,8 +192,47 @@ public sealed record CustomerDocument
     public string? Environment { get; init; }
 
     /// <summary>De volledige omgeving (subscription · resource group). Operator-only.</summary>
+    /// <remarks>
+    /// <para><strong>Vrije tekst voor een mens, en niet de scope waarmee gemeten wordt.</strong> Zie
+    /// <see cref="AzureScope"/> voor dat laatste. Bij de eerste echte klant staat hier
+    /// <c>501a66d2-… mbv</c> en bij de demoklanten <c>sub-soratus-acme · rg-acme-prod</c>: geen van
+    /// beide is te ontleden, en de echte resource group heet <c>MBV</c> met hoofdletters. Een
+    /// collector die zijn scope hieruit zou afleiden, zou bij een klant met een afwijkende
+    /// schrijfwijze een geslaagd leeg antwoord krijgen en dat als "geen kosten" doorgeven.</para>
+    /// </remarks>
     [JsonPropertyName("envFull")]
     public string? EnvironmentDetail { get; init; }
+
+    /// <summary>
+    /// De Azure-scope waartegen de kosten van deze klant worden gemeten, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Machineleesbaar, náást <see cref="EnvironmentDetail"/> en niet in plaats
+    /// daarvan.</strong> Dat laatste is wat een operator leest; dit is wat de collector gebruikt. Ze
+    /// mogen uiteenlopen — een klant met twee resource groups heeft een weergavetekst die meer noemt
+    /// dan er wordt gemeten — en dat is geen fout maar wel iets dat zichtbaar hoort te zijn. Vandaar
+    /// de regel op het omgevingsblok die meldt dat er één van de twee is ingevuld.</para>
+    ///
+    /// <para><strong><c>null</c> betekent "niet ingericht" en dat is een geldige toestand.</strong>
+    /// Punt 15 op de plek waar hij de meting raakt: een klant zonder scope wordt niet bevraagd, er
+    /// komt dus geen verbruiksdocument, en <see cref="AzureCostReading.From"/> maakt daar
+    /// <see cref="AzureCostState.Unknown"/> van. Nooit € 0,00. Het facturatiescherm zegt er bovendien
+    /// bij dát er niets is ingericht, want "onbekend" en "niet ingericht" vragen een verschillende
+    /// handeling.</para>
+    ///
+    /// <para>Opgeslagen als tekst en niet als twee velden; zie <see cref="AzureScope"/> voor die
+    /// afweging. Wat er staat is gevalideerd door de schrijfkant
+    /// (<see cref="CustomerEdit.Validate"/>, <see cref="NewCustomerRequest.Validate"/>), dus een
+    /// onbruikbare waarde kan hier alleen komen als iemand het document met de hand heeft aangepast.
+    /// De leeskant behandelt dat als een fout die op het scherm komt, en niet als een leeg veld.</para>
+    ///
+    /// <para><strong>Bestaande documenten zijn niet gemigreerd.</strong> Vaste lijn in dit project, en
+    /// hier goedkoop: de zeven demoklanten zijn verzonnen, en van de enige echte klant is de scope met
+    /// de hand in te vullen op het contractscherm. Uit <c>envFull</c> raden zou precies de fout maken
+    /// waartegen dit veld bestaat.</para>
+    /// </remarks>
+    [JsonPropertyName("azureScope")]
+    public string? AzureScope { get; init; }
 
     /// <summary>
     /// De Cosmos-endpoint van de telemetrie van déze klant, of leeg voor de standaard.

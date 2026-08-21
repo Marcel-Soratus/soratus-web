@@ -383,6 +383,19 @@ public sealed record OperatorContractView
     public string? EnvironmentDetail { get; init; }
 
     /// <summary>
+    /// De Azure-scope waartegen de kosten worden gemeten, of <c>null</c>. Operator-only.
+    /// </summary>
+    /// <remarks>
+    /// Staat hier om dezelfde reden als <see cref="TelemetryEndpoint"/>, en die reden weegt hier
+    /// zwaarder: <see cref="Data.IPortalDataStore.SaveCustomerAsync"/> vervangt het hele klantdocument,
+    /// dus een veld dat niet op het formulier staat wordt bij het eerste bewaren leeggemaakt. Zou dit
+    /// veld hier ontbreken, dan zou een operator die de klantnaam verbetert de kostenmeting van die
+    /// klant uitzetten — en dan staat er vanaf de volgende maand "niet ingericht" op het
+    /// facturatiescherm zonder dat iemand iets heeft uitgezet. Zie <see cref="Data.AzureScope"/>.
+    /// </remarks>
+    public string? AzureScope { get; init; }
+
+    /// <summary>
     /// De Cosmos-endpoint van de telemetrie van déze klant, of <c>null</c> voor het
     /// standaardaccount. Operator-only.
     /// </summary>

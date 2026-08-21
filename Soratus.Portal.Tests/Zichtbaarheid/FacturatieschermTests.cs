@@ -436,6 +436,111 @@ public class FacturatieschermTests : Portaalrendertest
         Assert.Contains("geen urenbundel vastgelegd", markup, StringComparison.Ordinal);
     }
 
+    // ── De Azure-scope: operator-only, en "niet ingericht" is geen "onbekend" ───────────────────
+
+    [Fact]
+    public void EenOperatorLeestWaartegenErWordtGemeten()
+    {
+        // De enige beschikbare verdediging tegen een tikfout in een resourcegroepnaam. De code kan
+        // "niets verbruikt", "nog niet geboekt" en "verkeerde omgeving" niet uit elkaar halen — dat zijn
+        // drie oorzaken achter één identiek antwoord — dus staat er op het scherm wát er is bevraagd.
+        MeldOperatorAan();
+
+        Assert.Contains(Vasteportaalopslag.Standaardscope, Render().Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenKlantLeestDatNiet()
+    {
+        // §2 wijst de volledige omgeving aan de operator toe en niet aan de klant. De grens is een
+        // typeverschil: CustomerBillingView draagt het veld niet, dus het klantcomponent kán het niet
+        // renderen. Dit is het vangnet eronder.
+        MeldKlantAan();
+
+        Assert.DoesNotContain(Vasteportaalopslag.Standaardscope, Render().Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("subscriptions/", Render().Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ZonderScopeLeestEenOperatorDatErNietsIsIngericht()
+    {
+        // Het onderscheid dat een lege kostenkolom zelf niet kan maken. "Niet ingericht" en "nog niet
+        // vastgesteld" leveren dezelfde streepjes op en vragen een verschillende handeling: iets
+        // invullen tegenover wachten. Zonder deze regel wacht een operator op een meting die nooit komt.
+        Opslag.EenAndereOperatorWijzigtDeKlant(klant => klant with { AzureScope = null });
+
+        MeldOperatorAan();
+
+        var markup = Render().Markup;
+
+        Assert.Contains("geen Azure-scope vastgelegd", markup, StringComparison.Ordinal);
+
+        // Wat er wél blijft staan is de scope waartegen de bewaarde maanden zijn gemeten. Dat is geen
+        // tegenspraak maar het hele nut van twee plekken: er is gemeten, en er wordt niet meer gemeten.
+        Assert.Contains(Vasteportaalopslag.Kostenscope, markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenGewijzigdeScopeStaatNaastDeScopeWaartegenIsGemeten()
+    {
+        // Het geval waarvoor die twee plekken bestaan: iemand heeft een tikfout gecorrigeerd. De oude
+        // maanden zijn tegen het oude pad gemeten en de nieuwe worden tegen het nieuwe gemeten, en beide
+        // staan er. Zou er maar één staan, dan is "waarom is augustus leeg en september niet" niet te
+        // beantwoorden zonder in Cosmos te kijken.
+        const string nieuw =
+            "/subscriptions/501a66d2-de54-4d4f-9f7c-1fbb55bec17f/resourceGroups/rg-acme-productie";
+
+        Opslag.EenAndereOperatorWijzigtDeKlant(klant => klant with { AzureScope = nieuw });
+
+        MeldOperatorAan();
+
+        var markup = Render().Markup;
+
+        Assert.Contains(nieuw, markup, StringComparison.Ordinal);
+        Assert.Contains(Vasteportaalopslag.Kostenscope, markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MetScopeStaatDieMeldingErNietBij()
+    {
+        // De spiegel. Zonder deze test mag de melding er altijd staan, en dan zegt hij niets meer.
+        MeldOperatorAan();
+
+        Assert.DoesNotContain("geen Azure-scope vastgelegd", Render().Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenOnbruikbareScopeMeldtZichAlsFoutEnNietAlsAfwezigheid()
+    {
+        // Kan alleen als iemand het klantdocument met de hand heeft aangepast — beide formulieren
+        // valideren. En juist daarom hoort hij hier te staan: een scope die er wél is en niet werkt, is
+        // niet van een scope te onderscheiden die er niet is, en de collector meet in beide gevallen
+        // niets. De handeling is anders: corrigeren in plaats van invullen.
+        Opslag.EenAndereOperatorWijzigtDeKlant(klant => klant with { AzureScope = "rg-acme-prod" });
+
+        MeldOperatorAan();
+
+        var markup = Render().Markup;
+
+        Assert.Contains("niet te gebruiken", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("geen Azure-scope vastgelegd", markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EenKlantLeestGeenWoordOverEenScopeDieOntbreekt()
+    {
+        // De klant hoort niet te weten met welke inrichting wij hier bezig zijn. Wat hij nodig heeft
+        // staat er wel: een streepje betekent dat het bedrag nog niet is vastgesteld.
+        Opslag.EenAndereOperatorWijzigtDeKlant(klant => klant with { AzureScope = null });
+
+        MeldKlantAan();
+
+        var markup = Render().Markup;
+
+        Assert.DoesNotContain("Azure-scope", markup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("contractscherm", markup, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ── Gereedschap ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>De querystring die de uitsplitsing van de lopende maand openklapt.</summary>

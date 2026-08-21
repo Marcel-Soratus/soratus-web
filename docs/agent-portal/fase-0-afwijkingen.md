@@ -2265,6 +2265,393 @@ die elke uitslag onleesbaar maakten. `shell=False`.
 
 ---
 
+## 37. De klant krijgt een machineleesbare Azure-scope, náást de weergavetekst
+
+**Niet in de spec.** §6 geeft `Customer` de velden `env` en `envFull`; die tweede is de "volledige
+omgeving (subscription · resource group)" en is vrije tekst voor een operator. Er was geen veld waarmee
+een programma kon weten wat het moest bevragen.
+
+**Dat werd vandaag fataal, en de reden staat in punt 30: een resource group die niet bestaat geeft
+HTTP 200 met nul rijen.** Er is geen fout, geen 404 en geen lege body — er is een geslaagd antwoord.
+Een collector die zijn scope uit een weergavetekst afleidt, levert bij een tikfout dus geen storing maar
+een leeg antwoord dat als "geen kosten" doorrolt naar een factuur. En die weergaveteksten zijn niet te
+ontleden:
+
+```
+de echte klant   501a66d2-de54-4d4f-9f7c-1fbb55bec17f mbv
+de demoklanten   sub-soratus-acme · rg-acme-prod
+```
+
+De eerste heeft geen scheidingsteken en noemt de resource group in kleine letters terwijl hij `MBV`
+heet; de tweede noemt een abonnement dat geen guid is. Er is geen ontleedregel die op beide werkt, en
+een ontleedregel die op één werkt is de gevaarlijkste soort: hij lijkt te werken.
+
+### Het besluit: één veld, in de exacte ARM-padvorm
+
+`CustomerDocument.AzureScope` (`azureScope`), tekst, `null` toegestaan. `AzureScope` is het type dat hem
+leest en controleert. De afweging tussen "twee velden" (abonnements-id plus resourcegroepnaam) en "één
+pad" is echt, en dit is waarom het één pad is geworden:
+
+1. **Eén veld heeft twee toestanden en twee velden hebben drie.** Leeg betekent "niet ingericht" en dat
+   is een geldige toestand (punt 15). Met twee velden bestaat er een derde toestand — de één ingevuld en
+   de ander niet — die niets betekent, en die apart moet worden afgevangen, gemeld en getest. Een pad is
+   één waarde: hij is er of hij is er niet.
+2. **Het is letterlijk de tekenreeks die de deur uit gaat.** De aanroep is
+   `POST https://management.azure.com{scope}/providers/Microsoft.CostManagement/query`, dus er wordt
+   niets samengesteld. Met twee velden bouwt de collector het pad, en bouwt het scherm het opnieuw voor
+   de regel "bevraagd: …" — en de eerste keer dat die twee opbouwen verschillen staat er op het scherm
+   een andere scope dan er is bevraagd. Dat is precies de tweede waarheid die punt 34 bij het
+   opslagpercentage weigert, op het veld dat als enige verdediging tegen een tikfout dient.
+3. **De operator plakt, hij typt niet.** Het veld *Resource-ID* op de eigenschappenpagina van een
+   resource group in Azure is exact deze tekenreeks. De invoerweg is kopiëren, en de foutmelding zegt
+   dat ook — een melding die dat niet zegt laat iemand het opnieuw intypen.
+
+### Wat er wordt gecontroleerd, en wat niet kan
+
+Het abonnements-id moet een guid **met streepjes** zijn (`Guid.TryParseExact(…, "D")` en niet
+`TryParse`: ARM neemt de vorm met accolades en die zonder streepjes niet aan, en een pad dat de API met
+een 400 afwijst staat dan maanden in de opslag zonder bedrag). De resourcegroepnaam moet aan de regels van
+Azure voldoen: één tot negentig tekens, letters — ook unicodeletters, `café` is een geldige naam —
+cijfers, `_`, `-`, `.` en ronde haakjes, en niet eindigend op een punt. De vaste segmenten mogen in elke
+schrijfwijze worden ingevoerd en worden genormaliseerd.
+
+**Wat níet te controleren is, is of die resource group bestaat.** Dat is de meting van punt 30 en er is
+geen code die eraan ontkomt. Juist daarom is wat wél te controleren is ook echt gecontroleerd: dit is de
+enige laag die er is, en daaronder ligt alleen nog "zet op het scherm wát er is bevraagd".
+
+### De schrijfwijze van de resourcegroepnaam blijft van de operator — en dat is bijgesteld
+
+De eerste opzet ging ervan uit dat een verkeerde hoofdletter fataal was, want de echte resource group
+heet `MBV`. **Gemeten op 21 augustus 2026 en dat blijkt niet zo:**
+
+```
+POST …/resourceGroups/MBV/providers/Microsoft.CostManagement/query   → 200, 112 rijen
+POST …/resourcegroups/mbv/providers/Microsoft.CostManagement/query   → 200, 112 rijen  (identiek)
+```
+
+Zelfde kolommen, zelfde bedragen. Het pad is hoofdletterongevoelig, dus de hoofdletter valt weg als
+storingsoorzaak. Wat overblijft is één reden om de naam niet aan te raken: deze tekenreeks komt onder een
+maand zonder regels op het scherm als "bevraagd: …", en daar hoort te staan wat er is ingevuld en niet
+wat wij ervan hebben gemaakt. De twee *vaste* delen van het pad worden wél genormaliseerd — die zijn van
+Azure en niet van de operator, en genormaliseerd zijn twee klantscopes met elkaar te vergelijken.
+
+### Náást `envFull` en niet in plaats daarvan, met een regel die zegt als er één van de twee is
+
+`envFull` is wat een mens leest; dit is wat een machine gebruikt. **Ze mogen uiteenlopen en dat is geen
+fout:** een klant met twee resource groups heeft een weergavetekst die meer noemt dan er wordt gemeten.
+Wat wél iets betekent is dat er precies één van de twee is ingevuld — dan denkt iemand dat de omgeving is
+vastgelegd terwijl er niet wordt gemeten, of staat er een meetscope bij een klant waarvan niemand kan
+zien waar hij hoort. Het omgevingsblok zet daar een regel bij, uit de twee velden van het formulier zelf,
+dus ook over wat er net is getypt en nog niet bewaard. Een regel en geen blokkade: een blokkade zou van
+"mag uiteenlopen" een leugen maken.
+
+### Leeg is een geldige toestand, en het facturatiescherm zegt iets anders dan "onbekend"
+
+Een klant zonder scope wordt niet bevraagd. Er komt dus geen verbruiksdocument, en de afwezigheid daarvan
+wordt `AzureCostState.Unknown` — nooit € 0,00. Maar "onbekend" en "niet ingericht" vragen een
+verschillende handeling: wachten tegenover iets invullen. Daarom staat er op het operatorfacturatiescherm
+één regel boven de tabel: *"Voor deze klant is geen Azure-scope vastgelegd, dus er wordt niets gemeten."*
+
+Dat is een **tekst op het viewmodel en geen vijfde waarde in `AzureCostState`**. Die enum beschrijft een
+meting, en er is er geen; "geen document betekent geen status" (punt 2) blijft dus staan. En waaróm er
+niet is gemeten is een eigenschap van de klant en niet van een maand, dus hij staat één keer boven de
+tabel en niet twaalf keer in een rij.
+
+Er is een derde geval en het heeft zijn eigen tekst: een scope die er wél is en niet te gebruiken is. Dat
+kan alleen als iemand het document met de hand heeft aangepast — beide formulieren valideren — en het is
+niet van een ontbrekende scope te onderscheiden aan de lege kostenkolom, terwijl de handeling anders is:
+corrigeren in plaats van invullen.
+
+### Rolzichtbaarheid
+
+Het veld is operator-only, en dat is een typeverschil en geen filter: het staat op `OperatorContractView`
+en `OperatorBillingView` en niet op de klantvarianten. §2 wijst de volledige omgeving aan de operator toe.
+`ContractZichtbaarheidTests` somt het nu op met de regel erbij — die test werd rood bij het toevoegen van
+het veld, precies zoals bedoeld.
+
+### Bestaande documenten zijn niet gemigreerd
+
+Vaste lijn in dit project, en hier goedkoop: de zeven demoklanten zijn verzonnen en verdwijnen toch, en
+van de enige echte klant is de scope met de hand in te vullen op het contractscherm. Uit `envFull` raden
+zou precies de fout maken waartegen dit veld bestaat — en die fout is stil.
+
+---
+
+## 38. De kostencollector draait in het portaal, en de dagclaim is een slot op een budget en niet op een handeling
+
+De lezing, de volledigheidscontrole en de berekening bestonden (punten 30 t/m 35) en hadden geen
+productie-aanroeper. Die is er nu: `AzureCostCollector`, een `BackgroundService` in het portaal, dagelijks
+om 04:00 UTC.
+
+### Waarom in het portaal
+
+Alles wat de collector nodig heeft staat daar al en nergens anders: de managed identity die als enige
+`Cost Management Reader` op de resource group heeft (B5 van het haalbaarheidsonderzoek), het schrijfrecht
+op de portaalopslag, de klantenlijst, en de lees-, volledigheids- en rekencode. Een eigen deployable zou
+vier dingen vragen die vandaag geen van alle bestaan — een eigen identity, een rolverlening in élk
+abonnement waar een klant leeft, een eigen Cosmos-verlening en een eigen uitrol — en er één ding voor
+teruggeven dat we juist niet willen: **een tweede aanroeper.** Het budget hangt aan de aanroeper en niet
+aan de scope; de header heet `clienttype-retry-after`. Van alles wat dit werk zou kunnen doen, is het
+portaal het enige dat het recht al heeft.
+
+### De prijs, en het antwoord erop
+
+Het portaal kan meer dan één instantie hebben, en dan draaien er twee collectors. Dat is niet alleen
+dubbel werk: ze verdelen de emmer tot geen van beide nog een bedrag krijgt. `Soratus.Portal/Mail/` heeft
+voor precies dit soort probleem een vorm — een document met een afgeleide sleutel, geschreven vóór de
+handeling, waarbij een 409 betekent "iemand anders doet het al" — en die past hier. Eén claimdocument per
+dag, `costRun-{jjjj-MM-dd}` in de gereserveerde partitie `$portal`, met een `CreateItemAsync` en geen
+upsert. De tweede instantie krijgt een 409 en doet niets; dat is `information` en geen waarschuwing, want
+op een portaal met twee instanties is dat elke nacht het normale gedrag van de ene van de twee.
+
+**Maar de betekenis is anders dan bij de mail, en dat verschil is het opschrijven waard.** Daar is de
+claim een slot op een *onherhaalbare handeling*: een verstuurde mail is niet terug te halen, dus "onbekend
+of het gelukt is" is daar géén reden om het opnieuw te proberen en komt het portaal er alleen langs een
+mens uit. Een kostenlezing is wél herhaalbaar — er gaat niets de deur uit — dus dit is geen slot op
+herhalen maar een **wederzijdse uitsluiting tussen instanties**. Vandaar dat er geen toestand op het
+claimdocument staat en geen uitgang: er valt niets vrij te geven.
+
+**En daarom mag een halve run blijven liggen.** Valt de app om halverwege, dan blijft de claim van vandaag
+staan en gebeurt er vandaag niets meer. Dat kost niets, en dat is het eigenlijke argument voor deze vorm:
+*elke run leest de hele maand.* Een overgeslagen dag gaat niet verloren, hij wordt de volgende nacht
+ingehaald. Ook voor de volledigheid maakt het niet uit — `SettlementDays` is twee, dus een maand die op de
+3e wordt gelezen heet net zo goed volledig als een maand die op de 2e wordt gelezen. Een claim met een
+verlooptijd zou daar niets aan verbeteren en wel iets kosten: het verschil tussen "loopt nog" en "is
+omgevallen" is alleen door de klok te bepalen, en dat is precies de constructie die `StatementSendState`
+afwijst.
+
+### Het cronmoment is niet verschoven, en dat is de winst
+
+Het onderzoek (§6) geeft twee wegen en adviseert de eerste: de volledigheid controleren in plaats van
+later draaien. Die controle bestaat al — `AzureCostCompleteness.Judge`, punt 31 — en de collector gebruikt
+hem. Er is geen tweede geschreven en er staat nergens een drempel of een percentage. Om 04:00 op de 1e
+levert dat `Partial` of niets op, en dus geen factuur met een halve dag Azure erin.
+
+### Twee aanroepen per klant per dag, en achtentwintig dagen per maand maar één
+
+Per klant wordt de **vorige** maand gedaan en daarna de lopende. Die volgorde is niet cosmetisch: de
+vorige maand is de maand die gefactureerd gaat worden, en loopt het budget halverwege leeg dan is de maand
+die je wil hebben degene die je het eerst hebt gedaan.
+
+De vorige maand wordt overgeslagen zodra hij op `Measured` staat. Zo'n maand kan niet meer veranderen — de
+volledigheidsregel eist dat de laatste dag er staat én dat er twee dagen ná de maand is gemeten, en aan
+beide is niets meer te doen. Dat is een besparing op het schaarse ding (een aanroep) met het goedkope (een
+puntlezing van ongeveer één RU), en voor achtentwintig van de eenendertig dagen van een maand halveert het
+het aantal aanroepen per klant. Alleen `Measured` telt: `Partial` wordt wél opnieuw opgevraagd, anders
+wordt een maand die op de 1e om 04:00 onvolledig was nooit meer bijgewerkt.
+
+Verder terug dan één maand gaat de collector niet. Een maand die drie maanden geleden nooit is gemeten
+wordt door deze taak niet ingehaald — dat is een handmatige inhaalslag en geen nachtelijke gewoonte, want
+hij kost per klant per maand een aanroep uit hetzelfde budget en zou de metingen van vannacht verdringen.
+Gemeld als open punt.
+
+### Eén vraagvorm, en het is de vorm die is gemeten
+
+`type: ActualCost`, `timeframe: Custom` over een periode die **volledig in het verleden** ligt,
+`granularity: Daily`, gegroepeerd op `ServiceName`. `Custom` en niet `MonthToDate`: dat tweede werkt
+alleen voor de lopende maand, dus een afgesloten maand vraagt hoe dan ook `Custom` — en dan is één
+vraagvorm beter dan twee, want de tweede is de vorm die op de dag dat hij misgaat niet is gemeten. Een
+`to` in de toekomst is niet gemeten en wordt daarom niet gebruikt: de periode loopt tot en met
+**gisteren**. Dat kost niets, want de boeking loopt ongeveer acht uur achter en de run staat om 04:00 UTC.
+
+**En het levert een besparing op precies de dag waar punt 30 over gaat.** Op de 1e van de maand om 04:00
+valt "gisteren" in de vorige maand, dus is de periode voor de nieuwe maand leeg. Er wordt dan **niet
+gevraagd**, in plaats van een 200 met nul rijen op te halen die als `NoLines` zou worden weggeschreven.
+Niet vragen is hier eerlijker dan vragen — "wij hebben niet gemeten" is iets anders dan "de API zei nul
+regels" — en het scheelt een aanroep uit een emmer die er geen over heeft.
+
+---
+
+## 39. Een mislukte aanroep schrijft niets weg; een antwoord dat we niet konden lezen wél
+
+Dit is de scherpste regel van de collector en hij bestaat in drie delen.
+
+| Wat er terugkwam | Wat er wordt weggeschreven |
+|---|---|
+| **niets** — een 429 waarvan de pogingen op zijn, de 404 uit §2, een tijdslimiet | **niets** |
+| **een antwoord dat niet te lezen was** — een ontbrekende kolom, een bedrag dat geen getal is | `Unknown`, met de reden en de bevraagde scope |
+| **een antwoord** — nul rijen, of rijen | `NoLines`, `Partial` of `Measured` uit `Judge` |
+
+**Bij niets wordt er niets geschreven, en dat is §32 letterlijk:** wat er op het scherm hoort te staan als
+de verzameling van vannacht is mislukt, is de lezing van gisteren met het tijdstip erbij. Het bewaarde
+getal is werkelijk gemeten; de mislukte aanroep heeft niets gemeten. Zou hier een document met `Unknown`
+worden geschreven, dan wist één 429 een bedrag dat er wél was.
+
+**Bij een onleesbaar antwoord wordt er wél geschreven, en dat overschrijft dus een goed getal van
+gisteren.** Dat is de juiste richting en punt 33 zegt het al: een onleesbaar bedrag werpt en wordt geen
+nul, en de aanroeper hoort er `Unknown` van te maken. Het betekent dat onze lezer niet meer bij de API
+past, en dat is een defect dat zichtbaar hoort te zijn. Van de twee mogelijke fouten — geen bedrag of een
+te laag bedrag — is alleen de eerste zichtbaar. Dit is bovendien de enige bron van
+`AzureCostDocument.Failure`; zonder haar zou dat veld een stille onwaarheid zijn (punt 11).
+
+**En er is een vierde geval dat bij het bouwen boven kwam.** `Judge` negeert dagen buiten de gevraagde
+maand, en noemt de maand daarmee leeg — de veilige kant, en zo staat het in punt 31. Maar als er *wel*
+regels zijn en géén dag binnen de maand, zou daar een document uit komen dat `NoLines` zegt naast een
+subtotaal dat wél bestaat, want `AzureCostReading.Subtotal` is de som van de regels. Dat is geen toestand
+maar een defect — de bevraagde periode was niet de maand — en het wordt `Unknown` met een reden. Eén `if`,
+en `Judge` blijft de enige autoriteit over de toestand.
+
+**Een 429 is geen mislukte run.** Hij logt als `warn` met `api.retry` — de vorm die de seed-data al
+gebruikt — en de run slaagt. Bij de gemeten uitvalskans zou de collector anders permanent amber staan en
+zou de storingsmelder van fase 6 gaan mailen over een gezonde agent.
+
+### De backoff
+
+Twee pogingen per maand per klant en geen drie. **Elke respons kost budget, ook een mislukte:** gemeten
+liep `qpu-remaining` over eenentwintig aanroepen van 599 naar 578 terwijl de meeste ervan 429's waren. Een
+derde poging kost de vólgende klant zijn meting.
+
+De wachthint wordt gelezen als hij er is — `entity-retry-after` én `clienttype-retry-after`, de grootste
+van de twee, want de eerste verschijnt alleen zodra de entiteitsteller op nul staat en is dan de grotere —
+met een eigen vloer eronder. Die vloer is niet netheid: gemeten waarden 1, 3, 4 en 12 waren aantoonbaar te
+kort. `x-ms-ratelimit-remaining-subscription-resource-requests` wordt niet gelezen en niet bewaakt; die
+stond in élke meting op 1099, óók op de 429's.
+
+Een 403 of 401 wordt **niet** herhaald. Dat gaat niet over van zichzelf — het is een ontbrekende
+rolverlening — en herhalen kost budget en verandert niets.
+
+Een `nextLink` wordt gevolgd, met dezelfde stilte ertussen en met een grens van twintig pagina's. Op de
+gemeten scope was hij altijd `null` (112 rijen over een maand), dus **dat pad is niet gemeten**: dat het
+een POST met dezelfde body naar dat adres is komt uit de documentatie. De grens is er zodat een verkeerde
+aanname geen eindeloze lus wordt die de emmer leegtrekt, en raakt hij op dan is de uitkomst `Unreadable`
+en geen halve som — want een lezer die een pagina laat liggen heeft een subtotaal dat te laag is, en dat
+is even onzichtbaar als de overgeslagen rij uit punt 33.
+
+### De schrijfkant is een eigen interface en geen twee methoden op de leeskant
+
+`IPortalCostsStore` zegt "alleen lezen, en dat is geen tijdelijke beperking", en dat blijft staan. Elke
+methode daar vraagt een scope: het bewijs dat er een mens naar een klant kijkt en dat hij dat mag. **De
+collector heeft geen mens en dus geen scope, en zou er een moeten verzinnen om daar langs te komen** — een
+operatorbewijs zonder operator, en dat is precies de constructie waarmee een autorisatiegrens ophoudt iets
+te betekenen. Vandaar `IAzureCostCollectorStore`, met de klantslug als parameter.
+
+Wat dat kost, eerlijk: de isolatie-eigenschap van de leeskant ("er is geen aanroep waarmee je met de scope
+van klant A bij klant B komt") geldt daar niet. Wat er in de plaats staat is dat die interface alleen kan
+schrijven, alleen de twee soorten van de collector, en dat de enige leesmethode één enum teruggeeft en
+geen document — hij bestaat om een aanroep te vermijden en niet om iets te lezen. Het ergste dat een fout
+kan doen is een verbruiksdocument in de verkeerde partitie zetten, en dát is op het scherm te zien: de
+bevraagde scope staat eronder.
+
+---
+
+## 40. Opnieuw gemeten op 21 augustus: de stilte tussen twee aanroepen moet minuten zijn, en de emmer is niet de onze alleen
+
+Vier metingen, `api-version=2023-11-01`, `timeframe: Custom` over juli 2026 met dagkorrel, scope
+`resourceGroups/MBV`, als `marcel@`:
+
+```
+12:09:22  200   112 rijen, kolommen Cost/UsageDate/ServiceName/Currency, nextLink null
+12:10:15  429   (+53 s)    clienttype-retry-after: 3    entity-requests DefaultQuota:3   qpu 598/59/11
+12:12:07  429   (+112 s)   clienttype-retry-after: 12   entity-requests DefaultQuota:3   qpu 597/59/11
+12:15:24  200   (+197 s)   112 rijen
+12:25:15  429   (+591 s)   clienttype-retry-after: 4    entity-requests DefaultQuota:3   qpu 595/59/11
+```
+
+Drie dingen die het ontwerp raken.
+
+**De stilte moet veel langer zijn dan het onderzoek suggereert.** §2 daarvan meldt dat een geslaagde
+aanroep dertig tot veertig seconden stilte vroeg. Dat gold voor een `MonthToDate`-probe; een maandvraag met
+dagkorrel is zwaarder, en drieënvijftig seconden was er niet genoeg voor. `PauseSeconds` staat daarom op
+**240** en `MaxAttempts` op **2**. Bij zeven klanten met twee maanden is dat ongeveer een uur, en 's nachts
+is een uur gratis.
+
+**De tellers die je kunt zien, zijn niet de emmer die je tegenhoudt.** In alle drie de 429's stond
+`entity-requests` op `DefaultQuota:3` — dus drie over — en stond `qpu` op ruim 595 per uur, 59 per minuut
+en 11 per tien seconden. Punt 32 voor de tweede keer, nu met de aanvulling dat `qpu-remaining` er
+inmiddels drie sub-tellers heeft (`QueriesPerHour`, `QueriesPerMin`, `QueriesPer10Sec`) waar die meting er
+één noteerde. Geen van de vijf is bruikbaar.
+
+**En de emmer wordt gedeeld met aanroepers die wij niet kennen.** Tussen 12:15 en 12:25 liep
+`QueriesPerHour` van 597 naar 595 terwijl er één eigen aanroep tussen zat, en na bijna tien minuten stilte
+kwam er alsnog een 429. Er werkte die dag meer dan één sessie aan deze lane. Dat maakt de 240 een
+bovengrens met marge en geen gemeten minimum — de veilige kant is dezelfde — en het levert de
+belangrijkste gedragsregel van deze lane op: **een 429 is geen mislukte run**, want de oorzaak kan buiten
+ons liggen.
+
+Wat er níet is bijgemeten en wel is bevestigd: `timeframe: Custom` over een afgesloten maand met dagkorrel
+werkt, geeft de kolomvolgorde `Cost, UsageDate, ServiceName, Currency` van punt 33, en `nextLink` was
+opnieuw `null`.
+
+---
+
+## 41. Wat de mutatieronde vond, en wat er niet gedekt is
+
+Vijfenveertig mutaties over `AzureScope`, `AzureCostClient`, `AzureCostCollector`, `AzureCostOptions`, de
+twee formulieren en de twee weergavelagen. Eenenveertig deden wat ze hoorden te doen. **Vier maakten niets
+rood, en dat waren de nuttige vier.**
+
+### Gat 1 — de validatie en de ontleding konden uiteenlopen
+
+`AzureScope.TryParse` mocht de naamcontrole weglaten zonder dat er iets rood werd: de tests stonden alleen
+op `Validate`. Dat is geen dubbele controle maar een eis, want de twee worden door verschillende kanten
+gebruikt — de schrijfkant valideert, de collector en het facturatiescherm ontleden. Zouden ze uiteenlopen,
+dan staat er "wordt gemeten" bij een klant die niet wordt gemeten, of weigert het formulier een scope
+waarmee de collector prima uit de voeten kan. Er staan nu tests op beide kanten, in beide richtingen.
+
+### Gat 2 — er werd na een 429 twee keer gewacht, en dat verborg de vloer
+
+Het weghalen van de eigen vloer onder de wachthint maakte niets rood. De oorzaak was geen ontbrekende test
+maar een fout in de code: er stond een `Task.Delay(Backoff)` aan het begin van de pogingenlus **en** een
+`Task.Delay(Wait(response))` aan het eind. Na een geweigerd verzoek werd er dus twee keer gewacht, en
+omdat beide op dezelfde waarde uitkwamen bleef de test groen als de ene wegviel. De wachttijd was daarmee
+het dubbele van wat er staat, en de vloer was niet te meten. De lusdelay is weg; de delay voor het
+exceptiepad staat nu in het `catch` waar hij thuishoort.
+
+**Dit is de nuttigste vondst van de ronde**, en het is precies het soort fout dat een test niet vindt maar
+een mutatie wel: twee stukken code die per ongeluk hetzelfde doen dekken elkaars afwezigheid.
+
+### Gat 3 — de vlag `Enabled` had geen test die niet kon hangen
+
+De vlag stond alleen in `ExecuteAsync`. Een test die daarop staat moet de dagelijkse lus starten, en met
+een klok die niet wacht draait die lus eindeloos: het negeren van de vlag levert dan geen rode test op
+maar een test die hangt. De vlag staat nu óók bovenaan `RunAsync`, met de reden erbij — dat is de enige
+methode die werk doet, en zij is `internal` en dus rechtstreeks aanroepbaar. Eén veld, één betekenis, dus
+geen tweede waarheid; twee plekken waar hij geldt, waarvan één te testen is.
+
+### Gat 4 — het omgevingsblok mocht de scope laten vallen bij bewaren
+
+Het weghalen van `AzureScope` uit de bewerking die het contractscherm verstuurt maakte niets rood. Dat is
+exact de fout die voor `TelemetryEndpoint` wél een test had: `SaveCustomerAsync` vervangt het hele
+klantdocument, dus een veld dat het formulier niet draagt wordt bij het eerste bewaren leeggemaakt — en
+dan zet een operator die de klantnaam verbetert de kostenmeting van die klant uit, waarna het
+facturatiescherm "niet ingericht" zegt en niemand weet waardoor. Er staan nu vier tests op dat blok:
+bewaren laat de scope staan, een verkeerde scope is te herstellen, een onbruikbare scope komt de opslag
+niet in, en leeghalen mag.
+
+### Vier mutaties die met opzet niets rood maakten
+
+Deze zijn gedraaid om vast te leggen wat er *niet* gedekt is, en ze deden wat ervan werd verwacht:
+
+| Mutatie | Waarom hij niet gedekt is |
+|---|---|
+| het logniveau van een 429 wordt `error` | er staat geen test op logniveaus. Bewust: de regel "een 429 is geen mislukte run" leeft in de uitkomst van de run en niet in een logregel |
+| het claimdocument noteert niet wie er heeft geclaimd | `ClaimedBy` is er om na te zoeken en niet om op te rekenen |
+| de `kind`-controle op de puntlezing verdwijnt | `CosmosAzureCostCollectorStore` heeft geen test: hij praat met Cosmos |
+| de échte opslag schrijft de scope niet op het klantdocument | zie hieronder |
+
+### Wat er niet is gemeten, en dat is het eerlijkste deel van dit werk
+
+**`CosmosAzureCostCollectorStore` en de klantdocumentmapping in `CosmosPortalDataStore` hebben geen
+test.** Beide praten met Cosmos, en de testfixture bouwt de klantdocumentmapping ná in plaats van de
+productiecode aan te roepen — anders dan bij het contract en de toegang, waar `Documentvorm` de
+`internal` productiemapping gebruikt. De mutatie "de echte opslag schrijft de scope niet op het
+klantdocument" maakte daarom niets rood, terwijl dezelfde fout in de fixture wél tests rood maakt.
+
+Dat is een echt gat en het is niet met een test te dichten zonder óf naar Cosmos te schrijven óf de
+mapping uit de methode te halen zoals bij `ToDocument`. Het tweede is de betere oplossing en het raakt
+een bestand met meer schrijvers; het staat daarom als voorstel en niet als wijziging.
+
+**De collector heeft nooit tegen Cosmos of tegen Cost Management gedraaid.** De claim (409 bij een tweede
+instantie), de upsert van het maanddocument en de cross-partition query naar de klantenlijst zijn tegen
+een fixture bewezen en niet tegen de opslag. De 409-eigenschap zelf is elders in dit project wél gemeten
+(`infra.md`, de klant-batch), dus de vorm is niet nieuw — maar deze aanroepen zijn dat wel.
+
+**En de gedragsregel over de 404 is niet opnieuw uitgelokt.** Dat hij bestaat is twee keer gemeten (§2 en
+punt 30); dat de backoff hem overleeft is tegen een eigen handler bewezen en niet tegen Azure. Een 404 op
+verzoek uitlokken kan niet.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Facturatie, sprint en support. Uit §9 van de spec staat daarmee nog één besluit open dat aan uren

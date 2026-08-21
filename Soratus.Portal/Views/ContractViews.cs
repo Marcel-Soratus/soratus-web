@@ -119,6 +119,11 @@ internal sealed class ContractViews(
             Environment = customer?.Environment ?? record?.Environment,
             EnvironmentDetail = customer?.EnvironmentDetail ?? record?.EnvironmentDetail,
 
+            // Geen terugval op het configuratierecord: dat type heeft dit veld niet en hoort het niet
+            // te krijgen. Een klant die alleen uit de configuratie komt heeft geen Azure-scope, en dat
+            // is de waarheid — een uitrol is nooit de plek waar een meetscope wordt vastgelegd.
+            AzureScope = customer?.AzureScope,
+
             // Ook deze twee komen mee, en niet omdat het scherm ze zo graag toont: het
             // omgevingsblok stuurt ze terug bij het bewaren. SaveCustomerAsync vervangt het hele
             // klantdocument, dus een veld dat het formulier niet draagt wordt bij het eerste

@@ -123,7 +123,7 @@ else
                   Dirty="HasCustomerChanges"
                   State="_customerState"
                   Error="@_customerError"
-                  FieldErrorCount="@(_nameError is null ? 0 : 1)"
+                  FieldErrorCount="@((_nameError is null ? 0 : 1) + (_scopeError is null ? 0 : 1))"
                   OnSave="SaveCustomerAsync"
                   SaveLabel="@(_hasCustomerDocument ? "Omgeving bewaren" : "Omgeving vastleggen")"
                   Footnote="Het klant-id en de soort omgeving staan er als tekst omdat ze niet te wijzigen zijn: het eerste is de partitiesleutel van elk document van deze klant, het tweede bepaalt of er wordt gefactureerd. De klant leest van deze kaart alleen zijn naam en de korte omgevingsaanduiding. Verander je de naam, dan volgt de kop van deze pagina zodra je hem opnieuw opent.">
@@ -177,8 +177,32 @@ else
                            @bind-Value="_customer.EnvironmentDetail"
                            Mono="true"
                            Placeholder="sub-77b2e0 · rg-soratus-bakker"
-                           Hint="Alleen voor Soratus: infrastructuurdetails zijn operator-only (§2). Dit is het veld waarin een tikfout thuishoort te worden hersteld en niet in de database."
+                           Hint="Alleen voor Soratus: infrastructuurdetails zijn operator-only (§2). Dit is wat een mens leest; de meting loopt op het veld hieronder, en die twee mogen uiteenlopen."
                            maxlength="160" />
+
+                @* Het veld waarop de kostencollector werkelijk meet. Het staat náást de weergavetekst
+                   hierboven en niet in plaats daarvan: die eerste is voor een mens en mag "501a66d2-…
+                   mbv" zijn, deze moet een pad zijn dat een API accepteert. Een collector die zijn
+                   scope uit een weergavetekst afleidt en er één letter naast zit, krijgt geen fout maar
+                   HTTP 200 met nul rijen — en dat rolt als "geen kosten" door naar een factuur. Zie
+                   AzureScope. *@
+                <FormField Label="Azure-scope"
+                           @bind-Value="_customer.AzureScope"
+                           Mono="true"
+                           Error="@_scopeError"
+                           Placeholder="/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MBV"
+                           Hint="Het veld Resource-ID van de resource group in Azure; kopieer het daarvandaan. Leeg laten betekent: nog niet ingericht — er wordt dan niet gemeten en het facturatiescherm zegt dat, in plaats van € 0,00 te tonen."
+                           maxlength="@AzureScope.MaximumScopeLength" />
+
+                @if (ScopeMismatch is { } mismatch)
+                {
+                    @* Eén van de twee omgevingsvelden is ingevuld en de ander niet. Dat is geen fout —
+                       ze mogen uiteenlopen — maar het is wél de toestand waarin iemand denkt dat de
+                       omgeving is vastgelegd terwijl er niet wordt gemeten, of omgekeerd. Uit de twee
+                       velden van dít formulier en niet uit de opslag: dan meldt hij ook wat je net hebt
+                       getypt en nog niet bewaard. *@
+                    <FormField Label="Let op" Mode="FieldMode.ReadOnly" ReadOnlyText="@mismatch" />
+                }
 
                 @* Geen geheim: op de accounts staat local auth uit, dus een endpoint is een adres
                    en geen sleutel. Zie CustomerRecord. *@
@@ -515,6 +539,8 @@ else
 
         public string? EnvironmentDetail { get; set; }
 
+        public string? AzureScope { get; set; }
+
         public string? TelemetryEndpoint { get; set; }
 
         public string? TelemetryDatabase { get; set; }
@@ -601,6 +627,7 @@ else
     private FormSaveState _customerState = FormSaveState.Idle;
     private string? _customerError;
     private string? _nameError;
+    private string? _scopeError;
 
     private CustomerDocument? _customerConflict;
     private IReadOnlyList<FieldChange> _customerChanges = [];
@@ -746,6 +773,42 @@ else
     /// staat en er is dus geen bewerking waarmee deze waarde omslaat. Een keuzelijst die niets
     /// verandert is precies de knop die dit portaal niet zet.
     /// </remarks>
+    /// <summary>
+    /// De melding als er precies één van de twee omgevingsvelden is ingevuld, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Ze mogen uiteenlopen en dat is geen fout.</strong> <c>envFull</c> is wat een
+    /// operator leest en kan meer omvatten dan er wordt gemeten — een klant met twee resource groups
+    /// bijvoorbeeld. Wat wél iets betekent is dat er één van de twee is en de ander niet: dan denkt
+    /// iemand dat de omgeving is vastgelegd terwijl er niet wordt gemeten, of staat er een meetscope
+    /// bij een klant waarvan niemand kan zien waar hij hoort. Vandaar een regel op het scherm en geen
+    /// blokkade — een blokkade zou van "mag uiteenlopen" een leugen maken.</para>
+    ///
+    /// <para>Uit de twee formuliervelden en niet uit de opslag. Zo meldt hij ook wat er net is getypt en
+    /// nog niet bewaard, en dat is het moment waarop het nog goedkoop is.</para>
+    /// </remarks>
+    private string? ScopeMismatch
+    {
+        get
+        {
+            var detail = !string.IsNullOrWhiteSpace(_customer.EnvironmentDetail);
+            var scope = !string.IsNullOrWhiteSpace(_customer.AzureScope);
+
+            return (detail, scope) switch
+            {
+                (true, false) =>
+                    "Er staat wel een omgeving voor een mens, maar geen Azure-scope. Er worden voor "
+                    + "deze klant dus geen kosten gemeten en het facturatiescherm meldt dat er niets "
+                    + "is ingericht.",
+                (false, true) =>
+                    "Er wordt wel gemeten, maar er staat geen omgeving voor een mens. Op de "
+                    + "contractkaart en in het overzicht blijft de omgeving van deze klant daarmee "
+                    + "leeg.",
+                _ => null,
+            };
+        }
+    }
+
     private string EnvironmentKind => _isInternal
         ? "Interne beheeromgeving van Soratus — niet doorbelast"
         : "Klantomgeving";
@@ -924,6 +987,7 @@ else
     {
         _customerError = null;
         _nameError = null;
+        _scopeError = null;
 
         // De enige harde eis van CustomerEdit, en de melding komt onder het veld dat hem schendt in
         // plaats van als blok boven de knop. Dezelfde functie die de schrijfkant gebruikt zou hier
@@ -940,6 +1004,18 @@ else
             return;
         }
 
+        // Dezelfde functie die de schrijfkant gebruikt, en hier alleen om de melding ónder het veld te
+        // krijgen dat hem schendt. Zonder deze regel weigert CustomerEdit.Validate hem alsnog, maar dan
+        // als blok boven de knop — en dan zoekt een operator welk van de zeven velden hij bedoelt.
+        // Dit is geen tweede definitie: het is dezelfde aanroep, twee keer.
+        _scopeError = AzureScope.Validate(_customer.AzureScope);
+
+        if (_scopeError is not null)
+        {
+            _customerState = FormSaveState.Failed;
+            return;
+        }
+
         var edit = new CustomerEdit
         {
             Name = name,
@@ -950,6 +1026,7 @@ else
             IsInternal = _isInternal,
             Environment = NullIfBlank(_customer.Environment),
             EnvironmentDetail = NullIfBlank(_customer.EnvironmentDetail),
+            AzureScope = NullIfBlank(_customer.AzureScope),
             TelemetryEndpoint = NullIfBlank(_customer.TelemetryEndpoint),
             TelemetryDatabase = NullIfBlank(_customer.TelemetryDatabase),
             BasedOnETag = _customerETag,
@@ -1135,6 +1212,7 @@ else
         Name = view.DisplayName,
         Environment = view.Environment,
         EnvironmentDetail = view.EnvironmentDetail,
+        AzureScope = view.AzureScope,
         TelemetryEndpoint = view.TelemetryEndpoint,
         TelemetryDatabase = view.TelemetryDatabase,
     };
@@ -1151,6 +1229,7 @@ else
         Name = document.Name,
         Environment = document.Environment,
         EnvironmentDetail = document.EnvironmentDetail,
+        AzureScope = document.AzureScope,
         TelemetryEndpoint = document.TelemetryEndpoint,
         TelemetryDatabase = document.TelemetryDatabase,
     };
@@ -1271,7 +1350,7 @@ else
     private IReadOnlyList<FieldChange> Changes(CustomerDocument document)
     {
         var current = EnvironmentFields(document);
-        var lijst = new List<FieldChange>(5);
+        var lijst = new List<FieldChange>(6);
 
         Compare("Klantnaam", _customerOriginal.Name, current.Name);
         Compare("Omgeving", _customerOriginal.Environment, current.Environment);
@@ -1279,6 +1358,7 @@ else
             "Subscription en resource group",
             _customerOriginal.EnvironmentDetail,
             current.EnvironmentDetail);
+        Compare("Azure-scope", _customerOriginal.AzureScope, current.AzureScope);
         Compare("Cosmos-endpoint", _customerOriginal.TelemetryEndpoint, current.TelemetryEndpoint);
         Compare("Databasenaam", _customerOriginal.TelemetryDatabase, current.TelemetryDatabase);
 

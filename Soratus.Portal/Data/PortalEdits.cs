@@ -33,6 +33,12 @@ public sealed record NewCustomerRequest
     /// <summary>De volledige omgeving, bijvoorbeeld <c>sub-77b2e0 · rg-soratus-bakker</c>.</summary>
     public string? EnvironmentDetail { get; init; }
 
+    /// <summary>
+    /// De Azure-scope waartegen de kosten worden gemeten, of <c>null</c> om hem later vast te leggen.
+    /// </summary>
+    /// <remarks>Zie <see cref="CustomerDocument.AzureScope"/> en <see cref="Data.AzureScope"/>.</remarks>
+    public string? AzureScope { get; init; }
+
     /// <summary>De eigen Cosmos-endpoint van deze klant, of leeg voor de standaard.</summary>
     public string? TelemetryEndpoint { get; init; }
 
@@ -59,6 +65,15 @@ public sealed record NewCustomerRequest
         if (string.IsNullOrWhiteSpace(Name))
         {
             return "Vul een klantnaam in.";
+        }
+
+        // De scope wordt hier gecontroleerd en niet alleen op het formulier: dit is de controle die de
+        // opslag zelf doet, en dus de enige die ook geldt voor een aanroeper die het formulier omzeilt.
+        // Een onbruikbare scope hoort niet in een document te belanden, want de fout die eruit volgt is
+        // een geslaagd leeg antwoord van Cost Management — zie AzureScope.
+        if (Data.AzureScope.Validate(AzureScope) is { } scopeError)
+        {
+            return scopeError;
         }
 
         if (Contract?.Validate() is { } contractError)
@@ -246,6 +261,16 @@ public sealed record CustomerEdit
     /// <summary>De volledige omgeving. Operator-only op het scherm.</summary>
     public string? EnvironmentDetail { get; init; }
 
+    /// <summary>
+    /// De Azure-scope waartegen de kosten worden gemeten, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Anders dan <see cref="IsInternal"/> is dit een gewoon formulierveld: hij is te corrigeren. Dat
+    /// is de hele reden dat het omgevingsblok bestaat — zie de opmerking daar: een verkeerd getypt
+    /// abonnements-id was na het aanmaken alleen met de hand in Cosmos te herstellen.
+    /// </remarks>
+    public string? AzureScope { get; init; }
+
     /// <summary>De eigen Cosmos-endpoint van deze klant, of leeg voor de standaard.</summary>
     public string? TelemetryEndpoint { get; init; }
 
@@ -259,8 +284,14 @@ public sealed record CustomerEdit
     /// Controleert de invoer.
     /// </summary>
     /// <returns><c>null</c> als het klopt, anders de melding.</returns>
+    /// <remarks>
+    /// De naam eerst en de scope daarna, in de volgorde van de velden op het scherm. Een leeg
+    /// scopeveld is toegestaan: zie <see cref="Data.AzureScope.Validate"/>.
+    /// </remarks>
     public string? Validate() =>
-        string.IsNullOrWhiteSpace(Name) ? "Vul een klantnaam in." : null;
+        string.IsNullOrWhiteSpace(Name)
+            ? "Vul een klantnaam in."
+            : Data.AzureScope.Validate(AzureScope);
 }
 
 /// <summary>

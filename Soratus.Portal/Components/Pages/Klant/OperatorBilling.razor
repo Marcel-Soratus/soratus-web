@@ -37,6 +37,17 @@
    waar hij moet zijn in plaats van te concluderen dat het niet kan. *@
 
 <div class="stack">
+    @* Dit staat boven het contractbericht en niet eronder, en dat is de volgorde van de oorzaken:
+       zonder scope is er geen verbruik, en zonder verbruik is een contract nog niet het probleem. Een
+       klant zonder scope én zonder contract mist er twee, en de eerste die je oplost is deze. *@
+    @if (View.ScopeNotice is { } scopeNotice)
+    {
+        <p class="meta notice">
+            @scopeNotice
+            <a href="@ContractPath">Naar het contractscherm</a>.
+        </p>
+    }
+
     @if (!View.HasContract)
     {
         <p class="meta notice">
@@ -136,6 +147,14 @@
 
     <p class="meta notice">@View.UnknownNotice</p>
     <p class="meta notice">@View.SurchargeNotice</p>
+
+    @* De scope die vanaf nu wordt bevraagd, en die kan verschillen van de scope waartegen een oudere
+       maand is gemeten — die staat per maand op de rij. Bij een gecorrigeerde tikfout is het verschil
+       tussen die twee precies het antwoord op de vraag waarom augustus leeg is en september niet. *@
+    @if (View.AzureScope is { Length: > 0 } azureScope)
+    {
+        <p class="meta notice">Wordt gemeten tegen <span class="mono">@azureScope</span>.</p>
+    }
 
     @if (Selected is { } selected)
     {

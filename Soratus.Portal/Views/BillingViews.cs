@@ -77,6 +77,15 @@ internal sealed class BillingViews(
         var readings = await costs.GetAzureCostsAsync(scope, year, cancellationToken)
             .ConfigureAwait(false);
 
+        // Het klantdocument, voor precies één veld: de Azure-scope. Dat is een puntlezing van ongeveer
+        // één RU, en hij koopt het onderscheid dat de kostenkolom zelf niet kan maken — "niet ingericht"
+        // tegenover "nog niet vastgesteld". Zonder hem wacht een operator op een meting die nooit komt.
+        //
+        // Uit het document en niet uit de klantenlijst: die is een momentopname die bij een koude start
+        // nog uit de configuratie kan komen, en daar staat geen scope in. Zie ContractViews, dat om
+        // dezelfde reden geen terugval op het configuratierecord heeft voor dit veld.
+        var customer = await store.GetCustomerAsync(scope, cancellationToken).ConfigureAwait(false);
+
         // Uit de klantenlijst en niet uit de scope: CustomerWriteScope draagt dit gegeven bewust niet.
         // Dezelfde terugval als in HourViews en ContractViews.
         var isInternal = directory.Find(scope.CustomerId)?.IsInternal ?? false;
@@ -85,6 +94,8 @@ internal sealed class BillingViews(
 
         return new OperatorBillingView
         {
+            AzureScope = customer?.AzureScope,
+            ScopeNotice = ScopeNotice(customer?.AzureScope),
             CustomerId = scope.CustomerId,
             DisplayName = scope.DisplayName,
             GeneratedAt = timeProvider.GetUtcNow(),
@@ -318,6 +329,26 @@ internal sealed class BillingViews(
             TotalNotice = CustomerTotalNotice(charge),
         };
     }
+
+    /// <summary>
+    /// Wat er over de scope van deze klant te melden valt, of <c>null</c> als er niets aan de hand is.
+    /// </summary>
+    /// <param name="scope">De scope zoals hij in het klantdocument staat.</param>
+    /// <returns>De tekst, of <c>null</c>.</returns>
+    /// <remarks>
+    /// <para><strong>Drie toestanden en niet twee, en dat is dezelfde afweging als overal in deze
+    /// keten.</strong> Er is een bruikbare scope (geen melding), er is er geen (niet ingericht), of er
+    /// staat er een die niet werkt (een fout). De laatste twee leveren beide een lege kostenkolom op en
+    /// vragen een verschillende handeling: iets invullen tegenover iets corrigeren.</para>
+    ///
+    /// <para>Dezelfde functie die de schrijfkant en de collector gebruiken. Zou hier een eigen controle
+    /// staan, dan is er een pad waarop het scherm een scope goedkeurt die de collector weigert — en dan
+    /// staat er "wordt gemeten" bij een klant die niet wordt gemeten.</para>
+    /// </remarks>
+    private static string? ScopeNotice(string? scope) =>
+        string.IsNullOrWhiteSpace(scope) ? BillingNotice.NoScopeConfigured
+        : AzureScope.TryParse(scope, out _) ? null
+        : BillingNotice.ScopeUnusable;
 
     /// <summary>De operatorvariant van één maand.</summary>
     private OperatorChargeRow OperatorRow(

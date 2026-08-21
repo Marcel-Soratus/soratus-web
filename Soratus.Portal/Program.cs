@@ -213,6 +213,44 @@ builder.Services.AddScoped<IStatementViews, StatementViews>();
 builder.Services.AddScoped<IMonthlyStatementFigures, BillingStatementFigures>();
 builder.Services.AddScoped<MonthlyStatementService>();
 
+// ── De kostencollector (§3.7, fase 4a) ───────────────────────────────────────────────────────
+// Geen ValidateOnStart, om dezelfde reden als bij PortalData en PortalMail: een verkeerd ingestelde
+// collector is een inrichtingsfout, en een inrichtingsfout die het opstarten tegenhoudt neemt
+// /healthz mee en rolt daarmee de uitrol terug.
+builder.Services.AddOptions<AzureCostOptions>()
+    .Bind(builder.Configuration.GetSection(AzureCostOptions.SectionName))
+    .ValidateDataAnnotations();
+
+// Een benoemde HttpClient en geen typed client. De collector is een achtergronddienst en leeft zolang
+// het portaal draait; een geïnjecteerde HttpClient zou daarmee jaren dezelfde handler vasthouden en
+// een DNS-wijziging van management.azure.com niet meer volgen. AzureCostClient vraagt de fabriek per
+// aanroep om een verse client. Dezelfde afweging als bij AcsStatementMailSender.
+builder.Services.AddHttpClient(AzureCostClient.HttpClientName);
+builder.Services.AddSingleton<IAzureCostClient, AzureCostClient>();
+
+// Singleton, want AzureCostCollector is een hosted service en die kan geen scoped afhankelijkheid
+// krijgen. Een eigen interface naast IPortalCostsStore en niet twee methoden daar: elke methode van
+// die interface vraagt een scope, en de collector heeft geen mens en dus geen scope.
+builder.Services.AddSingleton<IAzureCostCollectorStore, CosmosAzureCostCollectorStore>();
+
+// De collector draait niet in Development, en dat staat hier in code in plaats van als vlag in
+// appsettings.Development.json.
+//
+// Waarom niet als configuratie: die vlag staat met opzet standaard áán (een standaard-uit vlag is
+// een storing die zich voordoet als werkende functionaliteit), dus hem uitzetten vraagt een regel in
+// een bestand die iemand kan vergeten of bij een merge kan verliezen. En de prijs van vergeten is
+// niet klein: een lokale run roept om 04:00 UTC Cost Management aan met de identiteit van de
+// ontwikkelaar, uit precies dezelfde emmer waarin de collector in productie meet — en die emmer
+// hangt gemeten aan de aanroeper en niet aan de scope.
+//
+// Waarom niet als omgevingscontrole binnen de dienst zelf: dan is hij lokaal helemaal niet meer te
+// draaien. Zo is hij er in Development gewoon niet, wat in de container te zien is, en wie hem
+// bewust lokaal wil draaien haalt deze voorwaarde hier weg en ziet daarbij waarom hij er stond.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<AzureCostCollector>();
+}
+
 // ── Blazor ───────────────────────────────────────────────────────────────────────────────────
 // Static SSR is de standaard. InteractiveServer is alleen beschikbaar als render mode voor de
 // eilanden die later komen (live tail); de app als geheel wordt niet interactief.

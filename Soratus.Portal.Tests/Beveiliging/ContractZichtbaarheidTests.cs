@@ -32,6 +32,13 @@ public class ContractZichtbaarheidTests
         ("EnvironmentDetail",
             "§2 maakt infrastructuurdetails operator-only. Dit veld draagt subscription en resource " +
             "group; het is de reden dat CustomerScope het niet heeft en OperatorCustomerScope wel."),
+        ("AzureScope",
+            "§2 maakt infrastructuurdetails operator-only, en dit veld noemt het abonnement en de " +
+            "resource group van onze eigen infrastructuur in de exacte vorm waarin een API ze " +
+            "aanneemt. Het staat naast EnvironmentDetail en om dezelfde reden op het omgevingsblok " +
+            "van de operator: SaveCustomerAsync vervangt het hele klantdocument, dus een veld dat " +
+            "het formulier niet draagt wordt bij het bewaren leeggemaakt — en dan zet een operator " +
+            "die de klantnaam verbetert de kostenmeting van die klant uit."),
         ("ContractETag",
             "Een etag is een schrijfvoorwaarde. De klant schrijft niet, dus hij heeft er niets aan — " +
             "en een veld dat niemand leest is precies het veld dat later ergens opduikt."),

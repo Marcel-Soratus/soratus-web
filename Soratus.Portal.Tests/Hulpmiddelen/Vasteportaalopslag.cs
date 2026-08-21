@@ -68,6 +68,26 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
     public const string Omgevingsdetail = "sub-soratus-acme · rg-acme-prod";
 
     /// <summary>
+    /// De machineleesbare Azure-scope van de standaardklant.
+    /// </summary>
+    /// <remarks>
+    /// <strong>Let op het verschil met <see cref="Omgevingsdetail"/> hierboven, want dat verschil is de
+    /// hele reden dat dit veld bestaat.</strong> Die tekst is wat een operator leest en is niet te
+    /// ontleden; deze is wat een machine gebruikt. Ze mogen uiteenlopen en dat is geen fout — een
+    /// collector die zijn scope uit de eerste zou afleiden, krijgt bij een tikfout HTTP 200 met nul
+    /// rijen en geen enkele foutmelding. Zie <see cref="AzureScope"/>.
+    /// </remarks>
+    /// <remarks>
+    /// <strong>Gelijk aan <see cref="Kostenscope"/>, en dat is de normale toestand.</strong> Wat er op de
+    /// klant staat is de scope die vanaf nu wordt bevraagd; wat er op een maand staat is de scope
+    /// waartegen die maand werkelijk is gemeten. Bij een gecorrigeerde tikfout lopen die uiteen, en dan
+    /// is het verschil tussen die twee precies het antwoord op de vraag waarom augustus leeg is en
+    /// september niet. Eén constante en niet twee dezelfde: twee waarden die per ongeluk gelijk zijn
+    /// bewijzen niets, en een test die het verschil wil zien zet het zelf.
+    /// </remarks>
+    public const string Standaardscope = Kostenscope;
+
+    /// <summary>
     /// Het begin van elke etag die deze opslag uitdeelt.
     /// </summary>
     /// <remarks>
@@ -127,6 +147,7 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
                 IsInternal = false,
                 Environment = "West-Europa",
                 EnvironmentDetail = Omgevingsdetail,
+                AzureScope = Standaardscope,
                 TelemetryEndpoint = Autorisatiebron.StandaardEndpoint,
                 TelemetryDatabase = "telemetry",
                 CreatedAt = Testgegevens.Nu - TimeSpan.FromDays(120),
@@ -417,6 +438,7 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
             IsInternal = request.IsInternal,
             Environment = request.Environment,
             EnvironmentDetail = request.EnvironmentDetail,
+            AzureScope = request.AzureScope,
             TelemetryEndpoint = request.TelemetryEndpoint,
             TelemetryDatabase = request.TelemetryDatabase,
             CreatedAt = Testgegevens.Nu,
@@ -489,6 +511,7 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
             IsInternal = partitie.Klant?.IsInternal ?? edit.IsInternal,
             Environment = edit.Environment,
             EnvironmentDetail = edit.EnvironmentDetail,
+            AzureScope = edit.AzureScope,
             TelemetryEndpoint = edit.TelemetryEndpoint,
             TelemetryDatabase = edit.TelemetryDatabase,
             CreatedAt = partitie.Klant?.CreatedAt ?? Testgegevens.Nu,

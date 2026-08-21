@@ -151,6 +151,46 @@ public class ContractInvoerTests
         Assert.Null(new CustomerEdit { Name = "Bakker Logistiek" }.Validate());
 
     [Fact]
+    public void EenKlantwijzigingZonderAzureScopeKlopt() =>
+        // "Niet ingericht" is een geldige toestand, en leeghalen is de enige manier om een verkeerde
+        // scope weg te krijgen zonder in Cosmos te hoeven. Zie AzureScope.
+        Assert.Null(new CustomerEdit { Name = "Bakker Logistiek", AzureScope = null }.Validate());
+
+    [Fact]
+    public void EenKlantwijzigingMetEenOnbruikbareAzureScopeWordtGeweigerd() =>
+        // De controle die telt voor een aanroeper die het formulier omzeilt. Wat de opslag doorlaat komt
+        // in een document, en wat in een document komt wordt door de collector bevraagd — of stil niet.
+        Assert.NotNull(
+            new CustomerEdit
+            {
+                Name = "Bakker Logistiek",
+                AzureScope = "501a66d2-de54-4d4f-9f7c-1fbb55bec17f mbv",
+            }.Validate());
+
+    [Fact]
+    public void EenNieuweKlantMetEenOnbruikbareAzureScopeWordtGeweigerd() =>
+        Assert.NotNull(
+            new NewCustomerRequest
+            {
+                CustomerId = "bakker",
+                Name = "Bakker Logistiek",
+                AzureScope = "rg-soratus-bakker",
+            }.Validate());
+
+    [Fact]
+    public void EenNieuweKlantMetEenGeldigeAzureScopeKlopt() =>
+        // De spiegel. Zonder deze test mag Validate elke scope weigeren en is er geen klant meer in te
+        // richten voor de kostenmeting.
+        Assert.Null(
+            new NewCustomerRequest
+            {
+                CustomerId = "bakker",
+                Name = "Bakker Logistiek",
+                AzureScope =
+                    "/subscriptions/501a66d2-de54-4d4f-9f7c-1fbb55bec17f/resourceGroups/rg-soratus-bakker",
+            }.Validate());
+
+    [Fact]
     public async Task WatErOpHetDocumentStaatBepaaltOfEenKlantInternIsEnNietDeBewerking()
     {
         // Het omgevingsblok rendert IsInternal niet — een klant intern maken raakt de facturatie en

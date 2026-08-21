@@ -104,6 +104,39 @@ public static class BillingNotice
         "Het subtotaal is de som van de onafgeronde bedragen. Een dienst die minder dan een cent "
         + "kost staat er als '< € 0,01', dus de regels tellen op het scherm niet precies op tot het "
         + "subtotaal.";
+
+    /// <summary>
+    /// Dat er voor deze klant geen Azure-scope is vastgelegd, dus dat er niets wordt gemeten
+    /// (operator-only).
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Dit is het onderscheid dat "onbekend" niet kan maken.</strong> Een klant zonder
+    /// scope levert dezelfde lege kolom op als een klant wiens meting van vannacht is mislukt, en die
+    /// twee vragen een volstrekt verschillende handeling: de eerste is een veld invullen, de tweede is
+    /// wachten. Zonder deze regel zou een operator op een meting wachten die nooit gaat komen.</para>
+    ///
+    /// <para>Het staat als tekst op het viewmodel en niet als vijfde waarde in
+    /// <see cref="Data.AzureCostState"/>. Die enum beschrijft een <em>meting</em>, en er is er geen —
+    /// "geen document betekent geen status" (punt 2), dus de afwezigheid hoort <c>Unknown</c> te blijven.
+    /// Waaróm er niets is gemeten is een eigenschap van de klant en niet van de maand, en hij staat
+    /// daarom één keer boven de tabel in plaats van twaalf keer in een rij.</para>
+    /// </remarks>
+    public const string NoScopeConfigured =
+        "Voor deze klant is geen Azure-scope vastgelegd, dus er wordt niets gemeten. De streepjes "
+        + "hieronder betekenen hier 'niet ingericht' en niet 'nog niet vastgesteld'. Leg de scope vast "
+        + "op het contractscherm, in het blok Omgeving.";
+
+    /// <summary>
+    /// Dat de vastgelegde Azure-scope niet te gebruiken is (operator-only).
+    /// </summary>
+    /// <remarks>
+    /// Kan alleen als iemand het klantdocument met de hand heeft aangepast — beide formulieren
+    /// valideren. En juist daarom hoort hij hier te staan: een scope die er wél is en niet werkt, is
+    /// niet van een scope te onderscheiden die er niet is, en de collector meet in beide gevallen niets.
+    /// </remarks>
+    public const string ScopeUnusable =
+        "De Azure-scope van deze klant is niet te gebruiken, dus er wordt niets gemeten. Corrigeer hem "
+        + "op het contractscherm, in het blok Omgeving.";
 }
 
 /// <summary>
@@ -507,4 +540,30 @@ public sealed record OperatorBillingView
 
     /// <summary>Dat het subtotaal de exacte som is.</summary>
     public required string SubtotalNotice { get; init; }
+
+    /// <summary>
+    /// De Azure-scope waartegen deze klant wordt gemeten, of <c>null</c> als er geen is vastgelegd.
+    /// </summary>
+    /// <remarks>
+    /// <para>Operator-only, en dat is geen extra regel: §2 wijst de volledige omgeving (subscription ·
+    /// resource group) aan de operator toe en niet aan de klant. Zie <see cref="CustomerBillingView"/>,
+    /// dat dit veld daarom niet <em>heeft</em> in plaats van het te hebben en te verbergen.</para>
+    ///
+    /// <para>Staat hier naast <see cref="OperatorChargeRow.Scope"/> per maand, en die twee mogen
+    /// verschillen — dat is de bedoeling. Dit is de scope die vanaf nu wordt bevraagd; die op de rij is
+    /// de scope waartegen die maand werkelijk is gemeten. Bij een gecorrigeerde tikfout is het verschil
+    /// tussen die twee precies het antwoord op de vraag waarom augustus leeg is en september niet.</para>
+    /// </remarks>
+    public string? AzureScope { get; init; }
+
+    /// <summary>
+    /// Waarom er voor deze klant niets wordt gemeten, of <c>null</c> als er wél wordt gemeten.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BillingNotice.NoScopeConfigured"/> of <see cref="BillingNotice.ScopeUnusable"/>. Twee
+    /// teksten en geen enum: dit is een mededeling en geen gegeven waarop iets rekent. De reden dat de
+    /// gaten per maand wél een enum zijn (<see cref="Data.MonthlyChargeGap"/>) is dat die naar de
+    /// klantvorm worden omgezet en dus door code moeten; deze regel gaat alleen naar één operatorscherm.
+    /// </remarks>
+    public string? ScopeNotice { get; init; }
 }

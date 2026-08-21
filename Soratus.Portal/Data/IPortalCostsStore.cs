@@ -7,11 +7,16 @@ namespace Soratus.Portal.Data;
 /// </summary>
 /// <remarks>
 /// <para><strong>Alleen lezen, en dat is geen tijdelijke beperking.</strong> Deze documenten worden
-/// geschreven door de beheeragent <c>kosten-collector</c> (§4) en door niets anders. Er is geen
-/// scherm en geen formulier dat een kostenbedrag vastlegt, en er hoort er ook geen te komen: een
-/// bedrag dat een mens kan intypen is een bedrag dat naast de meting gaat staan, en dan is niet te
-/// zeggen welke van de twee op de factuur hoort. Dat is dezelfde afweging als bij een agent die zijn
-/// eigen status niet publiceert (punt 2 van de fase-0-afwijkingen).</para>
+/// geschreven door <see cref="AzureCostCollector"/> en door niets anders. Er is geen scherm en geen
+/// formulier dat een kostenbedrag vastlegt, en er hoort er ook geen te komen: een bedrag dat een mens
+/// kan intypen is een bedrag dat naast de meting gaat staan, en dan is niet te zeggen welke van de twee
+/// op de factuur hoort. Dat is dezelfde afweging als bij een agent die zijn eigen status niet
+/// publiceert (punt 2 van de fase-0-afwijkingen).</para>
+///
+/// <para><strong>De schrijfkant is daarom een andere interface en niet twee methoden hier.</strong>
+/// Elke methode hieronder vraagt een scope: het bewijs dat er een mens naar een klant kijkt en dat hij
+/// dat mag. De collector heeft geen mens en dus geen scope, en zou er een moeten verzinnen om hier
+/// langs te komen. Zie <see cref="IAzureCostCollectorStore"/>.</para>
 ///
 /// <para>Wat een mens wél instelt is het <em>opslagpercentage</em>, en dat staat op het contract
 /// (<see cref="ContractDocument.AzureSurchargePercentage"/>) en wordt op het contractscherm bewerkt.

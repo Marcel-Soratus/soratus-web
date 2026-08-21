@@ -398,6 +398,87 @@ public class ContracteilandTests : Portaalrendertest
     }
 
     [Fact]
+    public void HetBewarenVanDeOmgevingLaatDeAzureScopeStaan()
+    {
+        // Dezelfde bevinding als hierboven, op het veld waar hij geld kost. SaveCustomerAsync vervangt
+        // het hele klantdocument, dus een veld dat het formulier niet draagt wordt bij het eerste
+        // bewaren leeggemaakt — en dan zet een operator die de klantnaam verbetert de kostenmeting van
+        // die klant uit. Het facturatiescherm zegt vanaf dat moment "niet ingericht" en niemand weet
+        // waardoor.
+        //
+        // Deze test is gevonden met een mutatie: het weghalen van AzureScope uit de bewerking maakte
+        // niets rood, terwijl dezelfde fout op TelemetryEndpoint hierboven wél een test had.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Klantnaam", "Acme Logistiek BV");
+        BewaarOmgeving(cut);
+
+        Assert.Equal(Vasteportaalopslag.Standaardscope, Opslag.Klant()!.AzureScope);
+        Assert.Equal(
+            Vasteportaalopslag.Standaardscope,
+            Assert.Single(Opslag.Klantwijzigingen).AzureScope);
+    }
+
+    [Fact]
+    public void EenVerkeerdeAzureScopeIsOpHetSchermTeHerstellen()
+    {
+        // Waarom dit veld op het formulier staat en niet alleen op het document. Een verkeerde scope
+        // geeft HTTP 200 met nul rijen — geen fout, geen melding — dus hij komt pas uit als iemand een
+        // maand zonder bedrag ziet. Op dat moment moet hij te corrigeren zijn zonder in Cosmos te hoeven.
+        const string juist =
+            "/subscriptions/501a66d2-de54-4d4f-9f7c-1fbb55bec17f/resourceGroups/rg-acme-productie";
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Assert.Equal(Vasteportaalopslag.Standaardscope, Waarde(cut, "Azure-scope"));
+
+        Vul(cut, "Azure-scope", juist);
+        BewaarOmgeving(cut);
+
+        Assert.Equal(juist, Opslag.Klant()!.AzureScope);
+    }
+
+    [Fact]
+    public void EenOnbruikbareAzureScopeWordtNietBewaardEnMeldtZichOnderZijnVeld()
+    {
+        // De weergavetekst per ongeluk in het verkeerde veld geplakt. Die hoort niet in de opslag te
+        // komen: wat er in een document staat wordt door de collector bevraagd, en een pad dat geen pad
+        // is levert daar geen fout op maar niets.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Azure-scope", Vasteportaalopslag.Omgevingsdetail);
+        BewaarOmgeving(cut);
+
+        // Niet weggeschreven, en er is niet eens een poging naar de opslag gegaan: de melding hoort
+        // onder het veld te staan en niet als blok boven de knop.
+        Assert.Equal(Vasteportaalopslag.Standaardscope, Opslag.Klant()!.AzureScope);
+        Assert.Empty(Opslag.Klantwijzigingen);
+        Assert.Contains("Resource-ID", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeAzureScopeLeeghalenIsToegestaanEnBetekentNietIngericht()
+    {
+        // De spiegel van de test hierboven, en zonder hem is er geen weg terug: leeg is een geldige
+        // toestand, en als leeghalen zou worden geweigerd is een verkeerde scope alleen te vervangen en
+        // nooit weg te halen.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Azure-scope", "  ");
+        BewaarOmgeving(cut);
+
+        Assert.Null(Opslag.Klant()!.AzureScope);
+    }
+
+    [Fact]
     public void EenOmgevingswijzigingSchrijftHetContractNietOpnieuwWeg()
     {
         // Twee kaarten, twee documenten, twee knoppen. Eén kaart met één knop zou van elke correctie

@@ -128,7 +128,20 @@
                            Value="@Form.EnvironmentDetail"
                            Mono="true"
                            Placeholder="sub-77b2e0 · rg-soratus-bakker"
-                           Hint="Alleen voor Soratus: infrastructuurdetails zijn operator-only (§2)." />
+                           Hint="Alleen voor Soratus: infrastructuurdetails zijn operator-only (§2). Dit is wat een mens leest; de kostenmeting loopt op het veld hieronder." />
+
+                @* Het veld waarop de kostencollector meet. Náást de weergavetekst hierboven en niet in
+                   plaats daarvan: die mag "sub-77b2e0 · rg-…" zijn, deze moet een pad zijn dat een API
+                   accepteert. Een resource group die niet bestaat geeft HTTP 200 met nul rijen, dus een
+                   scope die uit een weergavetekst is geraden levert stil "geen kosten". *@
+                <FormField Label="Azure-scope"
+                           Name="@FieldName(nameof(Form.AzureScope))"
+                           Value="@Form.AzureScope"
+                           Mono="true"
+                           Error="@Error(nameof(Form.AzureScope))"
+                           Placeholder="/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MBV"
+                           Hint="Het veld Resource-ID van de resource group in Azure; kopieer het daarvandaan. Leeg laten mag: dan wordt er nog niet gemeten en zegt het facturatiescherm dat er niets is ingericht, in plaats van € 0,00 te tonen."
+                           maxlength="@AzureScope.MaximumScopeLength" />
 
                 <h2 class="colhead">Telemetrie</h2>
 

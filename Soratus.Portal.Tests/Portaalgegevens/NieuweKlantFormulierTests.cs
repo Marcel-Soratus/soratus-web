@@ -269,6 +269,51 @@ public class NieuweKlantFormulierTests
         Assert.Equal(NewCustomerForm.AccessRowCount, regels.Distinct().Count());
     }
 
+    // ── De Azure-scope: leeg mag, onbruikbaar niet ─────────────────────────────────────────────
+
+    [Fact]
+    public void EenLeegScopeveldLevertGeenScopeEnGeenMelding()
+    {
+        // "Niet ingericht" is een geldige toestand — punt 15 op de plek waar hij de meting raakt. Een
+        // verplicht veld zou hier een verzonnen pad opleveren, en een verzonnen pad geeft HTTP 200 met
+        // nul rijen: het ziet uit als een antwoord.
+        var formulier = Formulier();
+
+        Assert.DoesNotContain(nameof(NewCustomerForm.AzureScope), formulier.FieldErrors().Keys);
+        Assert.Null(formulier.ToRequest().AzureScope);
+        Assert.Null(formulier.ToRequest().Validate());
+    }
+
+    [Fact]
+    public void EenIngevuldePadvormKomtOngewijzigdInHetVerzoek()
+    {
+        // De spiegel. Zonder deze test mag het formulier het veld weggooien en blijft de test hierboven
+        // groen — en dan is er geen klant meer in te richten voor de kostenmeting.
+        const string scope = "/subscriptions/501a66d2-de54-4d4f-9f7c-1fbb55bec17f/resourceGroups/MBV";
+
+        var verzoek = Formulier(f => f.AzureScope = $"  {scope}  ").ToRequest();
+
+        // Getrimd maar niet herschreven: de schrijfwijze van de resourcegroepnaam is die van de
+        // operator, want deze tekenreeks komt op het scherm terug als "bevraagd: …".
+        Assert.Equal(scope, verzoek.AzureScope);
+        Assert.Null(verzoek.Validate());
+    }
+
+    [Fact]
+    public void EenOnbruikbareScopeMeldtZichOnderZijnEigenVeld()
+    {
+        // De weergavetekst van de bestaande klanten hoort hier niet door te komen. "501a66d2-… mbv"
+        // staat vandaag bij de echte klant in envFull, en dát is precies de waarde die iemand hier
+        // per ongeluk in plakt.
+        var formulier = Formulier(f => f.AzureScope = "501a66d2-de54-4d4f-9f7c-1fbb55bec17f mbv");
+
+        Assert.Contains(nameof(NewCustomerForm.AzureScope), formulier.FieldErrors().Keys);
+
+        // En de opslag weigert hem óók, want dat is de controle die telt voor een aanroeper die het
+        // formulier omzeilt. Twee plekken, dezelfde functie.
+        Assert.NotNull(formulier.ToRequest().Validate());
+    }
+
     /// <summary>
     /// Een formulier met alleen de twee verplichte velden gevuld, en daarna wat de test nodig heeft.
     /// </summary>

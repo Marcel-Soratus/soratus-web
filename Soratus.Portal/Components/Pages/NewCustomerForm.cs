@@ -71,7 +71,23 @@ public sealed class NewCustomerForm
     public string? Environment { get; set; }
 
     /// <summary>De volledige omgeving (subscription · resource group). Operator-only (§2).</summary>
+    /// <remarks>Vrije tekst voor een mens. De meting loopt op <see cref="AzureScope"/>.</remarks>
     public string? EnvironmentDetail { get; set; }
+
+    /// <summary>
+    /// De Azure-scope waartegen de kosten worden gemeten. Operator-only (§2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Mag leeg blijven: dan is deze klant nog niet ingericht voor de kostenmeting, en dat is een
+    /// geldige toestand. Zie <see cref="Data.AzureScope"/> — een verplicht veld zou hier een verzonnen
+    /// pad opleveren, en een verzonnen pad geeft HTTP 200 met nul rijen en ziet er dus uit als een
+    /// antwoord.</para>
+    ///
+    /// <para>De controle staat in <see cref="FieldErrors"/> en niet alleen in
+    /// <see cref="NewCustomerRequest.Validate"/>, om dezelfde reden als bij de drie getalvelden: dit is
+    /// een melding die onder één veld hoort te staan.</para>
+    /// </remarks>
+    public string? AzureScope { get; set; }
 
     /// <summary>De eigen Cosmos-endpoint van de telemetrie van deze klant, of leeg.</summary>
     public string? TelemetryEndpoint { get; set; }
@@ -199,6 +215,11 @@ public sealed class NewCustomerForm
         // er dubbelzinnig is in plaats van om een getal te vragen terwijl er al een getal staat.
         // Zie ContractText.NumberError: laat je de invoer weg, dan is de melding niet onwaar maar
         // wel minder scherp bij precies het geval waar hij het meest te zeggen heeft.
+        if (Data.AzureScope.Validate(AzureScope) is { } scopeError)
+        {
+            errors[nameof(AzureScope)] = scopeError;
+        }
+
         if (!ContractText.TryNumber(BundledHours, out _))
         {
             errors[nameof(BundledHours)] = ContractText.NumberError("8", BundledHours);
@@ -282,6 +303,7 @@ public sealed class NewCustomerForm
         IsInternal = string.Equals(EnvironmentKind, InternalEnvironment, StringComparison.Ordinal),
         Environment = NullIfBlank(Environment),
         EnvironmentDetail = NullIfBlank(EnvironmentDetail),
+        AzureScope = NullIfBlank(AzureScope),
         TelemetryEndpoint = NullIfBlank(TelemetryEndpoint),
         TelemetryDatabase = NullIfBlank(TelemetryDatabase),
         Contract = ToContract(),
