@@ -72,7 +72,7 @@ public class MailinhoudTests
     {
         // Punt 13: één definitie van "één regel". Deze test bewijst dat de mailkant hem niet zelf
         // heeft nagebouwd — de markering komt letterlijk uit Soratus.Agents.Contracts.
-        var geknipt = StatementText.OneLine("Eerste regel\ntweede regel", 200);
+        var geknipt = MailText.OneLine("Eerste regel\ntweede regel", 200);
 
         Assert.EndsWith(MessageTruncation.Marker, geknipt, StringComparison.Ordinal);
         Assert.StartsWith("Eerste regel", geknipt, StringComparison.Ordinal);

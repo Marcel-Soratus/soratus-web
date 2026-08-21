@@ -49,7 +49,7 @@ internal sealed class Maandoverzichtbank
         // De verzender kijkt bij elke aanroep of er al een claim staat. Dat is de enige manier om de
         // volgorde te meten in plaats van alleen de aantallen: claimen en versturen leveren beide een
         // teller op, en die tellers zijn hetzelfde ongeacht welke van de twee eerst gaat.
-        Verzender = new Vasteverzender(maand => Bevestigingen.Document(maand) is not null);
+        Verzender = new Vasteverzender(Opties, maand => Bevestigingen.Document(maand) is not null);
 
         Dienst = new MonthlyStatementService(
             Options.Create(Opties),
@@ -146,19 +146,27 @@ internal sealed class Vastemaandbedragen(Func<MonthlyStatementFigures?> bedragen
 }
 
 /// <summary>
-/// Een verzender die niets verstuurt en teruggeeft wat de test wil.
+/// Een verzendlaag die niets verstuurt en teruggeeft wat de test wil.
 /// </summary>
 /// <remarks>
-/// Houdt bij wat hij heeft gekregen. Dat is de enige manier om te meten wat er in een mail zou
-/// staan: de echte verzender geeft de tekst niet terug.
+/// <para>Houdt bij wat hij heeft gekregen. Dat is de enige manier om te meten wat er in een mail zou
+/// staan: de echte verzendlaag geeft de tekst niet terug.</para>
+///
+/// <para><strong>De stand komt uit <see cref="PortalMailOptions.Outbox"/> en niet uit een eigen
+/// veld.</strong> Dat is opzet: zou deze dubbel de proefdraaimodus zelf uitrekenen, dan meet elke test
+/// erop zijn eigen kopie van die beslissing en blijft hij groen als de echte laag hem omdraait.</para>
 /// </remarks>
-internal sealed class Vasteverzender(Func<string, bool>? geclaimd = null) : IStatementMailSender
+internal sealed class Vasteverzender(PortalMailOptions opties, Func<string, bool>? geclaimd = null)
+    : IMailOutbox
 {
     /// <summary>Wat de verzender teruggeeft.</summary>
     public MailDelivery Uitkomst { get; set; } = MailDelivery.Accepted;
 
     /// <summary>Elke mail die hij heeft gekregen, in volgorde.</summary>
-    public List<StatementMail> Verstuurd { get; } = [];
+    public List<OutgoingMail> Verstuurd { get; } = [];
+
+    /// <inheritdoc />
+    public MailOutboxState State => opties.Outbox();
 
     /// <summary>
     /// Of er bij elke verzending al een claim stond.
@@ -171,11 +179,15 @@ internal sealed class Vasteverzender(Func<string, bool>? geclaimd = null) : ISta
     public bool GeclaimdBijElkeVerzending { get; private set; } = true;
 
     /// <inheritdoc />
-    public Task<StatementSendResult> SendAsync(
-        MailSender sender,
-        StatementMail mail,
+    public Task<MailSendResult> SendAsync(
+        OutgoingMail mail,
         CancellationToken cancellationToken = default)
     {
+        // Dezelfde eis als op de echte laag: aanbieden terwijl er niet verstuurd mag worden is een fout
+        // in de aanroeper en geen toestand. Zonder deze regel zou een mutatie die de proefdraaicontrole
+        // uit MonthlyStatementService haalt, hier stil doorgaan.
+        Assert.Equal(MailOutboxState.Ready, State);
+
         Verstuurd.Add(mail);
 
         if (geclaimd is not null)
@@ -187,7 +199,7 @@ internal sealed class Vasteverzender(Func<string, bool>? geclaimd = null) : ISta
             GeclaimdBijElkeVerzending &= geclaimd(maand);
         }
 
-        return Task.FromResult(new StatementSendResult(
+        return Task.FromResult(new MailSendResult(
             Uitkomst,
             Uitkomst == MailDelivery.Accepted ? "operatie-0001" : null));
     }

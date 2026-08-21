@@ -29,37 +29,33 @@ public sealed record StatementAddressing(IReadOnlyList<string> Recipients, strin
 /// er is geen tweede fabriek. Dat is de reden dat "wat kan er in deze mail sluipen" een
 /// beantwoordbare vraag is: er is precies één plek waar de velden worden gevuld.</para>
 ///
+/// <para><strong>Een eigen type naast <see cref="OutgoingMail"/> en niet die basis zelf.</strong> De
+/// verzendlaag neemt de basis aan, want versturen is voor elk doel hetzelfde. Wat níet hetzelfde is,
+/// is wie het leest: op dít type staat een broncodetest die elke foutmelding uit de opmaak weert
+/// (punten 13 en 14), en op de operatorvariant staat die met opzet niet. Zou er één type zijn, dan is
+/// dat onderscheid alleen nog een afspraak — en de storingsmelding zou het klantpad kunnen nemen.
+/// Dezelfde constructie en dezelfde reden als bij <c>AgentRunRow</c> in punt 14.</para>
+///
 /// <para><strong>Beide lichamen komen uit dezelfde gegevens en niet uit twee opmaakfuncties.</strong>
 /// Een HTML-versie en een platte versie die uit elkaar lopen betekent dat de klant met
 /// afbeeldingen uit een ander bedrag leest dan de klant zonder. Ze staan daarom naast elkaar in
 /// dezelfde methode, met dezelfde regels in dezelfde volgorde.</para>
 /// </remarks>
-public sealed record StatementMail
+public sealed record StatementMail : OutgoingMail
 {
     /// <summary>Alleen de opmaakfunctie maakt dit type.</summary>
+    /// <param name="subject">De onderwerpregel.</param>
+    /// <param name="recipients">De ontvangers.</param>
+    /// <param name="plainText">Het platte lichaam.</param>
+    /// <param name="html">Het HTML-lichaam.</param>
     internal StatementMail(
         string subject,
         IReadOnlyList<string> recipients,
         string plainText,
         string html)
+        : base(subject, recipients, plainText, html)
     {
-        Subject = subject;
-        Recipients = recipients;
-        PlainText = plainText;
-        Html = html;
     }
-
-    /// <summary>De onderwerpregel. Altijd één regel; zie <see cref="StatementText.OneLine"/>.</summary>
-    public string Subject { get; }
-
-    /// <summary>De ontvangers.</summary>
-    public IReadOnlyList<string> Recipients { get; }
-
-    /// <summary>Het platte lichaam.</summary>
-    public string PlainText { get; }
-
-    /// <summary>Het HTML-lichaam. Elke ingevoegde waarde is HTML-gecodeerd.</summary>
-    public string Html { get; }
 }
 
 /// <summary>
@@ -163,7 +159,7 @@ internal static class StatementMailComposer
             return StatementComposition.Refused(StatementRefusal.AmountUnknown);
         }
 
-        var name = StatementText.OneLine(customerName, StatementText.NameLimit);
+        var name = MailText.OneLine(customerName, MailText.NameLimit);
         var monthLabel = HourMonths.Label(figures.Month);
         var specification = StatementText.PortalPath(portalBaseUri, figures.CustomerId, figures.Month);
 

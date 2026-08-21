@@ -82,6 +82,11 @@ public sealed class PortalMailOptions
     /// uitzondering is en hier de standaard, omdat een urenregel te corrigeren is en een verzonden
     /// mail niet.</para>
     ///
+    /// <para><strong>Deze vlag geldt voor élk doel en niet alleen voor het maandoverzicht.</strong> Hij
+    /// wordt gelezen door <see cref="IMailOutbox"/> — de verzendlaag — en dus ook door de
+    /// storingsmelder. Een ontwikkelmachine hoort geen enkele echte mail te versturen, en een tweede
+    /// vlag per doel zou betekenen dat je er één kunt vergeten.</para>
+    ///
     /// <para>In proefdraaimodus wordt er ook <em>niets vastgelegd</em>. Een verzendbevestiging is de
     /// vastlegging van een feit; een proefdraai is geen feit. Zou hij toch een document schrijven,
     /// dan staat er straks een bevestiging bij een mail die nooit is verstuurd, en dat is precies de
@@ -103,6 +108,29 @@ public sealed class PortalMailOptions
     /// leeg is. In productie hoort hij in configuratie te staan.</para>
     /// </remarks>
     public string PortalBaseUri { get; set; } = "https://portal.soratus.com";
+
+    /// <summary>
+    /// Wat er met een aangeboden bericht zou gebeuren: niets versturen, een proefdraai, of versturen.
+    /// </summary>
+    /// <returns>De stand van de verzendlaag.</returns>
+    /// <remarks>
+    /// <para><strong>Deze regel staat hier en niet in <see cref="IMailOutbox"/>, en dat is met opzet.
+    /// </strong> Hij bestaat één keer, en zowel de echte verzendlaag als een testdubbel leest hem
+    /// hiervandaan. Zou de dubbel zijn eigen stand bepalen, dan meet elke test op de proefdraaimodus
+    /// zijn eigen kopie van deze beslissing — en dan blijft hij groen als de echte laag hem omdraait.
+    /// Dat is precies het gat dat punt 41 met een mutatie vond: twee stukken code die per ongeluk
+    /// hetzelfde doen, dekken elkaars afwezigheid.</para>
+    ///
+    /// <para>De volgorde van de twee vragen is niet vrij: "niet ingericht" gaat vóór "proefdraai". Een
+    /// omgeving zonder endpoint waar iemand <c>DryRun</c> op <c>false</c> heeft gezet, hoort niet te
+    /// melden dat hij gaat versturen.</para>
+    /// </remarks>
+    public MailOutboxState Outbox() =>
+        Sender() is null
+            ? MailOutboxState.NotConfigured
+            : DryRun
+                ? MailOutboxState.DryRun
+                : MailOutboxState.Ready;
 
     /// <summary>
     /// De uitgerekende afzender, of <c>null</c> als mailen niet is ingericht.

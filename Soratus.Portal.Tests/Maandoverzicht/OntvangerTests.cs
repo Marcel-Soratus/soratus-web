@@ -88,14 +88,14 @@ public class OntvangerTests
     [InlineData("jan@acme.nl\niemand@elders.nl", false)]
     [InlineData("jan@acme.nl\r\nBcc: iemand@elders.nl", false)]
     public void WatAlsOntvangerBruikbaarIs(string adres, bool bruikbaar) =>
-        Assert.Equal(bruikbaar, StatementRecipients.IsUsable(adres));
+        Assert.Equal(bruikbaar, MailAddresses.IsUsable(adres));
 
     [Fact]
     public void EenAbsurdLangAdresIsGeenAdres()
     {
         var lang = new string('a', 250) + "@acme.nl";
 
-        Assert.False(StatementRecipients.IsUsable(lang));
+        Assert.False(MailAddresses.IsUsable(lang));
     }
 
     private static AccessDocument Toegang(string email, string? naam, string rol) => new()

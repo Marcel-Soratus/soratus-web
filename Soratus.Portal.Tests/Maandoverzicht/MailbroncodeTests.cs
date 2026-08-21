@@ -66,7 +66,11 @@ public class MailbroncodeTests
             RegexOptions.IgnoreCase,
             TimeSpan.FromSeconds(5));
 
-        var opmaak = new[] { "Mail/StatementMail.cs", "Mail/StatementText.cs" };
+        // MailText.cs staat erbij sinds de verzendlaag is geëxtraheerd: de knip op de eerste regel is
+        // gedeeld met de storingsmelder, en dat is precies de plek waar iemand ooit een foutmelding
+        // "even" zou kunnen laten meeliften naar het klantpad. Alerts/ staat er níet bij en hoort er
+        // niet bij: die opmaak gaat naar Soratus en mág een stacktrace dragen (§5 van de spec, punt 43).
+        var opmaak = new[] { "Mail/StatementMail.cs", "Mail/StatementText.cs", "Mail/MailText.cs" };
 
         var gevonden = Mailbestanden()
             .Where(bestand => opmaak.Contains(Broncode.RelatiefPad(bestand), StringComparer.Ordinal))

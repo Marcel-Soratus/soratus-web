@@ -52,7 +52,7 @@ public class RegistratieTests
 
         // Deze drie hangen aan niets buiten de mailkant en horen er dus altijd te zijn, ook zolang de
         // naad naar de kostenkant ontbreekt.
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IStatementMailSender>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IMailOutbox>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IStatementStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IStatementViews>());
     }

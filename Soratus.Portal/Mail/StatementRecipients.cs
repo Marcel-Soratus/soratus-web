@@ -1,4 +1,3 @@
-using System.Buffers;
 using Soratus.Portal.Data;
 
 namespace Soratus.Portal.Mail;
@@ -25,28 +24,6 @@ namespace Soratus.Portal.Mail;
 /// </remarks>
 internal static class StatementRecipients
 {
-    /// <summary>
-    /// De maximale lengte van een e-mailadres.
-    /// </summary>
-    /// <remarks>
-    /// 254 is de praktische bovengrens van een adres in een SMTP-envelop (RFC 5321 zet de envelop op
-    /// 256 inclusief de punthaken). De grens staat er niet om spec-getrouw te zijn maar omdat een
-    /// veld dat een adres hoort te bevatten en drie kilobyte lang is, geen adres bevat.
-    /// </remarks>
-    private const int AddressLimit = 254;
-
-    /// <summary>
-    /// De tekens die een e-mailadres onbruikbaar maken als ontvanger.
-    /// </summary>
-    /// <remarks>
-    /// De punthaken en de scheidingstekens staan erbij omdat ze een adres in een lijst of in een
-    /// weergavenaam kunnen veranderen: <c>"Jan &lt;jan@x.nl&gt;, iemand@elders.nl"</c> is als één
-    /// adres opgeslagen een tweede ontvanger die niemand heeft toegevoegd. De regelovergangen en de
-    /// tab staan erbij om dezelfde reden als in <see cref="StatementText"/>.
-    /// </remarks>
-    private static readonly SearchValues<char> Forbidden =
-        SearchValues.Create("<>,;:\\\"\'()[] \t\r\n\v\f\u0085\u2028\u2029");
-
     /// <summary>
     /// Bepaalt aan wie het maandoverzicht van deze klant gaat.
     /// </summary>
@@ -86,7 +63,7 @@ internal static class StatementRecipients
             return (null, StatementRefusal.NoRecipient);
         }
 
-        if (contacts.Any(document => !IsUsable(document.Email)))
+        if (contacts.Any(document => !MailAddresses.IsUsable(document.Email)))
         {
             return (null, StatementRefusal.RecipientInvalid);
         }
@@ -96,46 +73,5 @@ internal static class StatementRecipients
         return (
             new StatementAddressing([.. contacts.Select(document => document.Email)], name),
             StatementRefusal.None);
-    }
-
-    /// <summary>
-    /// Of dit als e-mailadres van een ontvanger te gebruiken is.
-    /// </summary>
-    /// <param name="email">Het adres zoals het in het toegangsdocument staat.</param>
-    /// <returns><c>true</c> als het bruikbaar is.</returns>
-    /// <remarks>
-    /// <para><strong>Dit is uitdrukkelijk geen tweede adresvalidatie.</strong> Of een adres een
-    /// geldig adres is, is bij het invoeren al vastgesteld — dat is portaalwerk uit fase 2 en het
-    /// hoort niet twee keer, anders bestaan er twee opvattingen over wat een adres is en weigert de
-    /// ene wat de andere heeft geaccepteerd. Wat hier wordt getoetst is smaller en anders: of deze
-    /// tekst als één ontvanger van één bericht te gebruiken is.</para>
-    ///
-    /// <para>Waarom dat er niettemin staat, met een geval erbij: een adres uit de opslag is niet per
-    /// definitie door het formulier van vandaag gegaan. In de opslag staan documenten uit de
-    /// configuratiemigratie, en een adres dat als tekst in een JSON-bestand stond is nooit door een
-    /// veldcontrole gekomen. Dit is de laatste plek voordat het buiten ons systeem gaat.</para>
-    /// </remarks>
-    internal static bool IsUsable(string? email)
-    {
-        if (string.IsNullOrWhiteSpace(email) || email.Length > AddressLimit)
-        {
-            return false;
-        }
-
-        if (email.AsSpan().ContainsAny(Forbidden))
-        {
-            return false;
-        }
-
-        var at = email.IndexOf('@', StringComparison.Ordinal);
-
-        // Precies één apenstaartje, met aan beide zijden iets, en een punt in het domein. Geen
-        // reguliere expressie: die zou de indruk geven dat hier de adresdefinitie staat.
-        return at > 0
-            && at == email.LastIndexOf('@')
-            && at < email.Length - 1
-            && email.AsSpan(at + 1).Contains('.')
-            && !email.EndsWith('.')
-            && !email.Contains("..", StringComparison.Ordinal);
     }
 }

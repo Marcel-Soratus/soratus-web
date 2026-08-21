@@ -1511,7 +1511,8 @@ zien. In een postbus staat hij definitief. Zeven paden, met de sluiting erbij.
    staat hij op een scherm dat een mens kan lezen en corrigeren. De mail noemt de bedragen en verwijst
    naar het portaal.
 
-4. **Een foutmelding van een dienstverlener.** `StatementSendResult` draagt géén meldingsveld, en
+4. **Een foutmelding van een dienstverlener.** `MailSendResult` draagt géén meldingsveld (hij heette
+   `StatementSendResult` tot punt 43 de verzendlaag extraheerde), en
    `StatementRefusal` en `StatementFigureGap` zijn **enums en geen strings**. Een reden die als tekst
    reist komt uit een `catch`-blok. Een enum kan die tekst niet dragen. De melding gaat naar de
    logregel met de `ErrorCode` en de status erbij; het scherm zegt dát het is geweigerd en waar de
@@ -1840,7 +1841,8 @@ plaatshouder groen staan.** Hij maakt de plaatshouder niet alleen een tijdelijk 
 vlek in de meting die ernaast is gebouwd.
 
 Wat er in plaats daarvan staat: de vier registraties die op zichzelf staan
-(`IStatementMailSender`, `IStatementStore`, `IStatementViews` en de opties), de vijfde als commentaar
+(`IMailOutbox` — tot punt 43 `IStatementMailSender` —, `IStatementStore`, `IStatementViews` en de
+opties), de vijfde als commentaar
 op de plek waar hij hoort met de reden erbij, en **drie tests op de registratie zelf** in
 `RegistratieTests`:
 
@@ -2919,6 +2921,420 @@ dus exact gelijk op alle drie de documenten (er is een test die dat vastpint). E
 `customerId` plus `startedAt` ziet daarmee "één host met drie diensten" en kan één bericht sturen in
 plaats van drie. Zonder die groepering stuurt hij er drie, en dan is de derde mail de reden dat de eerste
 ook niet meer gelezen wordt.
+
+---
+
+## 43. De verzendlaag is één plek geworden, en de storingsmelder is de tweede aanroeper — met de ontdubbeling in de melder en niet in de rekenregel
+
+**Spec:** §4 (`storingsmelder`, elke minuut, "mailt Soratus bij failed/degraded"), §7 fase 6, en de
+koppelingentabel bij §5: *"storingsmeldingen aan Soratus, maandoverzicht aan klant"*. Die laatste regel
+is de belangrijkste van dit punt, en waarom staat onder 43.4.
+
+Dit is één wijziging en niet twee. Er waren twee plekken die zelf een `EmailClient` bouwden en
+`SendAsync` aanriepen — `Soratus.Web/Services/LeadSink.cs` en `Soratus.Portal/Mail/StatementMailSender.cs`
+— en de melder zou de derde zijn geworden. Drie kopieën van één handeling is precies wat de knipregel
+dit project heeft gekost (punt 13). **De laag is daarom met twee aanroepers tegelijk gebouwd**: een
+gedeelde laag met één gebruiker bewijst niets, en de tweede aanroeper ontdekt anders pas later dat de
+vorm niet past. Wat dat concreet opleverde staat in 43.2.
+
+### 43.1 Wat er in de laag zit, en wat er buiten bleef
+
+`IMailOutbox` in `Soratus.Portal/Mail/MailOutbox.cs`. Erin zit de **verzendsemantiek** en geen omhulsel
+om `SendAsync`:
+
+| | |
+|---|---|
+| `MailDelivery` | drie uitkomsten en geen twee: `Unknown` (eerste waarde, dus de veilige standaard), `Accepted`, `Refused` |
+| de indeling | `RequestFailedException` met **400–499** is `Refused` — een `429` daaronder, want throttling betekent "niet aangenomen". Al het andere is `Unknown`: `5xx`, tijdslimiet, verbroken verbinding, annulering, onleesbare endpoint |
+| geen herhaling | geen `retry`, geen backoff, geen tweede poging. Uit "onbekend" komt niets automatisch |
+| `MailOutboxState` | `NotConfigured` / `DryRun` / `Ready`, met de proefdraaimodus standaard aan |
+| `OutgoingMail` | abstract; de ontvangers zitten op het bericht en niet op de verzendaanroep |
+| `MailText.OneLine` | één definitie van "één regel", voor elke onderwerpregel |
+| `MailAddresses.IsUsable` | één controle op "is dit als één ontvanger te gebruiken" |
+
+Erbuiten bleef precies wat per doel verschilt: **de opmaak en de ontvanger.**
+`StatementMailComposer` maakt de klantmail, `AgentAlertComposer` de operatormail. En erbuiten bleef ook
+de boekhouding eromheen — claimen, bevestigen, ontdubbelen — want die is per doel anders: bij het
+maandoverzicht één document per klant per maand met drie standen, bij de melder één markering per agent
+met een herhaalvenster.
+
+**`MailOutboxState` is een vraag en geen uitkomst, en dat is het scherpste van dit ontwerp.** De
+proefdraaimodus kon niet ín `SendAsync` zitten. §29.8 eist dat een proefdraai níets vastlegt, dus de
+aanroeper moet de stand kennen *vóór* zijn onomkeerbare boekhouding — bij het maandoverzicht vóór de
+claim, bij de melder vóór het zetten van de markering. Zat de controle in `SendAsync`, dan kende de
+aanroeper hem pas nadat hij zich had vastgelegd. Wat de vorm dan kost: een aanroeper kán de stand
+vergeten te lezen. Daarom **werpt `SendAsync` als de stand niet `Ready` is**. Dat is de enige plek waar
+deze laag werpt, en het is met opzet: luidruchtig omvallen is beter dan een proefdraai die stil echte
+mail verstuurt.
+
+De regel zelf staat op `PortalMailOptions.Outbox()` en niet in de laag. Dat is geen ordelijkheid: de
+testdubbel leest diezelfde methode. Zou de dubbel de stand zelf uitrekenen, dan meet elke test op de
+proefdraaimodus zijn eigen kopie van die beslissing en blijft hij groen als de echte laag hem omdraait
+— punt 41, gat 2, letterlijk: twee stukken code die per ongeluk hetzelfde doen dekken elkaars
+afwezigheid.
+
+### 43.2 Wat de tweede aanroeper aan de laag heeft veranderd
+
+Dit is het antwoord op "waarom niet los bouwen", en het is meetbaar. Drie dingen zijn ánders geworden
+doordat de melder er tegelijk op stond:
+
+1. **`SendAsync` neemt geen `MailSender` meer aan.** De eerste vorm gaf de afzender per aanroep mee,
+   omdat het maandoverzicht die toch al uit de opties haalde voor zijn `MailNotConfigured`-weigering.
+   De melder heeft dat niet: hij wil één vraag stellen ("mag er iets uit?") en niet twee. De afzender
+   zit nu in de laag, en daarmee is er precies één plek die de configuratie leest.
+2. **`StatementSendResult` is `MailSendResult` geworden en `MailDelivery` is verhuisd.** Dat is niet
+   alleen hernoemen: het type stond in het bestand van de klantmail, dus de melder zou een type over
+   "statements" hebben aangenomen. Een naam die niet klopt wordt later weggehaald.
+3. **`OutgoingMail` is abstract geworden.** De eerste vorm was één concreet berichttype. Met twee doelen
+   valt dat om: op de opmaak van de klantmail staat een broncodetest die elke foutmelding weert (§29.4,
+   punten 13 en 14), en op de operatormail staat die met opzet níet. Eén type maakt dat verschil een
+   afspraak; twee subtypen onder één basis maken het een typeverschil. Dezelfde constructie als
+   `AgentRunRow` in punt 14, en om dezelfde reden.
+
+`Soratus.Web` is **niet** aangeraakt. Wat daarvoor nodig zou zijn staat in 43.8.
+
+### 43.3 De melder: de volgorde is het ontwerp
+
+`Soratus.Portal/Alerts/`. Lezen → groeperen → ontdubbelen → afremmen → claimen → versturen →
+vastleggen. Twee dingen in die reeks staan vast en zijn met een mutatie beproefd:
+
+- **De proefdraai staat vóór de claim.** Een proefdraai die een markering achterlaat is geen
+  proefdraai: dan staat er "gemeld" bij een mail die nooit is verstuurd, en wordt de echte storing
+  daarna zes uur onderdrukt. §29.8, met een eigen gevolg.
+- **De rem staat vóór de claim.** Wat er door `MaxMailsPerRun` niet uitgaat wordt ook niet vastgelegd
+  en komt de volgende ronde weer in aanmerking. De rij loopt zichzelf leeg in plaats van dat er
+  meldingen verdwijnen.
+
+**Alleen productie-agents.** Punt 9 zegt dat voor de ernstrang van het overzicht; hier weegt het
+zwaarder. De interne klant draait `heartbeat-demo` op `dev`, die meestal uit staat en dus permanent
+`Degraded` is. Zonder dat filter mailt de melder daar elke zes uur over, en dan is hij binnen een week
+weggefilterd — precies de fout die punt 9 bij het overzicht beschrijft.
+
+**Een klant die niet te lezen was levert geen melding op**, alleen een `warning`. "Wij konden niet
+lezen" is geen storing van de agent, en `ShouldAlert` meldt niet over `Unknown`. Zonder die keuze zou
+één hapering van Cosmos een mail per agent van die klant opleveren.
+
+### 43.4 Waarom deze mail wél een stacktrace mag dragen, en hoe er geen weg naar een klant bestaat
+
+De koppelingentabel bij §5 zegt het in één regel: **storingsmeldingen gaan naar Soratus.** Punt 13 ging
+over een stacktrace die "zichtbaar voor een klant" was; punt 14 zegt letterlijk dat de operator de
+typenaam op het runtabblad hoort te vinden. Beide regels beschermen dus *de klant* en niet de tekst.
+Hier is er geen klant, en dan is het weglaten van een `errorType` of een foutmelding geen
+zorgvuldigheid maar het weggooien van precies de informatie waarvoor de mail bestaat.
+
+De melding draagt daarom: agentnaam, type, versie, de stilte in woorden, de laatste run met resultaat,
+duur en `runId`, `rolledBack`, het **volledige** `errorType` mét naamruimte, de **volledige**
+`errorMessage` inclusief regelovergangen, en een link naar het agentdetail. Punt 14 legt uit waarom de
+korte naam hier de verkeerde reparatie is: `Sync.ValidationException` en `Mail.ValidationException` zijn
+twee verschillende defecten.
+
+**Dat er geen weg naar een klant bestaat, is drie keer vastgelegd en geen van de drie is een afspraak:**
+
+1. De ontvangers komen uit `PortalAlerts:Recipients` — configuratie. Er is geen parameter op
+   `AgentAlertComposer` waarin een klantadres past.
+2. Er staat een broncodetest op dat de map `Alerts/` `AccessDocument`, `GetAccessAsync`,
+   `StatementRecipients`, `StatementAddressing`, `IPortalDataStore`, `IPortalHoursStore` en
+   `PortalAccessRoles` nergens aanraakt. Dat is een *afwezigheid*, en die is met een gedragstest niet
+   aan te tonen.
+3. `AgentAlertMail` en `StatementMail` zijn broertjes onder `OutgoingMail` en geen van beide is de
+   ander. Er is geen pad waarlangs een storingsmelding het klantpad neemt, want dat pad neemt het
+   andere type aan. Beide hebben een `internal` constructor en één opmaakfunctie.
+
+En de scheiding zit ook in de mappen: de broncodetest van §29.4 gaat de opmaakbestanden van de
+**klantmail** af op `Exception.Message`, `StackTrace`, `ToString` en `ErrorCode` — `Mail/StatementMail.cs`,
+`Mail/StatementText.cs` en nu ook `Mail/MailText.cs`, want die knip is gedeeld. De operatoropmaak staat
+in `Alerts/` en valt daar dus buiten. Dat is bedoeld, en het staat hier zodat niemand het later
+"opruimt" door de mappen samen te voegen.
+
+**Wat er níet gesloten is, en dat hoort erbij:** de klantnaam in de onderwerpregel blijft vrije tekst
+uit onze eigen administratie. Hij gaat door dezelfde `MailText.OneLine` als bij het maandoverzicht,
+maar staat er een interne aanduiding in de eerste regel van een klantnaam, dan gaat die mee — naar onze
+eigen postbus, dus het risico is hier kleiner dan bij punt 13.
+
+### 43.5 Ontdubbelen in twee lagen, en waarom die twee niet aan dezelfde sleutel hangen
+
+`ShouldAlert` ontdubbelt met opzet niet — het is de zuivere vraag "hoort hier een melding over" en niet
+"hebben we die al gestuurd", en het scherm gebruikt diezelfde functie. Voor `Failed` levert dat elke
+aanroep `true`. De melder draait elke minuut, dus zonder ontdubbeling zestig mails per uur over dezelfde
+mislukte run. **Die ontdubbeling staat dus in de melder**, en hij bestaat in twee lagen die
+uitdrukkelijk *niet* dezelfde sleutel gebruiken:
+
+**Laag 1 — groeperen op `customerId` + `startedAt`.** Punt 42: drie diensten in één webapplicatie worden
+bij uitval van het proces alle drie tegelijk `Degraded` — één oorzaak, drie agents — en `startedAt` is
+bij geherbergde agents de start van het *proces* en dus exact gelijk op alle drie de registraties. Eén
+groep is één mail. Bij een agent met een eigen proces doet de groepering niets, en dat is juist: twee
+losse agents zijn niet in dezelfde milliseconde gestart, dus twee groepen en twee meldingen — er zijn
+dan ook twee oorzaken. Er staat nergens een controle op "is dit een geherbergde agent"; het veld doet
+het werk. De klant staat in de sleutel omdat twee klanten met dezelfde starttijd anders in één mail
+zouden belanden.
+
+**Laag 2 — een markering per agent, en niet per groep.** Dit is het punt dat bij het bouwen boven kwam
+en het is de reden dat de twee lagen gescheiden zijn: **een herstart schuift `startedAt` op.** Zou de
+ontdubbeling aan de groepsleutel hangen, dan levert een proces dat elke minuut opnieuw start elke minuut
+een nieuwe sleutel op, en dan ontdubbelt er niets — een crashlus wordt dan een mailstroom. De markering
+hangt daarom aan (`customerId`, `agentName`): `agentAlert-{klant}-{agent}` in de gereserveerde partitie
+`$portal`.
+
+Dat het in `$portal` staat en niet bij de klant heeft twee redenen. Het is Soratus-eigen boekhouding
+over onze eigen meldingen — de klant heeft er niets mee te maken. En het maakt de lezing goedkoop: alle
+markeringen in één partitie, dus één query binnen één partitie per ronde in plaats van een
+cross-partition query of één query per klant. Dezelfde plek en dezelfde reden als
+`AzureCostRunDocument`.
+
+### 43.6 Wanneer een melding herhaald mag worden, en waarom dat een keuze is en geen afgeleide
+
+Er is geen goed antwoord dat uit de spec volgt. Wat er wél volgt is dat **beide uitersten fout zijn**:
+elke minuut melden maakt de melder waardeloos, en één keer melden over een storing die drie dagen duurt
+is een storing waarvan niemand meer weet dat hij er is. Dat tweede is even echt als het eerste, en het
+is de fout die makkelijker over het hoofd wordt gezien.
+
+Het besluit: **een venster van zes uur** (`PortalAlerts:RepeatAfterHours`), met twee uitzonderingen die
+niet wachten.
+
+- **Een veranderde status meldt meteen.** Beide kanten op. `Degraded` → `Failed` is nieuwe informatie en
+  wachten zou die zes uur oud maken; `Failed` → `Degraded` is een ander beeld, en de operator hoort niet
+  uit een oude mail te concluderen wat er nú aan de hand is.
+- **Een afgesloten markering geldt als geen markering.** Een storing die weg was en terugkomt is een
+  nieuwe storing, ook al is het dezelfde agent en dezelfde status.
+
+Waarom zes en niet vierentwintig: zes betekent hoogstens vier meldingen per storing per dag, dus binnen
+één werkdag komt een openstaande storing minstens één keer terug, en een storing die een weekend duurt
+levert acht mails op in plaats van twee. Genoeg om op te vallen, weinig genoeg om te blijven lezen.
+Vierentwintig is even verdedigbaar en het is één configuratiewaarde — het verschil is een voorkeur en
+geen meting, en het staat hier als zodanig.
+
+**Wat deze keuze kost, eerlijk.** Een agent die om het uur heen en weer flappert tussen `Degraded` en
+`Failed` levert elke keer een melding op. Dat is bewust niet gedempt: zo'n agent *is* een storing, en de
+dempening die dit zou tegenhouden — een venster op "er is over deze agent iets gemeld", ongeacht wat —
+zou ook de escalatie tegenhouden. Van die twee fouten is de tweede duurder. Punt van twijfel.
+
+**Bij herstel gaat er geen mail.** §7 vraagt te mailen bij `failed` en `degraded`; een tweede mail per
+storing verdubbelt het volume om iets te melden dat op het scherm staat. De markering wordt wel
+*afgesloten* en niet verwijderd — dat is het antwoord op "hoe lang duurde die storing" en het maakt een
+terugkeer meteen weer meldbaar.
+
+### 43.7 Twee instanties, en waarom de dagclaim van de kostencollector hier niet past
+
+Het portaal kan meer dan één instantie hebben, en dan draaien er twee melders. `AzureCostCollector`
+lost dat op met een dagclaim, en **punt 38 zegt zelf waarom die vorm hier niet past**: daar is de claim
+een wederzijdse uitsluiting op een *schaars budget*, een kostenlezing is herhaalbaar en er gaat niets de
+deur uit. Hier is het het mailgeval: een verstuurde mail is niet terug te halen.
+
+Een dagclaim zou hier bovendien iets kapotmaken. Hij zou de eerste melder van de dag álle meldingen van
+die dag laten doen en de tweede geen enkele, en bij een herstart zou er een dag lang niets meer worden
+gemeld — precies wanneer je hem nodig hebt. De claim gaat daarom **per agent per melding**, op hetzelfde
+document dat de ontdubbeling draagt: `CreateItemAsync` bij de eerste melding (409 = een ander doet het
+al) en `ReplaceItemAsync` met een etagcontrole bij een herhaling (412 = idem). Twee instanties lezen
+dezelfde etag, één vervanging slaagt.
+
+**Wat dat niet dicht, en dat staat er expliciet:** raken twee instanties elkaar precies op dit moment,
+dan kan één host twee mails opleveren, elk met een deel van de diensten — het geval dat §42 wilde
+vermijden, nu alleen nog onder een race in plaats van standaard. De eigenschap die er wél is: **elke
+mail noemt precies wat hij heeft geclaimd**, dus dezelfde dienst staat niet in twee mails. Die
+eigenschap is door een mutatie ontdekt en niet door een ontwerp — zie 43.10, gat 1. De vorm die de race
+ook zou dichten is één claim per groep, en die valt af omdat de groepsleutel bij elke processtart
+verschuift.
+
+**Een mislukte verzending wordt niet opnieuw geprobeerd, ook niet bij `Refused`.** Dat is de vaste
+stelregel, met hier een tweede reden: de volgende ronde is een minuut later. Een `4xx` is bij deze mail
+vrijwel altijd een inrichtingsfout — een ontvanger die niet klopt, een afzender die niet is geverifieerd
+— en die gaat niet over binnen een minuut; elke minuut opnieuw proberen zou een storing in het melden
+verergeren tot een storing bij de dienstverlener.
+
+**En het scherpste van deze lane: dat het melden zelf stuk is, is niet met een mail te melden.** Er is
+vandaag geen tweede kanaal. Het staat daarom als `error` in het log, op drie plekken: geen ingerichte
+mail, geen bruikbare ontvanger, en een verzending die niet is aangenomen. Dat is een echte beperking en
+geen detail.
+
+### 43.8 Wat er nodig zou zijn om de marketingsite de derde aanroeper te maken
+
+`Soratus.Web` is ongemoeid gebleven. Wat het zou vragen, zodat dat besluit op een lijst rust en niet op
+een gevoel — vijf dingen, en alleen het eerste is code:
+
+1. **Een gedeelde bibliotheek.** De laag staat nu in `Soratus.Portal/Mail/`, en de site is een eigen
+   deployable zonder projectreferentie daarheen. Het zou een vijfde project worden (`Soratus.Mail`?) met
+   `Azure.Communication.Email` erin. Beide projecten staan vandaag op 1.1.0, dus dat botst niet — maar
+   het legt die versie voor beide vast.
+2. **Een managed identity op `app-soratus-prod`.** Gemeten: die App Service staat niet in `infra/` en
+   heeft in Azure geen user-assigned identity; `infra/portal/portal-rg.bicep` heeft er wél een
+   (`id-soratus-portal`). Er is dus niets om een rol aan te verlenen.
+3. **Een roltoewijzing op `acs-soratus-prod`** voor die identity, met de custom role uit §29.10.
+4. **De connection string eruit.** `AzureEmail__ConnectionString` staat als platte app-setting op
+   `app-soratus-prod`. Zolang hij er staat is de identity een tweede weg naar hetzelfde en geen
+   vervanging — en dan is er niets opgelost, alleen iets bijgekomen. Er staat al een aparte taak voor
+   dat geheim.
+5. **Een uitrol van de site.** Elke wijziging hier raakt `deploy.yml` en de live marketingsite.
+
+Wat het zou opleveren: één plek voor de drie takken en de drie uitkomsten, en één plek waar de
+aanmelding wordt opgelost. Wat het kost is punt 2 tot en met 5, en dat is geen codewijziging. **Meting
+die het besluit zou moeten dragen en die er nog niet is:** hoe vaak `LeadSink` faalt, en hoe. Vandaag
+gooit hij bij een `RequestFailedException` een `InvalidOperationException` door en leest hij geen
+`4xx`/`5xx`-onderscheid; of dat ooit iets heeft gekost is niet gemeten.
+
+### 43.9 Wat er in Azure bij moet, en twee fouten in het blok van §29.10
+
+**Voor het versturen zelf niets.** De melder gebruikt dezelfde identity, dezelfde ACS-resource en
+dezelfde custom role als het maandoverzicht. Het `az`-blok in §29.10 volstaat; er is geen extra actie en
+er is niets in Azure gewijzigd. De grens die daar is benoemd blijft ook staan: `az role definition create`
+is een schrijfactie op abonnementsniveau en valt daarmee buiten de twee resource groups waar wij mogen
+schrijven. Besluit voor Marcel.
+
+Wat er wél bij komt is één configuratiesleutel, en die is geen geheim:
+
+```
+PortalAlerts__Recipients__0   storingen@soratus.com   ← het adres is een keuze voor Marcel
+```
+
+**Twee fouten in het configuratieblok van §29.10, gemeten en niet gerepareerd.**
+
+1. **De vijf `PortalMail__*`-sleutels staan daar op `app-soratus-prod`, en dat is de marketingsite.**
+   Het portaal is `app-soratus-portal-prod` (`infra/portal/portal-rg.bicep`, `param portalAppName`). Wie
+   het blok letterlijk uitvoert, configureert de verkeerde app: het portaal blijft "mailen is niet
+   ingericht" zeggen en de site krijgt vijf instellingen die hij nooit leest. Dat is een storing die
+   zich voordoet als een inrichtingsfout op de verkeerde plek.
+2. **Met de hand gezette app-settings op het portaal worden door de volgende uitrol gewist.** De
+   `appSettings` van `portalApp` staan in `infra/portal/portal-rg.bicep` als volledige array, en die
+   eigenschap is in ARM een vervanging en geen samenvoeging. `PortalMail__*` en `PortalAlerts__*` horen
+   dus in die template en niet in een `az webapp config appsettings set`. Niet zelf gedaan: `infra/` is
+   een andere lane, en het raakt een template waar een `what-if` naast hoort.
+
+`PortalMail:DryRun` staat nergens in `appsettings.json`, dus de standaard uit de code geldt: **aan.**
+`PortalAlerts` staat er ook niet, dus `Enabled` is aan en `Recipients` is leeg — de melder zegt bij elke
+ronde als `error` dat hij niets kan melden, en er staat een test op dat dat de huidige stand is.
+
+### 43.10 De mutatieronde: zesendertig mutaties, waarvan zes bewust stil
+
+Zesendertig mutaties over de melder, de groepering, de ontdubbelregel, de opmaak, de gedeelde
+verzendlaag en de test die het scopevrije pad bewaakt. **Negenentwintig werden meteen rood, zes maakten
+met opzet niets rood, en één maakte niets rood terwijl hij dat wél hoorde te doen.** Die één was de
+nuttigste vondst van de ronde.
+
+#### Gat 1 — de mail mocht agents noemen die niet waren geclaimd
+
+Het samenstellen van de melding uit de volledige groep in plaats van uit de geclaimde agents maakte
+niets rood. Dat is precies de eigenschap waar 43.7 op leunt: raken twee instanties elkaar, dan noemt
+elke mail alleen wat híj heeft geclaimd, want anders staat dezelfde dienst in twee mails en gaat een
+operator twee keer hetzelfde zoeken. Er was geen test met een *gedeeltelijke* botsing — alleen met een
+volledige, en dan is de geclaimde verzameling leeg en gaat er niets uit, dus de mutatie was onzichtbaar.
+Er staat nu een test die van drie diensten in één host de middelste laat botsen, en die toetst dat de
+mail de andere twee noemt, dat de onderwerpregel "2 diensten" zegt, en dat er twee markeringen staan en
+niet drie.
+
+#### Zes mutaties die met opzet niets rood maakten
+
+Deze zijn gedraaid om vast te leggen wat er *niet* gedekt is, en ze deden wat ervan werd verwacht:
+
+| Mutatie | Waarom hij niet gedekt is |
+|---|---|
+| het logniveau van de rem wordt `information` | er staat geen test op logniveaus. Bewust, dezelfde afweging als bij punt 41: de regel leeft in het gedrag en niet in een logregel |
+| de markering noteert niet wie er heeft gemeld | `NotifiedBy` is er om na te zoeken en niet om op te rekenen |
+| de echte markeringen komen in de partitie van de klant | `CosmosAgentAlertStore` heeft geen test: hij praat met Cosmos |
+| de markeringenquery loopt over alle partities | idem — dit is een kostenkeuze en geen gedrag |
+| de echte bron leest klanten zonder ingerichte opslag ook | `TelemetryAgentFaultSource` heeft geen test: hij praat met Cosmos |
+| de echte bron gebruikt de klant*naam* als partitiesleutel | idem, en dit is de nare: hij zou álle agents van élke klant missen |
+
+**Dat laatste rijtje is het eerlijkste deel van dit werk.** `CosmosAgentAlertStore` en
+`TelemetryAgentFaultSource` hebben geen test, om dezelfde reden als
+`CosmosAzureCostCollectorStore` in punt 41: ze praten met Cosmos, en de fixture bouwt hun gedrag ná in
+plaats van de productiecode aan te roepen. De claim (409 bij een tweede instantie, 412 bij een tweede
+herhaling), de etagcontrole en de query in de gereserveerde partitie zijn tegen een fixture bewezen en
+niet tegen de opslag. De 409-eigenschap zelf is elders in dit project wél gemeten (`infra.md`, de
+klant-batch), dus de vorm is niet nieuw — deze aanroepen zijn dat wel. **De melder heeft nooit tegen
+Cosmos of tegen Communication Services gedraaid, en er is geen enkele echte mail verstuurd.**
+
+Vier mutaties die de moeite van het noemen waard zijn omdat ze wél rood werden en laten zien wat de
+tests meten: het productiefilter weghalen (punt 9), de grens van het herhaalvenster van `>` naar `>=`
+zetten, `429` als onbekend lezen, en de proefdraaicontrole uit `MonthlyStatementService` halen — die
+laatste wordt rood doordat de verzenddubbel zelf eist dat de stand `Ready` is, en dat is de invariant en
+niet het gevolg.
+
+#### En de test die het scopevrije pad bewaakt is zelf gemuteerd
+
+Zie 43.11. Twee mutaties: het pad aanroepen uit een bestand in `Components/Pages/` maakt hem rood, en
+het type consequent hernoemen maakt hem óók rood — dat tweede is de spiegel, want zonder die assertie
+zou een hernoeming de test stil laten meten dat er nergens meer een aanroeper is.
+
+### 43.11 Het scopevrije leespad, en waarom een type dit niet kon dichten
+
+De melder is een achtergronddienst zonder mens en dus zonder `CustomerScope`. Elke methode van
+`IAgentTelemetryStore` vraagt er een. Een scope verzinnen is wat punt 39 verbiedt — "een operatorbewijs
+zonder operator" — en een eigen query schrijven zou een tweede definitie van "laatste afgeronde run"
+opleveren, precies waar het correctheidsargument gedocumenteerd staat (`TOP 1`, niet-lopend, per agent en
+niet één tijdvensterquery). Dat is punt 13 in een nieuwe jas.
+
+Wat er dus is: `CosmosAgentTelemetryStore.GetAgentsAsync(CustomerScope)` is gesplitst en het lijf staat
+eronder als `internal ScanAsync(AgentScanTarget)`. **Dezelfde twee query's, geen tweede lezing.**
+`AgentScanTarget` is een benoemd type en geen tweede parameter naast een losse `string customerId` —
+dat laatste is wat `CustomerWriteScope` in zijn eigen documentatie verbiedt, want met een string erbij
+is "mag deze gebruiker hierbij" weer een vraag die de aanroeper hoort te stellen. De naam zegt wat het
+is en de documentatie zegt wat het **niet** is: waar en van wie, en geen bewijs dat iemand het mag zien.
+
+**Maar een type kan dit binnen één assembly niet dichten, en dat hoort er te staan.** `internal` reikt
+tot in de schermen, dus een pagina zou dit pad kunnen aanroepen en de scopecontrole overslaan. De enige
+echte bescherming is een test die de aanroepers telt en er precies één eist, in `Alerts/`. Dezelfde
+vorm als de test die precies één implementatie van de telemetriestore eist. Hij is met een mutatie
+beproefd (43.10) en de bestaande test `DeStoreVraagtOveralEenScopeEnNooitEenLosseKlantSlug` blijft
+groen, want `ScanAsync` staat op de klasse en niet op de interface — en dat is precies de plek waar hij
+hoort.
+
+Bijkomend: `CosmosAgentTelemetryStore` staat nu als singleton geregistreerd met de interface ernaar
+verwijzend, dezelfde constructie als `CosmosPortalDataStore` en om dezelfde reden — een achtergronddienst
+kan geen scoped afhankelijkheid krijgen.
+
+### 43.12 Wat de kosten van een ronde per minuut zijn, en dat is geredeneerd en niet gemeten
+
+§4 zegt "elke minuut". Wat dat oplevert is smaller dan het lijkt: een `Degraded` meldt pas na
+`AgentStatusThresholds.Alert` — tien minuten — dus alleen bij `Failed` maakt een minuut verschil met twee
+minuten.
+
+Wat het kost is niet verwaarloosbaar. Eén ronde is per klant één query voor de registraties plus één per
+agent voor de laatste afgeronde run, plus één query voor de markeringen. De stand van zaken meet dat op
+het overzicht: bij 20 agents ongeveer 130 RU, richting 200 agents ongeveer 1300 RU. Maal 1440 per dag is
+dat 190 000 tot 1,9 miljoen RU per dag. **Dat is een berekening op een meting van een ánder scherm en
+geen meting van deze taak.** Het interval is één configuratiewaarde, en de tweede knop is een goedkopere
+lezing achter dezelfde naad (`IAgentFaultSource`) waarvoor de melder niet hoeft te veranderen. Gemeld als
+open punt, met het getal erbij zodat het niet op "voelt goed" rust.
+
+### 43.13 Kleinere besluiten, met de reden
+
+**De storingsmelder publiceert zelf geen telemetrie.** §4 zet hem als agent in het overzicht, en dat zou
+betekenen dat hij zich als geherbergde agent aanmeldt. Dat raakt `Soratus.Agents.AspNetCore` en de
+registratielaag, en die zijn van een andere lane. Gemeld en niet gebouwd. Het gevolg vandaag: de melder
+staat niet in het portaal, dus dat hij stil is gevallen is alleen in het log te zien.
+
+**Er is geen vierde stand "de melding loopt nu".** Zelfde reden als bij `StatementSendState`: het verschil
+tussen "loopt nog" en "onbekend" is alleen door de klok te bepalen, en een proces dat halverwege omvalt
+laat "loopt nog" staan.
+
+**De markeringen hebben geen verval.** De container `customers` staat in Bicep op `ttl: null`, dus een
+item-TTL doet daar niets. Het zijn hoogstens zoveel documenten als er ooit agents met een storing zijn
+geweest, dus het kost niets meetbaars — maar de markering van een agent die is opgeruimd blijft staan.
+Dezelfde soort rommel als de dagclaims van de kostencollector, en dezelfde melding.
+
+**`AgentAlertDocumentKeys` staat in `Alerts/` en niet bij `PortalDocumentKinds`.** Zelfde
+werkomstandigheid en zelfde vangnet als bij `StatementDocumentKeys` (§29): er werken meer sessies in
+`Data/`. Er staat een test op dat de nieuwe `kind` niet botst met een bestaande. Punt van twijfel, geen
+ontwerp.
+
+**Een onbruikbaar adres houdt een storingsmelding níet tegen**, en dat is precies andersom dan bij het
+maandoverzicht. Daar is één fout adres een reden om helemaal niet te versturen, want de bevestiging zou
+"verstuurd" zeggen terwijl de bedoelde lezer niets kreeg. Hier is de afweging omgekeerd: een
+storingsmelding die niemand bereikt omdat er een tikfout in het tweede adres staat, is erger dan één die
+één van de twee lezers bereikt. De overgeslagen adressen worden als `error` gelogd — stil overslaan zou
+betekenen dat de eigenaar van dat adres denkt dat hij meldingen krijgt.
+
+**Er staat geen relatieve tijd in de melding.** Op het scherm is "11 min geleden" het juiste; in een
+postbus is het onwaar zodra de mail een uur ongelezen blijft. De absolute tijd staat er, in de
+Nederlandse zone met de offset erbij, uit dezelfde `TimeFormat` die het scherm gebruikt. De stilte staat
+er als duur, want een duur verandert niet van betekenis.
+
+### 43.14 Eén meting die loog, en die hier hoort te staan
+
+**`dotnet test Soratus.slnx --no-build` sloeg een project over met "The test source file ... was not
+found" terwijl hij het in dezelfde regel aankondigde.** Vijf regels "Test run for …", vier uitslagen. Wie
+dat leest denkt dat hij vijf projecten heeft gemeten. Dat is exact de klasse fout van §36 en van de drie
+valse metingen in de stand van zaken: een groen signaal over de verkeerde verzameling.
+**`dotnet test` zonder solutionargument vanuit de wortel vindt en meldt alle vijf**, en dat is de manier.
 
 ---
 

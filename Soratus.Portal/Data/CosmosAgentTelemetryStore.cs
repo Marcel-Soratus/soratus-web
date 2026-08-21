@@ -14,6 +14,41 @@ using Soratus.Portal.Security;
 namespace Soratus.Portal.Data;
 
 /// <summary>
+/// Waar de agents van één klant staan en van wie ze zijn — en <strong>geen bewijs dat iemand ze mag
+/// zien</strong>.
+/// </summary>
+/// <param name="Telemetry">De opslag waarin gelezen wordt.</param>
+/// <param name="CustomerId">De klantslug waarop de query filtert.</param>
+/// <remarks>
+/// <para><strong>Lees dit voordat je dit type gebruikt: het is géén scope.</strong> Een
+/// <see cref="CustomerScope"/> draagt twee dingen — waar er wordt gelezen, én het oordeel dat de
+/// huidige gebruiker daar recht op heeft. Dit type draagt alleen het eerste. Wie het in handen heeft,
+/// heeft daarmee niets bewezen over wie er kijkt; er kijkt namelijk niemand.</para>
+///
+/// <para><strong>Waarom het bestaat.</strong> De storingsmelder (§4, <c>storingsmelder</c>) is een
+/// achtergronddienst en heeft geen mens en dus geen scope. Zou hij door
+/// <see cref="IAgentTelemetryStore"/> moeten, dan zou hij een scope moeten <em>verzinnen</em> — een
+/// operatorbewijs zonder operator — en dat is precies de constructie waarmee een autorisatiegrens
+/// ophoudt iets te betekenen. Dezelfde afweging en dezelfde uitkomst als bij
+/// <see cref="IAzureCostCollectorStore"/>, waar de kostencollector om dezelfde reden een eigen naad
+/// heeft in plaats van twee methoden op de leeskant.</para>
+///
+/// <para><strong>Waarom een benoemd type en niet twee parameters.</strong> Een methode met een losse
+/// <c>string customerId</c> ernaast is precies wat <see cref="Security.CustomerWriteScope"/> in zijn
+/// eigen documentatie verbiedt: met een string erbij is "mag deze gebruiker hierbij" weer een vraag
+/// die de aanroeper hoort te stellen. Eén type dat in zijn naam en in deze alinea zegt wat het níet
+/// is, is de eerlijkere vorm — en het is te vinden: er staat een test op dat er precies één aanroeper
+/// van dit pad bestaat.</para>
+///
+/// <para><strong>Wat dit type niet beschermt, eerlijk.</strong> <c>internal</c> betekent binnen
+/// <c>Soratus.Portal</c>, en daar staan ook alle schermen. Een pagina zou dit pad dus kunnen
+/// aanroepen en de scopecontrole overslaan. Een type kan dat binnen één assembly niet tegenhouden; de
+/// enige echte bescherming is de test die de aanroepers telt
+/// (<c>ScopevrijPadTests</c> in <c>Soratus.Portal.Tests/Storingsmelder</c>).</para>
+/// </remarks>
+internal sealed record AgentScanTarget(TelemetryLocation Telemetry, string CustomerId);
+
+/// <summary>
 /// De enige implementatie van <see cref="IAgentTelemetryStore"/>: leest de drie containers in de
 /// Cosmos-opslag van elke klant.
 /// </summary>
@@ -58,15 +93,46 @@ internal sealed class CosmosAgentTelemetryStore(
     {
         ArgumentNullException.ThrowIfNull(scope);
 
-        var agents = await containers.AgentsAsync(scope.Telemetry, cancellationToken).ConfigureAwait(false);
+        return await ScanAsync(
+                new AgentScanTarget(scope.Telemetry, scope.CustomerId),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Alle agents van één klant met hun laatste afgeronde run, <strong>zonder scope</strong>.
+    /// </summary>
+    /// <param name="target">Waar en van wie. Zie <see cref="AgentScanTarget"/>: dit is geen bewijs.</param>
+    /// <param name="cancellationToken">Annuleringstoken.</param>
+    /// <returns>De agents, in willekeurige volgorde.</returns>
+    /// <remarks>
+    /// <para><strong>Dit is het lijf van <see cref="GetAgentsAsync"/> en niet een tweede lezing.</strong>
+    /// Dezelfde twee query's, dezelfde parallelliteit, hetzelfde "laatste afgeronde run"-besluit
+    /// (<c>TOP 1</c>, niet-lopend, per agent en niet één tijdvensterquery). Het staat apart omdat de
+    /// storingsmelder geen scope kan hebben en niet omdat er iets anders wordt gelezen — zou hij zijn
+    /// eigen query schrijven, dan bestonden er twee definities van "laatste afgeronde run" en gingen
+    /// die schuiven. Dat is de fout van punt 13 in een nieuwe jas.</para>
+    ///
+    /// <para><strong>Er hoort precies één aanroeper te zijn, en dat is een test en geen afspraak.</strong>
+    /// <c>internal</c> reikt tot in de schermen, dus het typesysteem houdt hier niets tegen. Zie
+    /// <see cref="AgentScanTarget"/>.</para>
+    /// </remarks>
+    internal async Task<IReadOnlyList<AgentSnapshot>> ScanAsync(
+        AgentScanTarget target,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        var agents = await containers.AgentsAsync(target.Telemetry, cancellationToken).ConfigureAwait(false);
 
         var query = new QueryDefinition("SELECT * FROM c WHERE c.customerId = @customerId")
-            .WithParameter("@customerId", scope.CustomerId);
+            .WithParameter("@customerId", target.CustomerId);
 
         var registrations = await ReadAllAsync<AgentRegistration>(agents, query, cancellationToken)
             .ConfigureAwait(false);
 
-        return await WithLastCompletedRunsAsync(scope, registrations, cancellationToken).ConfigureAwait(false);
+        return await WithLastCompletedRunsAsync(target, registrations, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -83,7 +149,10 @@ internal sealed class CosmosAgentTelemetryStore(
             return null;
         }
 
-        var lastRun = await LastCompletedRunAsync(scope, registration.AgentName, cancellationToken)
+        var lastRun = await LastCompletedRunAsync(
+                new AgentScanTarget(scope.Telemetry, scope.CustomerId),
+                registration.AgentName,
+                cancellationToken)
             .ConfigureAwait(false);
 
         return new AgentSnapshot(registration, lastRun);
@@ -806,7 +875,7 @@ internal sealed class CosmosAgentTelemetryStore(
     /// Haalt bij elke registratie zijn laatste afgeronde run op.
     /// </summary>
     private async Task<IReadOnlyList<AgentSnapshot>> WithLastCompletedRunsAsync(
-        CustomerScope scope,
+        AgentScanTarget target,
         IReadOnlyList<AgentRegistration> registrations,
         CancellationToken cancellationToken)
     {
@@ -828,7 +897,7 @@ internal sealed class CosmosAgentTelemetryStore(
             async (index, token) =>
             {
                 lastRuns[index] = await LastCompletedRunAsync(
-                    scope,
+                    target,
                     registrations[index].AgentName,
                     token).ConfigureAwait(false);
             }).ConfigureAwait(false);
@@ -851,16 +920,16 @@ internal sealed class CosmosAgentTelemetryStore(
     /// documentatie bij <see cref="AgentStatusCalculator.Calculate"/>.
     /// </remarks>
     private async Task<RunRecord?> LastCompletedRunAsync(
-        CustomerScope scope,
+        AgentScanTarget target,
         string agentName,
         CancellationToken cancellationToken)
     {
-        var runs = await containers.RunsAsync(scope.Telemetry, cancellationToken).ConfigureAwait(false);
+        var runs = await containers.RunsAsync(target.Telemetry, cancellationToken).ConfigureAwait(false);
 
         var query = new QueryDefinition(
                 "SELECT TOP 1 * FROM c WHERE c.customerId = @customerId AND c.agentName = @agentName " +
                 "AND c.result != @running ORDER BY c.startedAt DESC")
-            .WithParameter("@customerId", scope.CustomerId)
+            .WithParameter("@customerId", target.CustomerId)
             .WithParameter("@agentName", agentName)
             .WithParameter("@running", JsonNameOf(RunResult.Running));
 

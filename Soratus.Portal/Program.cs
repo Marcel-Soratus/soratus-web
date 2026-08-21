@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using Soratus.Portal.Alerts;
 using Soratus.Portal.Api;
 using Soratus.Portal.Components;
 using Soratus.Portal.Data;
@@ -134,7 +135,17 @@ builder.Services.AddHostedService<PortalDirectoryRefresh>();
 // Precies één implementatie. Geen seed-store, geen in-memory variant, geen tweede registratie:
 // seed-data wordt door een apart consoleproject in dezelfde Cosmos gezet, in dezelfde
 // documentvorm, en het portaal kan het verschil niet zien.
-builder.Services.AddScoped<IAgentTelemetryStore, CosmosAgentTelemetryStore>();
+//
+// Twee regels en niet één, en dat is dezelfde constructie als bij CosmosPortalDataStore: de
+// storingsmelder is een achtergronddienst en die kan geen scoped afhankelijkheid krijgen, dus de
+// concrete klasse staat er als singleton bij en de interface wijst naar diezelfde instantie. Met twee
+// losse registraties zouden er twee instanties zijn — onschuldig zolang de klasse geen staat heeft,
+// en precies het soort stilzwijgende verdubbeling dat later een tweede moment oplevert.
+//
+// De melder gebruikt de scopevrije ScanAsync op de concrete klasse; zie AgentScanTarget voor waarom
+// dat pad bestaat en welke test hem tot één aanroeper beperkt.
+builder.Services.AddSingleton<CosmosAgentTelemetryStore>();
+builder.Services.AddScoped<IAgentTelemetryStore>(services => services.GetRequiredService<CosmosAgentTelemetryStore>());
 
 // Eén PortalViews achter twee interfaces, en dus ook één registratie waar beide naar wijzen. Met
 // twee AddScoped-regels zou een pagina die IPortalViews en IAgentDetailViews beide injecteert twee
@@ -181,11 +192,16 @@ builder.Services.AddOptions<PortalMailOptions>()
     .Bind(builder.Configuration.GetSection(PortalMailOptions.SectionName))
     .ValidateDataAnnotations();
 
-// De verzender is singleton en houdt geen staat vast; hij maakt zijn EmailClient per verzending. Hij
-// leunt op de TokenCredential die hierboven al staat — dezelfde managed identity als voor Cosmos, met
-// een custom role op de Communication Service en niet Contributor: die geeft ListKeys erbij en is dan
+// De verzendlaag. Singleton en zonder staat; hij maakt zijn EmailClient per verzending. Hij leunt op
+// de TokenCredential die hierboven al staat — dezelfde managed identity als voor Cosmos, met een
+// custom role op de Communication Service en niet Contributor: die geeft ListKeys erbij en is dan
 // machtiger dan het geheim dat we juist wilden vermijden.
-builder.Services.AddSingleton<IStatementMailSender, AcsStatementMailSender>();
+//
+// Twee aanroepers: het maandoverzicht (naar de klant) en de storingsmelder (naar Soratus). Dat is met
+// opzet zo gebouwd — een gedeelde laag met één gebruiker bewijst niets. Wat erin zit is de
+// verzendsemantiek: drie uitkomsten, 4xx als niet-verstuurd inclusief 429, al het andere onbekend,
+// geen herhaling uit onbekend, en een proefdraaimodus die standaard aan staat.
+builder.Services.AddSingleton<IMailOutbox, AcsMailOutbox>();
 
 // De verzendbevestigingen staan in de container customers, naast klant, contract en urenregels.
 // Scoped, net als IPortalHoursStore en om dezelfde reden: geen hosted service heeft hem nodig, en dan
@@ -224,7 +240,7 @@ builder.Services.AddOptions<AzureCostOptions>()
 // Een benoemde HttpClient en geen typed client. De collector is een achtergronddienst en leeft zolang
 // het portaal draait; een geïnjecteerde HttpClient zou daarmee jaren dezelfde handler vasthouden en
 // een DNS-wijziging van management.azure.com niet meer volgen. AzureCostClient vraagt de fabriek per
-// aanroep om een verse client. Dezelfde afweging als bij AcsStatementMailSender.
+// aanroep om een verse client. Dezelfde afweging als bij AcsMailOutbox.
 builder.Services.AddHttpClient(AzureCostClient.HttpClientName);
 builder.Services.AddSingleton<IAzureCostClient, AzureCostClient>();
 
@@ -249,6 +265,34 @@ builder.Services.AddSingleton<IAzureCostCollectorStore, CosmosAzureCostCollector
 if (!builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<AzureCostCollector>();
+}
+
+// ── De storingsmelder (§4, fase 6) ───────────────────────────────────────────────────────────
+// Geen ValidateOnStart, om dezelfde reden als bij PortalData, PortalMail en PortalCosts: een verkeerd
+// ingestelde melder is een inrichtingsfout, en een inrichtingsfout die het opstarten tegenhoudt neemt
+// /healthz mee en rolt daarmee de uitrol terug. Een lege ontvangerslijst is dus geen startfout maar
+// een error-regel bij elke ronde — zie AgentAlertOptions.Recipients.
+builder.Services.AddOptions<AgentAlertOptions>()
+    .Bind(builder.Configuration.GetSection(AgentAlertOptions.SectionName))
+    .ValidateDataAnnotations();
+
+// Beide singleton, want AgentFaultAlerter is een hosted service en die kan geen scoped afhankelijkheid
+// krijgen. De bron leunt op de concrete CosmosAgentTelemetryStore die hierboven als singleton staat —
+// zie AgentScanTarget voor waarom die scopevrije weg bestaat en welke test hem tot één aanroeper
+// beperkt.
+builder.Services.AddSingleton<IAgentFaultSource, TelemetryAgentFaultSource>();
+builder.Services.AddSingleton<IAgentAlertStore, CosmosAgentAlertStore>();
+
+// De melder draait niet in Development, en dat staat hier in code in plaats van als vlag in
+// appsettings.Development.json. Dezelfde afweging als bij AzureCostCollector, met een eigen reden: een
+// lokale run zou elke minuut de telemetrieopslag van élke echte klant bevragen. Dat mailt niets — de
+// proefdraaimodus staat standaard aan — maar het kost wel RU's op de opslag van een klant, en dat is
+// niets wat een ontwikkelmachine hoort te doen zonder dat iemand het heeft aangezet.
+//
+// Wie hem bewust lokaal wil draaien haalt deze voorwaarde weg en ziet daarbij waarom hij er stond.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<AgentFaultAlerter>();
 }
 
 // ── Blazor ───────────────────────────────────────────────────────────────────────────────────

@@ -91,7 +91,12 @@ public sealed record StatementResult
 /// de volgorde — weigeren vóór claimen, claimen vóór versturen, versturen vóór vastleggen. Een test
 /// die deze klasse vervangt, meet zijn eigen kopie van die volgorde. De tests vervangen daarom de drie
 /// afhankelijkheden (<see cref="IMonthlyStatementFigures"/>, <see cref="IStatementStore"/>,
-/// <see cref="IStatementMailSender"/>) en laten deze klasse staan.</para>
+/// <see cref="IMailOutbox"/>) en laten deze klasse staan.</para>
+///
+/// <para><strong>Deze klasse verstuurt niet zelf.</strong> Het versturen zit in
+/// <see cref="IMailOutbox"/>, samen met de indeling van de uitkomsten en de proefdraaimodus — en de
+/// storingsmelder van fase 6 gebruikt dezelfde laag. Wat hier staat is wat er om een verzending heen
+/// gebeurt en per doel verschilt: weigeren, claimen, vastleggen.</para>
 ///
 /// <para>Wat de keuze kost: een toekomstige tweede verzendstroom — een agent die op de 1e automatisch
 /// mailt — moet hier langs en kan er niet naast. Dat is precies de bedoeling. Een tweede pad naar
@@ -102,7 +107,7 @@ public sealed class MonthlyStatementService(
     IMonthlyStatementFigures figures,
     IPortalDataStore data,
     IStatementStore statements,
-    IStatementMailSender mailer,
+    IMailOutbox outbox,
     TimeProvider timeProvider,
     ILogger<MonthlyStatementService> logger)
 {
@@ -131,7 +136,12 @@ public sealed class MonthlyStatementService(
         }
 
         // ── 2. Is mailen ingericht ───────────────────────────────────────────────────────────────
-        if (_options.Sender() is not { } sender)
+        // De stand wordt één keer gelezen en daarna niet opnieuw. Zou hij twee keer worden opgevraagd
+        // — hier en bij stap 6 — dan kan een verversing van de configuratie er tussenin vallen en
+        // wordt er geclaimd op een stand die niet meer geldt.
+        var outboxState = outbox.State;
+
+        if (outboxState == MailOutboxState.NotConfigured)
         {
             return Refused(StatementRefusal.MailNotConfigured);
         }
@@ -186,7 +196,7 @@ public sealed class MonthlyStatementService(
         // ── 6. Proefdraai: opmaken, tonen, niets doen ────────────────────────────────────────────
         // Vóór de claim en niet erna. Een proefdraai die een document achterlaat is geen proefdraai:
         // dan staat er een bevestiging bij een mail die nooit is verstuurd.
-        if (_options.DryRun)
+        if (outboxState == MailOutboxState.DryRun)
         {
             logger.LogInformation(
                 "Proefdraai: het maandoverzicht {Month} van klant {CustomerId} is opgemaakt voor " +
@@ -233,7 +243,7 @@ public sealed class MonthlyStatementService(
         }
 
         // ── 8. Versturen ─────────────────────────────────────────────────────────────────────────
-        var send = await mailer.SendAsync(sender, mail, cancellationToken).ConfigureAwait(false);
+        var send = await outbox.SendAsync(mail, cancellationToken).ConfigureAwait(false);
 
         // ── 9. De uitkomst vastleggen ────────────────────────────────────────────────────────────
         var confirmed = await statements

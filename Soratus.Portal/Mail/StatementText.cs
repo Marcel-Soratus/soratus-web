@@ -1,6 +1,4 @@
-using System.Buffers;
 using System.Globalization;
-using Soratus.Agents.Contracts;
 using Soratus.Portal.Components.Pages;
 using Soratus.Portal.Data;
 
@@ -27,16 +25,6 @@ namespace Soratus.Portal.Mail;
 internal static class StatementText
 {
     /// <summary>
-    /// De grens waarop een naam in de onderwerpregel wordt ingekort.
-    /// </summary>
-    /// <remarks>
-    /// Ruim boven elke echte bedrijfsnaam en ruim onder de lengte waarop een onderwerpregel in een
-    /// postbuslijst onleesbaar wordt. De grens doet in de praktijk niets; hij staat er voor de dag
-    /// dat iemand een heel adres in het naamveld van een klant zet.
-    /// </remarks>
-    internal const int NameLimit = 120;
-
-    /// <summary>
     /// De melding bij een enumwaarde die geen naam heeft.
     /// </summary>
     /// <remarks>
@@ -46,27 +34,6 @@ internal static class StatementText
     /// </remarks>
     private const string Unnamed =
         "Deze waarde heeft geen naam in de enum en hoort niet te bestaan.";
-
-    /// <summary>
-    /// De tekens die uit een regel worden verwijderd voordat hij een onderwerpregel wordt.
-    /// </summary>
-    /// <remarks>
-    /// <para>Dit is <em>geen</em> tweede definitie van "één regel". Waar een regel eindigt wordt
-    /// door <see cref="MessageTruncation.Cut"/> bepaald en alleen daar — punt 13 van de
-    /// fase-0-afwijkingen zegt met zoveel woorden dat twee kopieën van die beslissing gaan schuiven.
-    /// Wat hier gebeurt is iets anders: tekens weghalen die in géén enkele regel horen. De tab en
-    /// de verticale tab overleven de knip (het zijn geen regelovergangen) en zetten een
-    /// onderwerpregel in een postbuslijst uit elkaar; NEL (U+0085), LINE SEPARATOR (U+2028) en
-    /// PARAGRAPH SEPARATOR (U+2029) zijn regelovergangen die <c>IndexOfAny("\r\n")</c> niet ziet.
-    /// </para>
-    ///
-    /// <para>Dit is bewust <em>geen</em> verdediging tegen kopinjectie. Communication Services krijgt
-    /// het onderwerp als veld in een JSON-lichaam over HTTPS en niet als SMTP-kop, dus er is geen
-    /// kop om in te injecteren. Zou die verdediging hier als reden staan, dan zou iemand hem later
-    /// weghalen omdat de reden niet klopt — en dan verdwijnt de echte reden mee.</para>
-    /// </remarks>
-    private static readonly SearchValues<char> Unwanted =
-        SearchValues.Create("\t\v\f\u0085\u2028\u2029");
 
     /// <summary>
     /// Het onderwerp van het maandoverzicht.
@@ -80,41 +47,7 @@ internal static class StatementText
     /// nummer is.
     /// </remarks>
     internal static string Subject(string customerName, string month) =>
-        $"Maandoverzicht {HourMonths.Label(month)} — {OneLine(customerName, NameLimit)}";
-
-    /// <summary>
-    /// Houdt van een vrij tekstveld de eerste regel over, zonder tekens die in geen regel horen.
-    /// </summary>
-    /// <param name="value">De tekst uit de opslag of uit een formulier.</param>
-    /// <param name="limit">De lengtegrens.</param>
-    /// <returns>De tekst zoals hij in een mail mag staan. Nooit <c>null</c>.</returns>
-    /// <remarks>
-    /// <para>De knip komt uit <see cref="MessageTruncation.Cut"/> en dus uit
-    /// <c>Soratus.Agents.Contracts</c> — dezelfde functie die de agentbibliotheek en de
-    /// klantprojectie van de logregels gebruiken. Punt 13: één definitie van "één regel", op één
-    /// plek, want drie kopieën gaan schuiven.</para>
-    ///
-    /// <para>Een leeg veld komt leeg terug en niet als <c>"(geen bericht)"</c>. Dat is de
-    /// terugvalwaarde van <see cref="MessageTruncation.Cut"/> en die hoort bij een logregel: daar is
-    /// een leeg bericht een fout van de agentbouwer die benoemd mag worden. Hier is het een leeg
-    /// naamveld, en dan hoort de opmaakfunctie eromheen te besluiten wat er staat — zie
-    /// <see cref="Greeting"/>. Dezelfde afweging als in <c>Views/CustomerMessage.cs</c>.</para>
-    /// </remarks>
-    internal static string OneLine(string? value, int limit)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        var head = MessageTruncation.Cut(value, Math.Max(limit, MessageTruncation.MinimumLength))
-            .Message
-            .Trim();
-
-        return head.AsSpan().ContainsAny(Unwanted)
-            ? new string([.. head.Where(character => !Unwanted.Contains(character))]).Trim()
-            : head;
-    }
+        $"Maandoverzicht {HourMonths.Label(month)} — {MailText.OneLine(customerName, MailText.NameLimit)}";
 
     /// <summary>
     /// De aanhef van de mail.
@@ -134,7 +67,7 @@ internal static class StatementText
     /// </remarks>
     internal static string Greeting(string? contactName)
     {
-        var name = OneLine(contactName, NameLimit);
+        var name = MailText.OneLine(contactName, MailText.NameLimit);
 
         return name.Length == 0 ? "Beste relatie," : $"Beste {name},";
     }
