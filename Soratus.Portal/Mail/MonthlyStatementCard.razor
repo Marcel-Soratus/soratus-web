@@ -1,0 +1,440 @@
+@* Het maandoverzicht mailen, met de verzendbevestiging eronder (§3.7, laatste regel).
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   ÉÉN PARAMETER, EN DIE PARAMETER IS DE ROLGRENS
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Dit component neemt een CustomerWriteScope en verder niets. Een klantgebruiker kan dat type per
+   definitie niet in handen krijgen — de constructor is internal en alleen
+   CustomerScopeResolver.ResolveWriteAsync levert hem, en die weigert iemand zonder de operatorrol.
+   Er is dus geen klantpagina die dit component kan renderen, ook niet per ongeluk, en er staat
+   geen `@if (isOperator)` in dit bestand.
+
+   Dat is dezelfde vorm als bij CustomerHours / OperatorHours (§3.6) en bij de contractkaart, met
+   dit verschil: daar zijn er twee componenten omdat beide rollen iets te zien krijgen. Hier is er
+   één, want een verzendbevestiging draagt de adressen waarop wij de klant hebben gemaild en de
+   vaststelling van een operator over een mislukte verzending. Zie IStatementViews.
+
+   Het component doet zijn eigen schrijfacties in plaats van ze als EventCallback aan de pagina te
+   geven. Dat is bewust: het verzendpad — claimen, versturen, bevestigen — hoort bij elkaar te
+   blijven, en een pagina die de handelingen zelf implementeert zou de volgorde kunnen omdraaien.
+   De hostpagina schrijft dus één regel:
+
+     <MonthlyStatementCard Scope="write" />
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   STATIC SSR, EN EEN HERHAALDE POST IS HIER VEILIG
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Na een verzendpoging volgt géén redirect, anders dan op het urenscherm. Daar is de redirect
+   nodig omdat een verversing een tweede urenregel oplevert; hier levert een verversing een tweede
+   POST op die door de claim wordt tegengehouden — CreateItemAsync op een afgeleide sleutel geeft
+   een 409, en dat gebeurt vóór er een verbinding met Communication Services wordt opgezet. De
+   operator ziet dan "dit overzicht is al verstuurd" in plaats van dat er een tweede mail uitgaat.
+
+   Dat is de enige plek in dit portaal waar een herhaalde POST niet met een redirect wordt
+   voorkomen maar met een slot in de opslag, en hier is dat de sterkere van de twee: een redirect
+   helpt niet tegen twee operators die tegelijk op de knop drukken, en een 409 wel.
+
+   Het vaststellen van een onbekende uitkomst gaat over twee adressen in plaats van over twee
+   klikken op dezelfde plek (?vaststellen=jjjj-MM). Dezelfde vorm en dezelfde reden als het
+   fiatteren van een urenregel: op static SSR kan er maar één formulier met een gegeven naam op de
+   pagina staan, en een formulier per rij zou dus een naam per rij vragen die de modelbinding niet
+   kan terugvinden.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAT ER OP HET SCHERM STAAT EN NIET IN DE MAIL
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   De weigeringsteksten, de vaststelling van de operator, de operatie-id, het aantal pogingen en
+   de e-mailadressen. Dat is allemaal tekst die op een scherm hoort en niet in een postbus. De
+   mail zelf bevat alleen de bedragen, de maand, de klantnaam en vaste zinnen uit StatementText. *@
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Soratus.Portal.Components.Shared
+@using Soratus.Portal.Data
+@using Soratus.Portal.Security
+
+@inject IStatementViews Views
+@inject MonthlyStatementService Statements
+@inject IStatementStore Store
+@inject NavigationManager Navigation
+
+<div class="card">
+    <div class="card-head">
+        <h2 class="card-head__title">Maandoverzicht mailen</h2>
+        <span class="card-head__meta mono">§3.7</span>
+    </div>
+
+    <div class="card__body stack">
+        @if (_view is { } view)
+        {
+            @if (view.IsDryRun)
+            {
+                @* Bovenaan en niet onderaan. Een operator die denkt dat hij heeft gemaild terwijl er
+                   niets is verstuurd, is de gevaarlijkste van de twee vergissingen: de klant wacht
+                   dan op iets wat niet komt en niemand weet het. *@
+                <p class="meta notice" role="status">
+                    <span aria-hidden="true">◐</span>
+                    PROEFDRAAI — dit portaal verstuurt niets. Wat je hier indient wordt opgemaakt en
+                    getoond; er wordt niets verstuurd en niets vastgelegd.
+                </p>
+            }
+
+            @if (!view.IsMailConfigured)
+            {
+                <p class="meta notice" role="status">
+                    <span aria-hidden="true">✕</span>
+                    Mailen is niet ingericht: er is geen Communication Services-endpoint of geen
+                    afzenderadres geconfigureerd. Er is niets te versturen.
+                </p>
+            }
+
+            @if (_result is { } result)
+            {
+                <p class="meta notice" role="@(result.Kind is StatementOutcomeKind.Sent ? "status" : "alert")">
+                    <span aria-hidden="true">@OutcomeGlyph(result.Kind)</span> @result.Message
+                </p>
+
+                @if (result.Preview is { } preview)
+                {
+                    @* Letterlijk wat er zou zijn verstuurd. Geen markering in de tekst en geen
+                       aanpassing: een proefdraai die iets anders toont dan hij zou versturen,
+                       bewijst niets. *@
+                    <FactRow>
+                        <FactTile Label="Aan" Value="@string.Join(" · ", preview.Recipients)" />
+                        <FactTile Label="Onderwerp" Value="@preview.Subject" />
+                    </FactRow>
+                    <pre class="mono">@preview.PlainText</pre>
+                }
+            }
+
+            @if (view.IsMailConfigured)
+            {
+                <EditForm Model="Sending" FormName="@SendFormName" OnValidSubmit="SendAsync">
+                    <div class="field field--row">
+                        <label class="field__label" for="maandoverzicht-maand">Maand</label>
+                        <div class="field__control">
+                            <select class="field__input" id="maandoverzicht-maand"
+                                    name="@SendField(nameof(StatementSendForm.Month))">
+                                @foreach (var month in view.Months)
+                                {
+                                    <option value="@month" selected="@(month == view.DefaultMonth)">
+                                        @HourMonths.Label(month)@(view.HasRow(month) ? " · al vastgelegd" : string.Empty)
+                                    </option>
+                                }
+                            </select>
+                            <p class="field__hint">
+                                Alleen afgesloten maanden. Een overzicht over een lopende maand noemt
+                                een bedrag dat morgen anders is.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button class="btn btn--primary" type="submit">
+                        @(view.IsDryRun ? "Proefdraaien" : "Versturen")
+                    </button>
+                </EditForm>
+
+                <p class="meta">
+                    De mail gaat naar de contactpersonen van deze klant — de toegangsregels met de
+                    aanduiding "@PortalAccessRoles.Administrator" — en bevat de bedragen, geen
+                    urenregels. De specificatie blijft in het portaal.
+                </p>
+            }
+
+            @if (Released(view) is { } release)
+            {
+                <EditForm Model="Releasing" FormName="@ReleaseFormName" OnValidSubmit="ReleaseAsync">
+                    <input type="hidden" name="@ReleaseField(nameof(StatementReleaseForm.Month))"
+                           value="@release.Month" />
+                    <input type="hidden" name="@ReleaseField(nameof(StatementReleaseForm.ETag))"
+                           value="@release.ETag" />
+
+                    <div class="field field--row">
+                        <label class="field__label" for="maandoverzicht-vaststelling">
+                            @release.MonthLabel — wat is er gebeurd?
+                        </label>
+                        <div class="field__control">
+                            <input class="field__input" id="maandoverzicht-vaststelling"
+                                   name="@ReleaseField(nameof(StatementReleaseForm.Note))"
+                                   maxlength="@StatementRelease.MaximumNoteLength"
+                                   value="@Releasing.Note" />
+                            <p class="field__hint">
+                                Bijvoorbeeld: gebeld met de contactpersoon, niets ontvangen. Deze tekst
+                                blijft in het portaal en gaat nooit naar de klant.
+                            </p>
+                            @if (_releaseError is { } releaseError)
+                            {
+                                <p class="field__error" role="alert">@releaseError</p>
+                            }
+                        </div>
+                    </div>
+
+                    <button class="btn" type="submit">Vaststellen</button>
+                </EditForm>
+            }
+
+            <div class="card-head">
+                <h3 class="card-head__title">Verzendbevestiging @view.Year</h3>
+                <span class="card-head__meta mono">@view.Rows.Count regel(s)</span>
+            </div>
+
+            @if (view.Rows.Count == 0)
+            {
+                <p class="table-empty">
+                    Over @view.Year is er nog geen maandoverzicht verstuurd. Er staat geen
+                    bevestiging, en dat betekent hier precies dat: er is nooit een poging gedaan.
+                </p>
+            }
+
+            @foreach (var row in view.Rows)
+            {
+                <div class="stack">
+                    <p class="meta">
+                        <span class="badge @BadgeClass(row.State)">
+                            <span class="badge__glyph" aria-hidden="true">@StateGlyph(row.State)</span>@row.StateLabel
+                        </span>
+                        <strong>@row.MonthLabel</strong> — @row.StateNotice
+                    </p>
+
+                    <FactRow>
+                        <FactTile Label="Gestart"
+                                  Value="@TimeFormat.Absolute(row.AttemptedAt)"
+                                  Title="@row.AttemptedBy" />
+                        <FactTile Label="Aangenomen"
+                                  Value="@(row.SentAt is { } sent ? TimeFormat.Absolute(sent) : Dash)" />
+                        <FactTile Label="Totaal in de mail"
+                                  Value="@(row.Total is { } total ? StatementText.Money(total) : Dash)"
+                                  Title="@(row.MeasuredAt is { } measured ? $"gemeten {TimeFormat.Absolute(measured)}" : null)" />
+                        <FactTile Label="Aan" Value="@string.Join(" · ", row.Recipients)" />
+                        <FactTile Label="Operatie" Value="@(row.OperationId ?? Dash)" />
+                        <FactTile Label="Pogingen"
+                                  Value="@row.Attempts.ToString(Invariant)"
+                                  Warn="@(row.Attempts > 1)" />
+                    </FactRow>
+
+                    @if (row.ReleaseNote is { } note)
+                    {
+                        <p class="meta">
+                            Vastgesteld door @row.ReleasedBy op
+                            <span class="mono">@TimeFormat.Absolute(row.ReleasedAt!.Value)</span>: @note
+                        </p>
+                    }
+
+                    @if (row.WhyNotRelease is null)
+                    {
+                        <a class="btn btn--small" href="@ReleaseHref(row.Month)">
+                            Vaststellen wat er is gebeurd
+                        </a>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>De naam van het verzendformulier.</summary>
+    /// <remarks>
+    /// Als constante en niet als letterlijke tekst op twee plekken: het attribuut van de eigenschap
+    /// en de <c>FormName</c> horen bij elkaar, en een verschrijving daartussen laat een formulier
+    /// stil niets doen. Dezelfde afspraak als op het urenscherm.
+    /// </remarks>
+    private const string SendFormName = "maandoverzicht-versturen";
+
+    private const string ReleaseFormName = "maandoverzicht-vaststellen";
+
+    /// <summary>De naam van de queryparameter waarmee één maand wordt vastgesteld.</summary>
+    private const string ReleaseQuery = "vaststellen";
+
+    /// <summary>Wat er staat als een feit er niet is.</summary>
+    /// <remarks>
+    /// Een streepje en nooit een nul of een leeg vak. Zie <c>FactTile.Value</c>, en punt 15: een
+    /// ontbrekende waarde is geen nul.
+    /// </remarks>
+    private const string Dash = "—";
+
+    /// <summary>De cultuur voor een teller. Een aantal pogingen is geen bedrag.</summary>
+    private static readonly System.Globalization.CultureInfo Invariant =
+        System.Globalization.CultureInfo.InvariantCulture;
+
+    private OperatorStatementView? _view;
+    private StatementResult? _result;
+    private string? _releaseError;
+
+    /// <summary>
+    /// Het schrijfrecht op deze klant.
+    /// </summary>
+    /// <remarks>
+    /// De enige parameter, en daarmee de rolgrens. Zie de toelichting bovenaan dit bestand: een
+    /// klantgebruiker kan dit type niet produceren, dus er is geen klantpagina die dit component kan
+    /// renderen.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public CustomerWriteScope? Scope { get; set; }
+
+    /// <summary>Het jaar dat in beeld is. Leeg betekent: het jaar van de vorige maand.</summary>
+    [SupplyParameterFromQuery(Name = "jaar")]
+    public int? Jaar { get; set; }
+
+    /// <summary>De maand waarvan een onbekende uitkomst wordt vastgesteld.</summary>
+    [SupplyParameterFromQuery(Name = ReleaseQuery)]
+    public string? Vaststellen { get; set; }
+
+    /// <summary>Het verzendformulier zoals de POST het oplevert.</summary>
+    /// <remarks>
+    /// Nullable en zonder beginwaarde (BL0008): het model wordt bij een POST volledig vervangen, en
+    /// een beginwaarde hier kan door <c>null</c> worden overschreven zodra er niets te binden viel.
+    /// </remarks>
+    [SupplyParameterFromForm(FormName = SendFormName)]
+    public StatementSendForm? Zending { get; set; }
+
+    /// <summary>Het vaststellingsformulier zoals de POST het oplevert.</summary>
+    [SupplyParameterFromForm(FormName = ReleaseFormName)]
+    public StatementReleaseForm? Vaststelling { get; set; }
+
+    private StatementSendForm Sending => Zending ??= new StatementSendForm();
+
+    private StatementReleaseForm Releasing => Vaststelling ??= new StatementReleaseForm();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    /// <summary>
+    /// Bouwt de weergave op.
+    /// </summary>
+    /// <remarks>
+    /// Wordt ook ná een schrijfactie aangeroepen, zodat de bevestigingen tonen wat er nú staat. Het
+    /// resultaat van die actie blijft staan: dat is de mededeling en de lijst is de uitkomst.
+    /// </remarks>
+    private async Task LoadAsync()
+    {
+        if (Scope is null)
+        {
+            return;
+        }
+
+        _view = await Views.BuildStatementsAsync(Scope, Jaar ?? CurrentYear());
+    }
+
+    /// <summary>
+    /// Verstuurt het maandoverzicht van de gekozen maand.
+    /// </summary>
+    /// <remarks>
+    /// Er staat geen tweede controle in deze methode. Alles wat een reden kan zijn om niet te
+    /// versturen staat in <see cref="MonthlyStatementService"/>, vóór de claim, en een kopie hier zou
+    /// een tweede opvatting zijn over wanneer er gemaild mag worden.
+    /// </remarks>
+    private async Task SendAsync()
+    {
+        if (Scope is null || _view is null)
+        {
+            return;
+        }
+
+        _result = await Statements.SendAsync(Scope, Sending.Month ?? _view.DefaultMonth);
+
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Legt vast wat er is gebeurd bij een onbekende uitkomst.
+    /// </summary>
+    /// <remarks>
+    /// De overgangstoets staat niet hier maar in <see cref="StatementTransitions.WhyNotRelease"/>, en
+    /// de opslag doet hem opnieuw. Dat is geen dubbel werk: het scherm gebruikt hem om te bepalen of
+    /// er een knop hoort te staan, de opslag om te weigeren wat er tussen die twee momenten is
+    /// veranderd.
+    /// </remarks>
+    private async Task ReleaseAsync()
+    {
+        _releaseError = null;
+
+        if (Scope is null)
+        {
+            return;
+        }
+
+        if (Releasing.Validate() is { } invalid)
+        {
+            _releaseError = invalid;
+            await LoadAsync();
+            return;
+        }
+
+        var written = await Store.ReleaseAsync(Scope, Releasing.ToRelease());
+
+        if (!written.IsSaved)
+        {
+            _releaseError = written.Message;
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// De rij waarvan een onbekende uitkomst wordt vastgesteld, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Alleen als de rij bestaat én de overgang mag. Een gedeelde link naar een maand die intussen is
+    /// vastgesteld levert dus geen formulier op dat een melding gaat geven.
+    /// </remarks>
+    private StatementRow? Released(OperatorStatementView view) =>
+        string.IsNullOrWhiteSpace(Vaststellen)
+            ? null
+            : view.Rows.FirstOrDefault(row =>
+                string.Equals(row.Month, Vaststellen, StringComparison.Ordinal)
+                && row.WhyNotRelease is null);
+
+    private string ReleaseHref(string month) =>
+        Navigation.GetUriWithQueryParameter(ReleaseQuery, month);
+
+    /// <summary>Het jaar van de vorige maand.</summary>
+    /// <remarks>
+    /// Niet "dit jaar". In januari gaat een maandoverzicht over december, en dan hoort het
+    /// standaardjaar het vorige te zijn — anders staat de maand die je wilt versturen niet in beeld.
+    /// De maand komt uit het viewmodel en niet uit een eigen klok, zodat het scherm en de weergave
+    /// dezelfde grens gebruiken.
+    /// </remarks>
+    private int CurrentYear() =>
+        HourMonths.YearOf(StatementText.PreviousMonthOf(DateTimeOffset.UtcNow))
+        ?? DateTimeOffset.UtcNow.Year;
+
+    /// <summary>Het <c>name</c>-attribuut van een veld van het verzendformulier.</summary>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns>Bijvoorbeeld <c>Zending.Month</c>.</returns>
+    private static string SendField(string field) => $"{nameof(Zending)}.{field}";
+
+    /// <summary>Het <c>name</c>-attribuut van een veld van het vaststellingsformulier.</summary>
+    /// <param name="field">De naam van de eigenschap, uit <c>nameof</c>.</param>
+    /// <returns>Bijvoorbeeld <c>Vaststelling.Note</c>.</returns>
+    private static string ReleaseField(string field) => $"{nameof(Vaststelling)}.{field}";
+
+    /// <summary>De statusklasse van een verzendtoestand.</summary>
+    /// <remarks>
+    /// De statuskleuren van §8 zijn functioneel en niet decoratief, en de toewijzing volgt hun
+    /// betekenis: verstuurd is groen, onbekend is amber omdat er iets van een mens wordt gevraagd, en
+    /// niet-verstuurd is neutraal grijs omdat er niets aan de hand is — er is alleen nog niets
+    /// gebeurd. Nooit kleur zonder woordlabel; het label staat er altijd naast.
+    /// </remarks>
+    private static string BadgeClass(StatementSendState state) => state switch
+    {
+        StatementSendState.Sent => "badge--live",
+        StatementSendState.Unknown => "badge--degraded",
+        StatementSendState.NotSent => "badge--idle",
+        _ => "badge--idle",
+    };
+
+    private static string StateGlyph(StatementSendState state) => state switch
+    {
+        StatementSendState.Sent => "●",
+        StatementSendState.Unknown => "◐",
+        StatementSendState.NotSent => "○",
+        _ => "○",
+    };
+
+    private static string OutcomeGlyph(StatementOutcomeKind kind) => kind switch
+    {
+        StatementOutcomeKind.Sent => "●",
+        StatementOutcomeKind.DryRun or StatementOutcomeKind.Unknown => "◐",
+        _ => "✕",
+    };
+}

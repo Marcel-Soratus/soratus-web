@@ -137,6 +137,12 @@ public class PaginatitelTests : Portaalrendertest
                 "Soratus.Portal.Components.Pages.Klant.Agents",
                 "Soratus.Portal.Components.Pages.Klant.Contract",
 
+                // Fase 4a. Het facturatiescherm rendert voor een klant inhoud — de bedragen die hij
+                // achteraf gefactureerd krijgt, want §2 geeft hem "Facturatie: bedragen en status" —
+                // en zet dus een titel. Wat er niet in staat is de beheeropslag; dat wordt door de
+                // theorie hierboven gemeten en niet door deze lijst.
+                "Soratus.Portal.Components.Pages.Klant.Facturatie",
+
                 // Fase 3. Het urenscherm rendert voor een klant inhoud — zijn verbruik tegen de
                 // bundel — en zet dus een titel ("Uren · Acme Logistiek · Agent Portal"). Wat er
                 // niet in staat is een woord uit de fiatteringsstroom; dat wordt door de theorie

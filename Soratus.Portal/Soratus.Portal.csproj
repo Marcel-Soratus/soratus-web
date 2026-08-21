@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Dezelfde versie als Soratus.Web, waar dit pad vandaag in productie loopt
+      (Services/LeadSink.cs). Twee versies van dezelfde mailbibliotheek in één repo zou betekenen
+      dat het bewezen pad en het nieuwe pad niet meer hetzelfde pad zijn.
+    -->
+    <PackageReference Include="Azure.Communication.Email" Version="1.1.0" />
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.62.1" />
     <PackageReference Include="Microsoft.Identity.Web" Version="4.10.0" />

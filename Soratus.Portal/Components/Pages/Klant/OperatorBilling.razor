@@ -1,0 +1,304 @@
+@* Het facturatiescherm zoals de operator het ziet (§3.7): per maand het gemeten Azure-verbruik, de
+   beheeropslag, het door te belasten bedrag, de uren boven bundel en het totaal — en eronder de
+   uitsplitsing per dienst van de maand die is aangeklikt.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM DIT EEN APART COMPONENT IS EN GEEN VLAG OP CustomerBilling
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §2 zet de uitsplitsing per dienst en de beheeropslag dicht voor de klant. Dat is hier een
+   typeverschil en geen @if: dit component neemt een OperatorBillingView, en dat type draagt de
+   diensten, het subtotaal, het opslagpercentage, de bevraagde scope en de reden waarom een bedrag
+   ontbreekt. CustomerBillingView draagt die niet.
+
+   Eén component met een `isOperator`-vlag zou betekenen dat er in één bestand een uitdrukking te
+   schrijven is die onze marge op een klantscherm zet. Een vergeten @if lekt, een ontbrekende
+   property compileert niet. Dat kost twee RowGrid's die op elkaar lijken, en dat is dezelfde ruil
+   als bij de logtabel (§12) en de uren.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DE BEVRAAGDE OMGEVING STAAT OP HET SCHERM, EN DAT IS GEEN DETAIL
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Gemeten op 21 augustus 2026: een query tegen een resource group die niet bestaat geeft HTTP 200
+   met nul regels — precies hetzelfde antwoord als een bestaande omgeving over een periode die nog
+   niet geboekt is. Er is dus geen manier om in code te zien of "geen regels" betekent dat er
+   niets is verbruikt of dat we de verkeerde omgeving bevragen.
+
+   Wat er dan overblijft is die vraag aan een mens stellen, en dat kan alleen als op het scherm
+   staat wát er is bevraagd. Vandaar de scope onder een maand zonder regels. Een ambiguïteit die
+   niet op te lossen is, hoort zichtbaar te zijn in plaats van weggerekend.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   HET OPSLAGPERCENTAGE IS HIER NIET IN TE VULLEN
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §3.7 vraagt een "instelbare beheeropslag %". Instellen gebeurt op het contractscherm, want het
+   is een afspraak en geen meting — en een tweede plek waar hetzelfde percentage wordt vastgelegd
+   is een tweede waarheid over onze marge. Er staat daarom een regel die zegt waar het hoort, met
+   een link erbij: een operator die hier een invulveld verwacht en er geen vindt, hoort te weten
+   waar hij moet zijn in plaats van te concluderen dat het niet kan. *@
+
+<div class="stack">
+    @if (!View.HasContract)
+    {
+        <p class="meta notice">
+            Voor deze klant is nog geen contract vastgelegd. Er is dus geen urenbundel, geen
+            uurtarief en geen beheeropslag, en daarmee geen enkel door te belasten bedrag — het
+            gemeten verbruik staat er wel. Leg de afspraken vast op het
+            <a href="@ContractPath">contractscherm</a>.
+        </p>
+    }
+
+    <DataCard Grid="MonthColumns" Title="Azure-verbruik en door te belasten bedragen">
+        <HeaderContent>
+            <span>@BillingText.Percentage(View.SurchargePercentage) opslag</span>
+            <a class="btn btn--small" href="@BillingText.YearPath(View.CustomerId, View.Year - 1)"
+               title="@($"de maanden van {View.Year - 1}")"><span class="mono" aria-hidden="true">←</span>@(View.Year - 1)</a>
+            @if (View.Year < ThisYear)
+            {
+                <a class="btn btn--small" href="@BillingText.YearPath(View.CustomerId, View.Year + 1)"
+                   title="@($"de maanden van {View.Year + 1}")">@(View.Year + 1)<span class="mono" aria-hidden="true">→</span></a>
+            }
+        </HeaderContent>
+        <ChildContent>
+            <DataRowHeader />
+
+            @if (View.Months.Count == 0)
+            {
+                <p class="table-empty">@EmptyMonths</p>
+            }
+            else
+            {
+                @foreach (var month in View.Months)
+                {
+                    <DataRow @key="month.Month"
+                             Href="@MonthHref(month)"
+                             aria-current="@(IsSelected(month.Month) ? "true" : null)"
+                             title="@MonthHint(month)">
+                        <DataCell Truncate="true">
+                            <span>
+                                @month.MonthLabel
+                                @if (month.IsRunningMonth)
+                                {
+                                    <span class="mono-meta">· loopt nog</span>
+                                }
+                                @if (IsSelected(month.Month))
+                                {
+                                    <span class="mono-meta">· uitgesplitst</span>
+                                }
+                            </span>
+                            @* De toestand van de meting als tekst en niet als statusbadge: §1 houdt
+                               groen, amber en rood voor status — draait het of niet — en dit is een
+                               kennistoestand. "We weten het niet" is geen storing. *@
+                            <span class="mono-meta" title="@BillingText.StateTitle(month.AzureState)">
+                                @BillingText.StateLabel(month.AzureState)
+                            </span>
+                            @if (month.Failure is { } failure)
+                            {
+                                <span class="mono-meta">@failure</span>
+                            }
+                            @if (NeedsScope(month) && month.Scope is { } scope)
+                            {
+                                @* Alleen bij een maand zonder regels, want daar is de scope het enige
+                                   gereedschap tegen een tikfout in een resource-groepnaam die jaren
+                                   stil € 0,00 zou opleveren. Bij een maand met bedragen zegt hij
+                                   niets nieuws en zou hij elke rij twee regels hoger maken. *@
+                                <span class="mono-meta">bevraagd: @scope</span>
+                            }
+                        </DataCell>
+                        <DataCell Class="num" title="@BillingText.Coverage(month.CoversThrough, month.MeasuredAt)">
+                            @BillingText.Amount(month.AzureSubtotal)
+                        </DataCell>
+                        <DataCell Class="num">@BillingText.Amount(month.SurchargeAmount)</DataCell>
+                        <DataCell Class="num" title="@ChargedTitle(month)">
+                            @BillingText.Amount(month.AzureCharged)
+                        </DataCell>
+                        <DataCell Class="num">@HourText.Hours(month.OverBundleHours)</DataCell>
+                        <DataCell Class="num" title="@BillingText.HoursSum(month.OverBundleHours, month.HourlyRate)">
+                            @BillingText.Amount(month.HoursAmount)
+                        </DataCell>
+                        <DataCell Class="num" title="@TotalTitle(month)">
+                            @BillingText.Amount(month.Total)
+                        </DataCell>
+                    </DataRow>
+                }
+
+                <DataRow Total="true">
+                    <DataCell Truncate="true">Jaartotaal @View.Year</DataCell>
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Class="num" title="@YearTotalTitle">@BillingText.Amount(View.YearTotal)</DataCell>
+                </DataRow>
+            }
+        </ChildContent>
+    </DataCard>
+
+    <p class="meta notice">@View.UnknownNotice</p>
+    <p class="meta notice">@View.SurchargeNotice</p>
+
+    @if (Selected is { } selected)
+    {
+        <DataCard Grid="ServiceColumns" Title="@($"Azure per dienst · {selected.MonthLabel}")">
+            <HeaderContent>
+                <span title="@BillingText.StateTitle(selected.AzureState)">@BillingText.StateLabel(selected.AzureState)</span>
+                <a class="btn btn--small" href="@BillingText.YearPath(View.CustomerId, View.Year)">Dichtklappen</a>
+            </HeaderContent>
+            <ChildContent>
+                <DataRowHeader />
+
+                @if (selected.Lines.Count == 0)
+                {
+                    @* Geen tabel met nullen: er is niets gemeten, en dat is een andere mededeling dan
+                       een uitsplitsing waarin alles nul is. *@
+                    <p class="table-empty">@BillingText.StateTitle(selected.AzureState)</p>
+                }
+                else
+                {
+                    @foreach (var line in selected.Lines)
+                    {
+                        <DataRow>
+                            <DataCell Truncate="true">@line.Service</DataCell>
+                            <DataCell Class="num">@BillingText.Amount(line.Amount)</DataCell>
+                        </DataRow>
+                    }
+
+                    <DataRow Total="true">
+                        <DataCell Truncate="true">Subtotaal @selected.MonthLabel</DataCell>
+                        <DataCell Class="num">@BillingText.Amount(selected.AzureSubtotal)</DataCell>
+                    </DataRow>
+                }
+            </ChildContent>
+        </DataCard>
+
+        <p class="meta notice">@View.ServicesNotice</p>
+        <p class="meta notice">@View.SubtotalNotice</p>
+
+        @if (selected.Scope is { } scope)
+        {
+            <p class="meta notice">Bevraagde omgeving: <span class="mono">@scope</span></p>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomsporen van de maandtabel: maand, subtotaal, opslag, door te belasten, uren boven
+    /// bundel, uurbedrag, totaal (§3.7).
+    /// </summary>
+    /// <remarks>
+    /// Zeven kolommen tegen de vijf van de klantvariant. De twee die erbij komen — het subtotaal en
+    /// het opslagbedrag — zijn precies wat §2 dichtzet, en dat is de reden dat er twee
+    /// <see cref="RowGrid"/>'s zijn en niet één met verborgen kolommen. Een verborgen kolom is een
+    /// filter; §2 vraagt een typeverschil.
+    /// </remarks>
+    private static readonly RowGrid MonthColumns = new(
+        new GridColumn("Maand", "minmax(0, 1.4fr)", Labelled: false),
+        new GridColumn("Subtotaal", "110px", Align: CellAlign.End),
+        new GridColumn("Opslag", "100px", Align: CellAlign.End),
+        new GridColumn("Doorbelast", "110px", Align: CellAlign.End),
+        new GridColumn("Boven bundel", "104px", Align: CellAlign.End),
+        new GridColumn("Uren", "110px", Align: CellAlign.End),
+        new GridColumn("Totaal", "110px", Align: CellAlign.End));
+
+    /// <summary>
+    /// De kolomsporen van de uitsplitsing: dienst en bedrag.
+    /// </summary>
+    /// <remarks>
+    /// Twee kolommen, en de dienstnaam is een gewone tekstkolom en geen keuze uit een lijst. De namen
+    /// komen uit Cost Management en niet uit de spec: gemeten zijn het <c>Azure App Service</c>,
+    /// <c>Azure Cosmos DB</c>, <c>Bandwidth</c>, <c>Key Vault</c> en <c>Microsoft Entra</c>, terwijl
+    /// §3.7 Container Apps, Azure OpenAI, Storage, Log Analytics en Key Vault noemt. Een vaste lijst
+    /// zou vandaag al de helft missen en zou op de dag dat er een dienst bijkomt stil geld buiten het
+    /// subtotaal laten vallen.
+    /// </remarks>
+    private static readonly RowGrid ServiceColumns = new(
+        new GridColumn("Dienst", "minmax(0, 1fr)", Labelled: false),
+        new GridColumn("Bedrag", "140px", Align: CellAlign.End));
+
+    private const string EmptyMonths =
+        "Voor dit jaar staat er geen maand op het overzicht. Dat gebeurt als het contract later ingaat "
+        + "dan het jaar dat je bekijkt en er ook geen meting is.";
+
+    private const string NoYearTotal =
+        "Er is geen jaartotaal zolang één maand geen totaal heeft. Een jaartotaal waarin een maand "
+        + "ontbreekt is niet van een compleet jaartotaal te onderscheiden en het is lager; van die twee "
+        + "fouten is alleen 'geen getal' zichtbaar.";
+
+    /// <summary>De facturatieweergave van de operator.</summary>
+    [Parameter]
+    [EditorRequired]
+    public OperatorBillingView View { get; set; } = default!;
+
+    /// <summary>De maand waarvan de uitsplitsing open staat, of <c>null</c>.</summary>
+    [Parameter]
+    public string? SelectedMonth { get; set; }
+
+    /// <summary>Het huidige jaar, in de Nederlandse dag.</summary>
+    private int ThisYear => TimeFormat.In(View.GeneratedAt).Year;
+
+    private string ContractPath => $"/klant/{Uri.EscapeDataString(View.CustomerId)}/contract";
+
+    /// <summary>De maand waarvan de uitsplitsing open staat, of <c>null</c>.</summary>
+    /// <remarks>
+    /// Uit de lijst en niet uit de query: een maand in de URL die niet in de weergave zit levert geen
+    /// kaart op in plaats van een lege kaart met een verzonnen label erboven.
+    /// </remarks>
+    private OperatorChargeRow? Selected =>
+        SelectedMonth is null
+            ? null
+            : View.Months.FirstOrDefault(month => IsSelected(month.Month));
+
+    private bool IsSelected(string month) =>
+        string.Equals(SelectedMonth, month, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Of de bevraagde scope bij deze maand hoort te staan.
+    /// </summary>
+    /// <remarks>
+    /// Alleen bij een maand zonder regels. Daar is de scope het antwoord op de vraag die de code niet
+    /// kan beantwoorden: gemeten is dat een resource group die niet bestaat hetzelfde geslaagde, lege
+    /// antwoord geeft als een bestaande omgeving over een periode die nog niet is geboekt.
+    /// </remarks>
+    private static bool NeedsScope(OperatorChargeRow month) =>
+        month.AzureState is AzureCostState.NoLines or AzureCostState.Unknown;
+
+    /// <summary>
+    /// Waar een maandrij naartoe leidt: de uitsplitsing open of dicht.
+    /// </summary>
+    /// <remarks>
+    /// Een tweede klik op de open maand klapt hem dicht. Zonder die uitweg is een open uitsplitsing
+    /// een doodlopende weg: de rij is zelf de knop, dus er staat geen kruisje bij. Dezelfde vorm als
+    /// de maandfilter op het urenscherm.
+    /// </remarks>
+    private string MonthHref(OperatorChargeRow month) => IsSelected(month.Month)
+        ? BillingText.YearPath(View.CustomerId, View.Year)
+        : BillingText.MonthPath(View.CustomerId, View.Year, month.Month);
+
+    private string MonthHint(OperatorChargeRow month) => IsSelected(month.Month)
+        ? "de uitsplitsing per dienst staat open; klik om hem dicht te klappen"
+        : "klap de uitsplitsing per dienst van deze maand open";
+
+    private string? ChargedTitle(OperatorChargeRow month) =>
+        BillingText.ChargedSum(
+            month.AzureSubtotal,
+            month.SurchargePercentage,
+            month.SurchargeAmount,
+            month.AzureCharged);
+
+    /// <summary>
+    /// De tooltip bij het maandtotaal: waarom het er niet is, of dat het definitief is.
+    /// </summary>
+    /// <remarks>
+    /// Twee mededelingen in één tooltip, en ze sluiten elkaar uit: er is een totaal, of er is er
+    /// geen. Bij een bestaand totaal is de vraag of erop gefactureerd mag worden — en dat is
+    /// <see cref="OperatorChargeRow.IsFinal"/>, niet hetzelfde als "er staat een getal".
+    /// </remarks>
+    private static string? TotalTitle(OperatorChargeRow month) =>
+        BillingText.GapReason(month.Gap)
+        ?? (month.IsFinal
+            ? "De maand is volledig gemeten; dit bedrag kan gefactureerd worden."
+            : "Dit bedrag is nog niet definitief: de maand is niet volledig geboekt.");
+
+    private string? YearTotalTitle => View.YearTotal is null ? NoYearTotal : null;
+}

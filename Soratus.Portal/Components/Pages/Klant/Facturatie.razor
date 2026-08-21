@@ -1,0 +1,195 @@
+@page "/klant/{Slug}/facturatie"
+@attribute [Authorize]
+
+@* Facturatie (§3.7), het kostendeel van fase 4a: het gemeten Azure-verbruik per maand, de
+   beheeropslag, de uren boven bundel en het totaal dat achteraf wordt gefactureerd.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   TWEE ROLLEN, TWEE VORMEN, EN HET VERSCHIL IS EEN TYPE
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §2 zegt: "Facturatie: bedragen en status — ja" voor de klant, "Facturatie: Azure per dienst +
+   beheeropslag — nee". Dat is hier een typeverschil en geen filter:
+
+     Scopes.ResolveWriteAsync  → CustomerWriteScope  → OperatorBillingView → <OperatorBilling />
+     Scopes.ResolveAsync       → CustomerScope       → CustomerBillingView → <CustomerBilling />
+
+   IBillingViews heeft twee overloads met dezelfde naam en een andere scope, en er bestaat geen
+   aanroep waarmee je met een klantscope het operatormodel krijgt. De twee weergaven staan
+   bovendien in twee eigen componenten en niet als twee takken in dit bestand: een tak deelt zijn
+   scope met de andere tak, en dan is het operatormodel in de klantmarkup één typefout ver weg.
+
+   Voor de zesde keer dezelfde vorm — CustomerLogLine (§12), CustomerRunRow (§14),
+   CustomerAgentsView (§9), de contractmarge (§2), CustomerHourRow (§3.6) — en om dezelfde reden:
+   wat er niet op het type staat kan niet lekken.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   STATIC SSR, GEEN EILAND, EN HIER VALT NIETS TE SCHRIJVEN
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Deze pagina heeft geen formulier. Er is niets in te vullen: de bedragen komen uit een meting
+   die de beheeragent kosten-collector doet, en het opslagpercentage is een contractafspraak die
+   op het contractscherm wordt vastgelegd. Zie IPortalCostsStore — dat er hier niets te schrijven
+   is, is geen ontbrekende functie maar het ontwerp: een bedrag dat een mens kan intypen komt naast
+   de meting te staan, en dan is niet te zeggen welke van de twee op de factuur hoort.
+
+   Elke weergave is daarmee een adres: ?jaar=… en, voor de operator, ?jaar=…&maand=… om de
+   uitsplitsing per dienst van één maand open te klappen. Deelbaar, werkend met de terugknop, en
+   zonder JavaScript.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   HET PORTAAL ROEPT COST MANAGEMENT NIET AAN BIJ HET RENDEREN
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Dat is een gemeten beslissing en geen voorzorg. Op 21 augustus 2026 leverden vier aanroepen
+   binnen elf seconden vier keer een HTTP 429, en een geslaagde aanroep vroeg dertig tot veertig
+   seconden stilte ervoor. Het budget hangt aan de aanroeper en niet aan de scope — de header
+   heet clienttype-retry-after — dus meer klanten of meer abonnementen maken het niet ruimer. Eén
+   operator die twee klanten naast elkaar opent, trekt de emmer leeg, en de tweede pageview zou
+   dan een bedrag missen dat er wél is.
+
+   Deze pagina leest dus uitsluitend wat er in Cosmos staat. Wat er op het scherm hoort te staan
+   als de verzameling van vannacht is mislukt, is de lezing van eergisteren met het tijdstip erbij
+   — dat getal is werkelijk gemeten, en een mislukte aanroep heeft niets gemeten. Zie
+   AzureCostDocument voor de volledige afweging.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   404 EN GEEN 403
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Geen recht, of een klant die niet bestaat: hetzelfde antwoord. Zie ICustomerScopeResolver — een
+   403 zou bevestigen dat de klant achter die URL bestaat. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject IBillingViews Views
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+@* De PageTitle staat binnen de rolcontrole en niet erboven, en dat is een gemeten regel. Een
+   PageTitle rendert in de HeadOutlet en dus niet in de markup van de pagina, waardoor het vangnet
+   op verboden woorden hem niet ziet — de gebruiker wel, in zijn tabblad, zijn geschiedenis en zijn
+   bladwijzer. Rendert deze pagina niets (een klant die naar de slug van een ándere klant kijkt, of
+   een verzoek zonder aanmeldtoestand), dan hoort er ook geen titel te staan: wat niet wordt
+   gerenderd kan niet lekken. Zie PaginatitelTests — daar is dit één keer stukgemaakt zonder dat er
+   iets rood werd, en dat is de reden dat die tests bestaan. *@
+
+@if (_operatorView is { } operatorView)
+{
+    <PageTitle>Facturatie · @operatorView.DisplayName · Agent Portal</PageTitle>
+
+    <div class="toolbar">
+        <a class="btn btn--small" href="/overzicht"><span class="mono" aria-hidden="true">←</span>Alle klanten</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title">@operatorView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(operatorView.GeneratedAt)">
+            facturatie · bijgewerkt @TimeFormat.Clock(operatorView.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@operatorView.CustomerId" />
+
+    <OperatorBilling View="operatorView" SelectedMonth="@SelectedMonth" />
+}
+else if (_customerView is { } customerView)
+{
+    <PageTitle>Facturatie · @customerView.DisplayName · Agent Portal</PageTitle>
+
+    <div class="page-head">
+        <h1 class="page-title">@customerView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(customerView.GeneratedAt)">
+            facturatie · bijgewerkt @TimeFormat.Clock(customerView.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@customerView.CustomerId" />
+
+    <CustomerBilling View="customerView" />
+}
+
+@code {
+    private OperatorBillingView? _operatorView;
+    private CustomerBillingView? _customerView;
+
+    /// <summary>De klantslug uit de route.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    /// <summary>Het jaar dat in beeld is. Leeg betekent: dit jaar.</summary>
+    [SupplyParameterFromQuery(Name = BillingText.YearQuery)]
+    public int? Jaar { get; set; }
+
+    /// <summary>De maand waarvan de uitsplitsing per dienst open staat. Operator-only.</summary>
+    /// <remarks>
+    /// Deze parameter bestaat op beide paden — een <c>[SupplyParameterFromQuery]</c> hangt aan de
+    /// pagina en niet aan een rol — maar hij wordt alleen doorgegeven aan
+    /// <c>OperatorBilling</c>. Dat is geen zichtbaarheidsrisico: er is geen klanttype dat een
+    /// uitsplitsing draagt, dus een klant die <c>?maand=…</c> intypt krijgt precies hetzelfde scherm
+    /// als zonder. De grens zit in het viewmodel en niet in deze parameter.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = BillingText.MonthQuery)]
+    public string? Maand { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    /// <summary>
+    /// De maand waarvan de uitsplitsing open staat, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// De genormaliseerde vorm gaat mee en niet de tekst van de gebruiker: het component vergelijkt
+    /// ordinaal met de maand in het viewmodel, en <c>" 2026-07"</c> met een spatie ervoor zou dan
+    /// geen enkele rij openklappen zonder dat er iets mis lijkt. Dezelfde afweging als op het
+    /// urenscherm.
+    /// </remarks>
+    private string? SelectedMonth =>
+        HourMonths.Parse(Maand) is { } month ? HourMonths.Of(month) : null;
+
+    /// <summary>
+    /// Het jaar dat wordt gelezen.
+    /// </summary>
+    /// <remarks>
+    /// Uit <c>?jaar=</c>, en anders het jaar van vandaag. Een maand in de URL verandert het jaar
+    /// <em>niet</em>: hij klapt één rij open binnen het jaar dat in beeld is. Zou hij het jaar
+    /// bepalen, dan springt het overzicht naar een ander jaar zodra iemand een rij openklapt, en dat
+    /// is een andere pagina dan waar hij op stond. Zie BillingText.MonthPath — daar staat het jaar
+    /// daarom altijd in het pad.
+    /// </remarks>
+    private int Year => Jaar ?? Today.Year;
+
+    /// <summary>Vandaag, in de Nederlandse dag.</summary>
+    /// <remarks>
+    /// Dezelfde zone als <c>BillingViews</c> gebruikt om te bepalen welke maand de lopende is. Zouden
+    /// die twee verschillen, dan leest dit scherm op 1 januari tussen middernacht en twee uur 's
+    /// nachts een ander jaar dan het viewmodel opbouwt.
+    /// </remarks>
+    private DateOnly Today =>
+        DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(Clock.GetUtcNow(), PortalTimeZone.Display).DateTime);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Het schrijfrecht eerst. Een operator krijgt ook een gewone klantscope, en dan zou hij de
+        // leesvorm van zijn eigen beheerscherm zien. ResolveWriteAsync en niet ResolveOperatorAsync:
+        // dat laatste vraagt een ingerichte telemetrie-opslag, en de kosten van een klant zijn te
+        // bekijken voordat zijn agents zijn uitgerold.
+        if (await Scopes.ResolveWriteAsync(user, Slug) is { } write)
+        {
+            _operatorView = await Views.BuildBillingAsync(write, Year);
+            return;
+        }
+
+        if (await Scopes.ResolveAsync(user, Slug) is { } read)
+        {
+            _customerView = await Views.BuildBillingAsync(read, Year);
+            return;
+        }
+
+        Navigation.NotFound();
+    }
+}

@@ -119,6 +119,21 @@ public abstract class Portaalrendertest : BunitContext
     protected IHourViews? Uren { get; set; }
 
     /// <summary>
+    /// De weergavelaag van het facturatiescherm. Standaard de échte projectie op <see cref="Opslag"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>null</c> betekent "bouw de standaard bij het aanmelden", want die heeft de klantenlijst
+    /// nodig die aan <see cref="MeldAan"/> is meegegeven.</para>
+    ///
+    /// <para>Vervang hem alleen als een test een stand nodig heeft die de projectie niet kan opleveren.
+    /// Voor alles wat over bedragen gaat is de échte projectie het punt: zie
+    /// <see cref="VasteFactuurweergaven"/> — de hele opgave van dit scherm is dat een onbekend bedrag
+    /// onderweg geen nul wordt, en een fixture die de viewmodellen zelf vult, vult ze met de bedragen
+    /// die de testschrijver in gedachten had.</para>
+    /// </remarks>
+    protected IBillingViews? Facturatie { get; set; }
+
+    /// <summary>
     /// Richt de container in met een aangemelde gebruiker en de diensten die een pagina vraagt.
     /// </summary>
     /// <param name="gebruiker">De aangemelde gebruiker.</param>
@@ -175,6 +190,17 @@ public abstract class Portaalrendertest : BunitContext
         // en laat dat vangnet dus groen staan om de verkeerde reden.
         Services.AddSingleton(Uren ?? VasteUrenweergaven.Bouw(Opslag, lijst));
         Services.AddSingleton<IPortalHoursStore>(Opslag);
+
+        // Het facturatiescherm vraagt deze twee. Ze staan hier en niet per test om dezelfde reden als
+        // de regels erboven: elke pagina valt onder het zichtbaarheidsvangnet en dat rendert ze
+        // allemaal, en een pagina die op een ontbrekende dienst omvalt toont geen verboden woorden en
+        // laat dat vangnet dus groen staan om de verkeerde reden.
+        //
+        // De opslag staat er als IPortalCostsStore bij hoewel dat scherm niets schrijft: hij is de
+        // leesbron, en één opslag voor kosten, contract en uren is de voorwaarde om te kunnen meten dat
+        // Azure en de uren op één totaal komen (§3.7).
+        Services.AddSingleton(Facturatie ?? VasteFactuurweergaven.Bouw(Opslag, lijst));
+        Services.AddSingleton<IPortalCostsStore>(Opslag);
 
         // Het urenscherm leest de klok zelf om te bepalen welke maand "deze maand" is. Dezelfde
         // stilstaande klok als de weergavelaag, anders wijst de standaardweergave naar een andere

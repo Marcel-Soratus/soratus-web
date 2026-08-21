@@ -1,0 +1,195 @@
+@* Het facturatiescherm zoals de klant het ziet (§3.7): per maand het door te belasten Azure-bedrag,
+   de uren boven bundel en het totaal dat achteraf wordt gefactureerd.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DIT COMPONENT KAN DE UITSPLITSING EN DE MARGE NIET TONEN, EN DAT IS DE HELE OPZET
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §2 zegt: "Facturatie: bedragen en status — ja" voor de klant, en "Facturatie: Azure per dienst
+   + beheeropslag — nee". Dat staat hier niet als @if rond een blok maar in de parameter: View is
+   een CustomerBillingView, en op dat type — en op elk type dat eraan hangt — bestaan de velden
+   niet.
+
+     CustomerBillingView   heeft geen SurchargePercentage, geen HasContract
+     CustomerChargeRow     heeft geen Lines, geen AzureSubtotal, geen SurchargeAmount,
+                           geen Scope, geen Failure, geen MonthlyChargeGap
+
+   Er is dus geen uitdrukking te schrijven in dit bestand die onze marge of de bevraagde
+   omgeving op het scherm zet. Een vergeten @if lekt; een ontbrekende property compileert niet.
+   Dat is dezelfde vorm als bij CustomerHours (§3.6), CustomerLogLine (§12), CustomerRunRow (§14)
+   en de contractmarge (§2) — voor de zesde keer, en om dezelfde reden.
+
+   Let ook op wat er níet in dit bestand staat: het woord "opslag" komt hier nergens voor, ook
+   niet in een uitleg. De reden waarom een totaal ontbreekt komt als voorgeformuleerde tekst mee
+   op de rij (TotalNotice), juist omdat de rij de reden zelf niet draagt. Zie BillingViews.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   EEN STREEPJE IS GEEN NUL
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Elk bedrag op dit scherm kan ontbreken, en dan staat er een streepje en nooit € 0,00. Dat is
+   niet netjesheid maar het onderwerp van dit scherm: gemeten is dat Cost Management voor een
+   omgeving die niet bestaat en voor een periode die nog niet geboekt is hetzelfde geslaagde,
+   lege antwoord geeft, en dat een 404 die "probeer opnieuw" betekent daar tussendoor komt. Geen
+   van die drie is nul euro. De uitleg staat één keer onder de tabel in plaats van in twaalf
+   tooltips.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   GEEN FACTUURNUMMER, GEEN VERZENDDATUM, GEEN BETAALSTATUS
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §3.7 vraagt die kolommen en ze komen uit SnelStart. Er is geen SnelStart-koppeling (zie
+   docs/agent-portal/fase-4-haalbaarheid.md §1), dus die kolommen zouden altijd leeg zijn — en
+   een lege statuskolom leest als "niet verstuurd" in plaats van als "wij weten het niet". Ze
+   komen erbij zodra er iets is dat ze vult. *@
+
+<div class="stack">
+    <DataCard Grid="MonthColumns" Title="Door te belasten per maand">
+        <HeaderContent>
+            <a class="btn btn--small" href="@BillingText.YearPath(View.CustomerId, View.Year - 1)"
+               title="@($"de maanden van {View.Year - 1}")"><span class="mono" aria-hidden="true">←</span>@(View.Year - 1)</a>
+            @if (View.Year < ThisYear)
+            {
+                <a class="btn btn--small" href="@BillingText.YearPath(View.CustomerId, View.Year + 1)"
+                   title="@($"de maanden van {View.Year + 1}")">@(View.Year + 1)<span class="mono" aria-hidden="true">→</span></a>
+            }
+        </HeaderContent>
+        <ChildContent>
+            <DataRowHeader />
+
+            @if (View.Months.Count == 0)
+            {
+                <p class="table-empty">@EmptyMonths</p>
+            }
+            else
+            {
+                @foreach (var month in View.Months)
+                {
+                    <DataRow @key="month.Month" title="@RowTitle(month)">
+                        <DataCell Truncate="true">
+                            <span>
+                                @month.MonthLabel
+                                @if (month.IsRunningMonth)
+                                {
+                                    @* §3.7: de lopende maand staat bovenaan als concept. Als tekst
+                                       en niet als kleur — §1 verbiedt kleur als enige drager, en
+                                       een statuskleur zou hier bovendien een
+                                       gezondheidsvocabulaire gebruiken voor iets wat geen storing
+                                       is. *@
+                                    <span class="mono-meta">· loopt nog</span>
+                                }
+                            </span>
+                            @if (month.TotalNotice is { } notice)
+                            {
+                                @* De reden onder de maandnaam en niet in een tooltip. Een ontbrekend
+                                   totaal is de enige vraag die een klant bij dit scherm heeft, en
+                                   een tooltip is daar geen antwoord op — niet op een aanraakscherm
+                                   en niet in een schermlezer. Dezelfde plek als de meta-regel onder
+                                   een omschrijving op de urenspecificatie. *@
+                                <span class="mono-meta">@notice</span>
+                            }
+                        </DataCell>
+                        <DataCell Class="num">@BillingText.Amount(month.AzureCharged)</DataCell>
+                        <DataCell Class="num">@HourText.Hours(month.OverBundleHours)</DataCell>
+                        <DataCell Class="num" title="@BillingText.HoursSum(month.OverBundleHours, HourlyRateOf(month))">
+                            @BillingText.Amount(month.HoursAmount)
+                        </DataCell>
+                        <DataCell Class="num">@BillingText.Amount(month.Total)</DataCell>
+                    </DataRow>
+
+                    @if (month.TotalNotice is { } notice)
+                    {
+                        @* De reden onder de rij en niet in een tooltip. Een ontbrekend totaal is de
+                           enige vraag die een klant bij dit scherm heeft, en een tooltip is geen
+                           antwoord op een aanraakscherm. *@
+                        <DataRow @key="@($"{month.Month}-uitleg")">
+                            <DataCell Label="" Class="span-all">
+                                <span class="mono-meta">@month.MonthLabel · @notice</span>
+                            </DataCell>
+                        </DataRow>
+                    }
+                }
+
+                <DataRow Total="true">
+                    <DataCell Truncate="true">Jaartotaal @View.Year</DataCell>
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Label="" />
+                    <DataCell Class="num" title="@YearTotalTitle">@BillingText.Amount(View.YearTotal)</DataCell>
+                </DataRow>
+            }
+        </ChildContent>
+    </DataCard>
+
+    <p class="meta notice">@View.UnknownNotice</p>
+    <p class="meta notice">@BillingNotice.RunningMonth</p>
+    <p class="meta notice">@View.ReadOnlyNotice</p>
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomsporen: maand, Azure, uren boven bundel, wat die uren kosten, totaal (§3.7).
+    /// </summary>
+    /// <remarks>
+    /// Vijf kolommen. De operatorvariant heeft er acht — daar komen het subtotaal, de opslag en de
+    /// toestand van de meting bij — en dat is de reden dat er twee <see cref="RowGrid"/>'s zijn en
+    /// niet één met verborgen kolommen. Een verborgen kolom is een filter, en §2 vraagt hier een
+    /// typeverschil: dit component heeft geen waarde om in zo'n kolom te zetten, en dat hoort ook
+    /// uit zijn kolomdefinitie te blijken.
+    /// </remarks>
+    private static readonly RowGrid MonthColumns = new(
+        new GridColumn("Maand", "minmax(0, 1fr)", Labelled: false),
+        new GridColumn("Azure", "120px", Align: CellAlign.End),
+        new GridColumn("Boven bundel", "110px", Align: CellAlign.End),
+        new GridColumn("Uren", "120px", Align: CellAlign.End),
+        new GridColumn("Totaal", "120px", Align: CellAlign.End));
+
+    private const string EmptyMonths =
+        "Voor dit jaar is er nog niets te factureren. Dat gebeurt als het contract later ingaat dan "
+        + "het jaar dat je bekijkt.";
+
+    private const string NoYearTotal =
+        "Er is geen jaartotaal zolang één maand nog geen bedrag heeft. Een jaartotaal waarin een "
+        + "maand ontbreekt is niet van een compleet jaartotaal te onderscheiden en het is lager.";
+
+    /// <summary>De facturatieweergave van de klant.</summary>
+    /// <remarks>
+    /// Dit type is de afdwinging van §2; zie de toelichting bovenaan dit bestand.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public CustomerBillingView View { get; set; } = default!;
+
+    /// <summary>Het huidige jaar, in de Nederlandse dag.</summary>
+    private int ThisYear => TimeFormat.In(View.GeneratedAt).Year;
+
+    private string? YearTotalTitle => View.YearTotal is null ? NoYearTotal : null;
+
+    /// <summary>
+    /// Het uurtarief, voor de rekensom in de tooltip bij het uurbedrag.
+    /// </summary>
+    /// <remarks>
+    /// <para>Afgeleid uit de rij en niet uit het contract: <see cref="CustomerChargeRow"/> draagt het
+    /// tarief niet, en dat is met opzet zo gebleven — het tarief staat op de contractkaart en hoeft op
+    /// dit scherm niet nog een keer. Wat er wél moet is de som kunnen navertellen, en die is uit de
+    /// twee getallen op de rij terug te rekenen zodra er uren boven bundel zijn.</para>
+    ///
+    /// <para><c>null</c> zodra er geen uren of geen bedrag is, en dan is er geen tooltip in plaats van
+    /// een deling door nul. Dat laatste is geen theoretisch geval: een maand met nul uur boven bundel
+    /// heeft een bedrag van nul, en dat is precies de rij waarop de deling stukloopt.</para>
+    /// </remarks>
+    private static decimal? HourlyRateOf(CustomerChargeRow month) =>
+        month is { OverBundleHours: > 0m, HoursAmount: > 0m }
+            ? month.HoursAmount!.Value / month.OverBundleHours!.Value
+            : null;
+
+    /// <summary>
+    /// De tooltip bij een maandrij: wanneer het verbruik is opgehaald (§3.7, "met tijdstip van ophalen").
+    /// </summary>
+    /// <remarks>
+    /// Per rij en niet één keer boven de tabel. Elke maand heeft zijn eigen laatste meting: een
+    /// afgesloten maand is één keer gemeten en verandert niet meer, de lopende maand is vannacht
+    /// gemeten. Eén tijdstip boven de tabel zou voor elke rij behalve één onwaar zijn.
+    /// </remarks>
+    private static string? RowTitle(CustomerChargeRow month) =>
+        month.MeasuredAt is { } moment
+            ? $"verbruik opgehaald op {TimeFormat.Absolute(moment)}"
+            : null;
+}

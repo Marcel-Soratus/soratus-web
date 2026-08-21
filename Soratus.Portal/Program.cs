@@ -8,6 +8,7 @@ using Microsoft.Identity.Web.UI;
 using Soratus.Portal.Api;
 using Soratus.Portal.Components;
 using Soratus.Portal.Data;
+using Soratus.Portal.Mail;
 using Soratus.Portal.Security;
 using Soratus.Portal.Views;
 
@@ -160,6 +161,57 @@ builder.Services.AddScoped<IPortalHoursStore, CosmosPortalHoursStore>();
 // urenregels én het contract — dat laatste voor precies één getal, de bundel, want een saldo bestaat
 // niet zonder bundel en de bundel staat in het contract.
 builder.Services.AddScoped<IHourViews, HourViews>();
+
+// De kostenopslag en de facturatieweergave. Eén registratie per interface en geen constructie met
+// een gedeelde instantie zoals bij PortalViews: beide implementaties zijn internal sealed en hangen
+// achter precies één interface, dus er is geen tweede interface die dezelfde instantie moet zien.
+//
+// Dit is niet uit te stellen tot na het scherm: /klant/{slug}/facturatie valt door zijn @page-route
+// automatisch onder de reflectietests die élke pagina renderen. Zonder deze twee regels bestaat de
+// pagina wél en valt hij dus onder dat vangnet, maar geeft hij een DI-fout in plaats van markup — en
+// dan is de melding "kan IBillingViews niet oplossen" in plaats van iets over facturatie.
+builder.Services.AddScoped<IPortalCostsStore, CosmosPortalCostsStore>();
+builder.Services.AddScoped<IBillingViews, BillingViews>();
+
+// ── Maandoverzicht per mail (§3.7) ────────────────────────────────────────────────────────────
+// De mailinstellingen mogen leeg zijn en er staat géén ValidateOnStart op, om dezelfde reden als bij
+// PortalDataOptions: een ontbrekende endpoint is een inrichtingsfout, en een inrichtingsfout die het
+// opstarten tegenhoudt neemt /healthz mee en rolt daarmee de uitrol terug. Het scherm meldt het.
+builder.Services.AddOptions<PortalMailOptions>()
+    .Bind(builder.Configuration.GetSection(PortalMailOptions.SectionName))
+    .ValidateDataAnnotations();
+
+// De verzender is singleton en houdt geen staat vast; hij maakt zijn EmailClient per verzending. Hij
+// leunt op de TokenCredential die hierboven al staat — dezelfde managed identity als voor Cosmos, met
+// een custom role op de Communication Service en niet Contributor: die geeft ListKeys erbij en is dan
+// machtiger dan het geheim dat we juist wilden vermijden.
+builder.Services.AddSingleton<IStatementMailSender, AcsStatementMailSender>();
+
+// De verzendbevestigingen staan in de container customers, naast klant, contract en urenregels.
+// Scoped, net als IPortalHoursStore en om dezelfde reden: geen hosted service heeft hem nodig, en dan
+// is scoped de standaard.
+builder.Services.AddScoped<IStatementStore, CosmosStatementStore>();
+builder.Services.AddScoped<IStatementViews, StatementViews>();
+
+// Deze twee regels komen en gaan samen, en dat is geen stijlvoorkeur.
+//
+// MonthlyStatementService hangt aan IMonthlyStatementFigures. Staat de dienst er zonder de naad, dan
+// start het portaal niet: ValidateOnBuild staat in Development aan, dus een onvervulbare AddScoped
+// maakt WebApplicationBuilder.Build() onmogelijk. Gemeten toen dat gebeurde: het nam alle 26 tests
+// van het urenendpoint mee, met een melding die naar dit bestand wees en niet naar de mailkant.
+//
+// Staat de naad er zonder de dienst, dan is er een bedragenbron waar niets langskomt. Er is een test
+// die op precies die twee gebroken tussenstanden rood wordt en op beide eindstanden groen blijft.
+//
+// Er lag een tussenoplossing klaar — een plaatshouder achter de naad, zodat het portaal zou starten
+// tot de echte implementatie er was. Afgewezen, en de reden is het bewaren waard: die plaatshouder
+// antwoordt "niets gemeten", en dat is niet te onderscheiden van een echte "niets gemeten". Verdwijnt
+// de echte registratie ooit bij een hernoeming of een merge, dan start de app gewoon door en wordt er
+// stil nooit gemaild, met een reden die op het operatorscherm plausibel oogt. Een storing die zich
+// voordoet als werkende functionaliteit — en een test die controleert of de container volledig is,
+// zou er groen op staan. Zie punt 29.11.
+builder.Services.AddScoped<IMonthlyStatementFigures, BillingStatementFigures>();
+builder.Services.AddScoped<MonthlyStatementService>();
 
 // ── Blazor ───────────────────────────────────────────────────────────────────────────────────
 // Static SSR is de standaard. InteractiveServer is alleen beschikbaar als render mode voor de

@@ -230,6 +230,24 @@ Twee dingen die de acceptatie van §7 niet halen en die dus een tekstwijziging i
 **gefactureerd** — en de betaaldatum bestaat er niet, alleen `openstaandSaldo`. De echte datum kost
 `boekhouden:read` op het hele grootboek voor één veld.
 
+## Drie manieren waarop een meting vandaag loog
+
+Alle drie gebeurd, alle drie kostten werk. Ze staan hier omdat ze niets met de code te maken
+hebben en dus in geen enkele test te vangen zijn.
+
+- **`dotnet test --no-build` ná het bouwen van één project meet tegen een oude assembly.** Dat
+  heeft een correcte wijziging gekost: de reparatie werd teruggedraaid omdat de testrun hem niet
+  zag. Bouw de solution, of laat `--no-build` weg.
+- **`MSB3061 — the file is locked by: testhost`** komt van een testrun die tegelijk loopt en
+  `bin/` vasthoudt. Dat verschijnt als waarschuwingen op een build waar er geen zijn: eerst
+  twaalf, dan tien, dan drie, dan nul. Wie dat naast een nul-waarschuwingen-eis ziet gaat code
+  repareren die niets mankeert. Meet opnieuw als er niets meer vergrendeld is.
+- **Filter niet op één waarschuwingscode.** Dat leverde bij de documentatiecontrole drie keer een
+  ander getal voor hetzelfde probleem op: eerst vier, toen twaalf, uiteindelijk één. En een dode
+  cref náást een compilatiefout is een **gevolg** en geen oorzaak — de crefresolutie valt om zodra
+  het project niet compileert. Wie hem dan "repareert" haalt een goede verwijzing weg. Eerst de
+  compilatiefout, dan opnieuw meten, dán een cref aanraken.
+
 ## Eén valkuil om te onthouden
 
 De rolclaim uit Entra komt **gemapt** binnen, als

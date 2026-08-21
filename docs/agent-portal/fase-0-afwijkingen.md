@@ -1374,6 +1374,895 @@ regel wegschreef, naast `by` voor de mens die het werk deed"* — en §3.6 toont
 kolom (`Portaal · MCP/Claude Code · Azure DevOps`). Met "Claude Code" in `by` staat de koppeling in drie
 velden en de mens in geen enkel. `createdBy` is daarom `soratus-uren`.
 
+## 29. Het maandoverzicht per mail: de bevestiging is een feit met drie standen, en de claim gaat vóór de mail
+
+**Spec:** §3.7, laatste regel — *"Maandoverzicht mailen naar de contactpersoon, met
+verzendbevestiging."* Eén regel, en er zit meer in dan er staat. §5 noemt SendGrid; de werkelijkheid
+is Azure Communication Services (`docs/agent-portal/fase-4-haalbaarheid.md` §3, gemeten). Dat is de
+kleinste van de afwijkingen hieronder.
+
+De code staat in `Soratus.Portal/Mail/`. Er is niets gewijzigd in `Data/`, `Views/` of `Api/`.
+
+### 29.1 Versturen is een handeling met gevolgen buiten ons systeem
+
+Elk ander schrijfpad in dit portaal is terug te draaien: een urenregel is te corrigeren, een
+contractveld te overschrijven, een toegang in te trekken. Een mail niet. Dat verandert welke fout de
+duurste is, en daarmee de ordening van het ontwerp.
+
+Drie gevallen, en ze hebben elk een eigen antwoord.
+
+**Een dubbele verzending.** De verzendbevestiging is één document per klant per maand, met een
+**afgeleide sleutel**: `statement-2026-08`, op de partitiesleutel van de klant. Hij wordt met
+`CreateItemAsync` geschreven — geen upsert — **vóórdat** er een verbinding met Communication Services
+wordt opgezet. Een tweede poging levert daarmee een `409` op bij Cosmos en niet een tweede mail. Dat
+is dezelfde eigenschap en dezelfde reden als bij `PortalDocumentIds.HourEntry` ("een dubbel
+weggeschreven regel is een dubbel gefactureerd uur"), en §6 van het haalbaarheidsrapport schrijft
+precies deze volgorde voor bij de conceptfactuur: *"Stap 1 vóór stap 3. Nooit andersom, want dat is
+precies de volgorde waarin een dubbele factuur ontstaat."*
+
+Wat de claim kost, eerlijk: valt het proces om tussen de claim en het bevestigen, dan staat er een
+bevestiging op *onbekend* terwijl er misschien niets is verstuurd. Dat is de goede kant om fout te
+zitten. De andere volgorde — eerst versturen, dan vastleggen — laat bij dezelfde storing een
+verstuurde mail zonder enig spoor achter, en dan verstuurt de volgende poging er een tweede.
+
+**Een mislukking halverwege.** Elke reden om níet te versturen staat vóór de claim: geen afgesloten
+maand, mailen niet ingericht, geen meting, een onbekend bedrag, een onvolledige meting, geen
+contactpersoon, een onbruikbaar adres. Een weigering laat daarom **geen document** achter. Er staat
+een test op dat drie verschillende weigeringen alle drie een lege partitie achterlaten, want een
+halve bevestiging is later niet van een halve verzending te onderscheiden.
+
+**Een uitkomst waarvan onbekend is of hij is aangekomen.** Dat is §29.2.
+
+### 29.2 Verzonden / niet verzonden / onbekend — drie standen, en met opzet geen `bool`
+
+Dit is in dit portaal de vierde keer dezelfde afweging: `Views.AccessEntraState` (drie standen voor
+de Entra-toegang), punt 2 (geen document betekent geen status), punt 15 (een contractbedrag dat
+ontbreekt is niet nul) en `recorded` in `mcp-uren.md`. `StatementSendState` heeft daarom drie waarden.
+
+| Stand | Betekenis | Wat er dan mag |
+|---|---|---|
+| `unknown` | Niet vast te stellen of het bericht is aangenomen | **niets.** Zie hieronder |
+| `sent` | Communication Services heeft het bericht aangenomen | niets. Klaar |
+| `notSent` | Er is zeker niets verstuurd | opnieuw versturen mag |
+
+En de vierde toestand is de **afwezigheid van het document**: er is nooit een poging gedaan. Er is
+daarom geen enumwaarde `NotAttempted`. Zou die bestaan, dan kan er een document met die waarde staan
+zonder dat er iets is gebeurd, en dan is de afwezigheid van het document geen antwoord meer op
+dezelfde vraag. Dat is punt 2, letterlijk.
+
+**`unknown` is de eerste waarde van de enum, en dat is geen alfabet.** De standaardwaarde van een
+niet-gezette enum hoort de veilige te zijn. Stond `sent` op nul, dan zou een document met een leeg of
+onleesbaar `state`-veld lezen als "verstuurd" — en dan krijgt een klant zijn overzicht nooit en weet
+niemand het.
+
+**Er is geen stand die zegt "de verzending loopt nu".** Dat lijkt informatie die je wilt hebben en het
+is precies de verkeerde: het verschil tussen "loopt nog" en "onbekend" is alleen door de tijd te
+bepalen, en een proces dat halverwege omvalt laat "loopt nog" staan. Dan staat er een toestand die
+zegt dat er iemand aan het werk is terwijl er niemand is. De claim staat dus meteen op `unknown`.
+
+**Uit `unknown` komt het portaal alleen langs een mens.** `IStatementStore.ReleaseAsync` vraagt een
+verplichte vaststelling van minstens tien tekens — *"gebeld met de contactpersoon, niets ontvangen"* —
+en zet de stand daarna op `notSent`. Pas dan mag er opnieuw. Dezelfde vorm als de toestand `abandoned`
+in §6 van het haalbaarheidsrapport, en om dezelfde reden: er is geen programma dat kan vaststellen of
+een mail is aangekomen. Communication Services weet het niet, wij hebben geen leesrecht op de postbus
+van de klant, en een tweede mail sturen om het te vragen is precies wat we wilden vermijden.
+
+Het aantal pogingen staat als getal op het document en de vaststelling blijft staan na een tweede
+verzending. Dat een klant twee overzichten over dezelfde maand heeft gekregen hoort op het scherm te
+staan en niet uit tijdstempels te reconstrueren te zijn.
+
+**"Verstuurd" en niet "Afgeleverd".** Aangenomen door Communication Services is niet in de inbox van
+de klant: een spamfilter, een volle postbus of een geweigerde ontvanger komt daarna. Het scherm zegt
+dat er ook bij. Dezelfde correctie die §7 van het haalbaarheidsrapport op de factuurstatus maakt —
+"Gefactureerd" in plaats van "Verzonden" — want een label boven een gegeven dat iets anders betekent
+is een onwaarheid met een tijdstempel eronder.
+
+### 29.3 Waar een 4xx en een 5xx uit elkaar gaan, en waarom dat de hele beslissing is
+
+De verzender kent drie uitkomsten en de indeling zit in twee `catch`-blokken.
+
+| Wat er gebeurt | Uitkomst | Stand |
+|---|---|---|
+| `SendAsync` komt terug met een operatie-id | `Accepted` | `sent` |
+| `RequestFailedException` met status **400–499** | `Refused` | `notSent` |
+| Al het andere: `5xx`, tijdslimiet, verbroken verbinding, annulering | `Unknown` | `unknown` |
+
+De 4xx-tak is de enige waarin "er is zeker niets verstuurd" waar is, en daarom de enige die
+`notSent` mag zetten. **Een `429` hoort daar ook bij**: throttling betekent "niet aangenomen" en niet
+"misschien wel".
+
+`OperationCanceledException` wordt bewust als *onbekend* gelezen en niet doorgegooid. Dat is tegen de
+gewoonte in en het is hier de juiste keuze: de annulering komt van een afgebroken HTTP-verzoek — een
+operator die zijn tabblad sluit — en op dat moment kan het bericht al de deur uit zijn. Doorgooien
+zou de claim op `unknown` laten staan zonder dat er iets wordt vastgelegd: dezelfde uitkomst met
+minder informatie.
+
+**Er zit nergens een herhaling in dit pad.** Geen `retry`, geen backoff, geen tweede poging bij een
+tijdslimiet. Dat is de vaste stelregel van dit project, en een dubbele mail naar een klant is erger
+dan een dag later mailen.
+
+### 29.4 Wat er in een mail kan sluipen dat er niet in hoort, en hoe het is gesloten
+
+Punt 13 en punt 14 gaan over deze klasse fout: tekst die door onze eigen systemen is geschreven en
+bij een klant belandt. Beide keren stond die tekst op een **scherm**, waar een operator hem nog kon
+zien. In een postbus staat hij definitief. Zeven paden, met de sluiting erbij.
+
+1. **Een stacktrace of een pad in een vrij tekstveld.** De klantnaam en de naam van de contactpersoon
+   zijn vrije tekst uit onze eigen administratie. Ze gaan door `MessageTruncation.Cut` uit
+   `Soratus.Agents.Contracts` — **dezelfde functie** die de agentbibliotheek en de klantprojectie van
+   de logregels gebruiken. Punt 13 zegt met zoveel woorden dat twee kopieën van die knip gaan
+   schuiven; dit is de derde aanroeper en niet de tweede definitie. Er is een test met het geval uit
+   punt 13 zelf: legitiem proza op de eerste regel, zestien regels stacktrace erachter.
+
+2. **Tekens die geen regelovergang zijn en toch een regel breken.** `Cut` knipt op `\n`, `\r\n` en
+   `\r`. Een tab, een verticale tab, NEL (U+0085), LINE SEPARATOR (U+2028) en PARAGRAPH SEPARATOR
+   (U+2029) overleven dat. Die worden apart verwijderd. **Dat is geen tweede definitie van "één
+   regel"**: waar de regel eindigt wordt nog steeds alleen door `Cut` bepaald; hier worden tekens
+   weggehaald die in géén enkele regel horen. En het is uitdrukkelijk geen verdediging tegen
+   kopinjectie — het onderwerp gaat als veld in een JSON-lichaam over HTTPS en niet als SMTP-kop, dus
+   er is geen kop om in te injecteren. Die reden staat er niet bij, want een reden die niet klopt
+   wordt later weggehaald en neemt de echte mee.
+
+3. **De omschrijving van een urenregel.** Dit is het grootste gat en het is met een ontwerpbesluit
+   gesloten in plaats van met een filter: **de urenspecificatie staat niet in de mail.** De
+   omschrijving van een urenregel is vrije tekst die door een koppeling kan zijn geschreven — de
+   MCP-server neemt hem letterlijk over uit een gesprek met een taalmodel (`mcp-uren.md`) — en de mail
+   is de enige plek waar zulke tekst buiten het bereik van een operator komt. Achter een aanmelding
+   staat hij op een scherm dat een mens kan lezen en corrigeren. De mail noemt de bedragen en verwijst
+   naar het portaal.
+
+4. **Een foutmelding van een dienstverlener.** `StatementSendResult` draagt géén meldingsveld, en
+   `StatementRefusal` en `StatementFigureGap` zijn **enums en geen strings**. Een reden die als tekst
+   reist komt uit een `catch`-blok. Een enum kan die tekst niet dragen. De melding gaat naar de
+   logregel met de `ErrorCode` en de status erbij; het scherm zegt dát het is geweigerd en waar de
+   reden staat. Er is een broncodetest die de twee opmaakbestanden afgaat op `Exception.Message`,
+   `StackTrace`, `ToString` en `ErrorCode`.
+
+5. **Operator-only gegevens uit §2.** Geen dienstuitsplitsing, geen opslagpercentage, geen resource
+   group, geen subscription. Dat is niet met een `@if` gesloten maar met het retourtype van de naad:
+   `MonthlyStatementFigures` heeft die velden niet. Er is een test die de mail afgaat op negen
+   verboden woorden, `opslag` en `%` daaronder.
+
+6. **De fiatteringsstroom.** De acceptatie van fase 3 is dat de klant er niets van ziet, en een mail
+   is de makkelijkste plek om die eis alsnog te breken — er kijkt niemand mee. Er staat een
+   typecontrole op de boom van `MonthlyStatementFigures`, `StatementMail` en `StatementAddressing` met
+   dezelfde woordenlijst als `UrencomponentTests` (`pending`, `approv`, `reject`, `etag`, `fiat`), en
+   een tekstcontrole op de opgemaakte mail.
+
+7. **Het e-mailadres van de één in de aanhef van de ander.** De aanhef krijgt alleen een naam bij
+   precies één ontvanger; bij twee staat er "Beste relatie,". En het adres is **niet** de terugvaloptie
+   als de naam ontbreekt — dat was de eerste opzet, en "Beste jan.bakker@example.nl," verraadt aan
+   iedereen die meeleest welk adres wij van deze persoon in onze administratie hebben staan.
+
+Wat er **niet** gesloten is, en dat hoort erbij te staan: de klantnaam en de naam van de
+contactpersoon blijven vrije tekst uit onze eigen administratie. Staat er een interne aanduiding in de
+eerste regel van een klantnaam, dan gaat die mee. Hetzelfde restrisico als bij `msg` (punt 13) en
+`errorMessage` (punt 14), en aan deze kant is er niets tegen te doen.
+
+### 29.5 De ontvanger komt uit de toegangsdocumenten, en dat maakt de twee aanduidingen voor het eerst ongelijk
+
+§3.7 zegt "mailen naar de contactpersoon" en §3.5 zet de contactpersoon op de contractkaart. Maar
+`ContractDocument.Contact` is een **naam** en geen adres. Het enige veld in dit portaal dat een
+e-mailadres van de klant bevat is `AccessDocument.Email`.
+
+De mail gaat dus naar de toegangsregels met de aanduiding **"Beheerder klant"**. En daarmee
+onderscheiden die twee aanduidingen voor het eerst iets van elkaar — `PortalAccessRoles` zegt met
+zoveel woorden dat ze *"precies hetzelfde mogen: lezen"*, en `ContractNotice.AccessLabelsAreEqual`
+zegt het aan de klant. **Dat blijft waar.** Dit gaat niet over recht maar over adressering: een
+"Lezer" mag meekijken en is niet degene die het maandoverzicht hoort te krijgen. Het staat hier omdat
+het de eerste barst is in een tekst die "beide aanduidingen geven hetzelfde leesrecht" belooft, en de
+volgende die dat leest hoort te weten dat er nu één plek is waar de keuze iets doet.
+
+**Eén onbruikbaar adres houdt de hele verzending tegen**, ook als er een goed adres naast staat. Dat
+is de duurdere van de twee keuzes en hij is de juiste: versturen naar wat wél klopt levert een
+bevestiging op die "verstuurd" zegt terwijl de persoon voor wie het overzicht bedoeld was niets heeft
+gekregen.
+
+De adrescontrole is **geen tweede adresvalidatie** — die staat bij het invoeren, in fase 2 — maar een
+smallere vraag: is deze tekst als één ontvanger van één bericht te gebruiken. Dat is niet overbodig:
+in de opslag staan documenten uit de configuratiemigratie, en een adres dat als tekst in een
+JSON-bestand stond is nooit door een veldcontrole gekomen. Geweigerd worden onder andere
+`Jan <jan@acme.nl>` en `jan@acme.nl, iemand@elders.nl` — als één adres opgeslagen is dat een tweede
+ontvanger die niemand heeft toegevoegd.
+
+### 29.6 De bedragen komen van elders, en de bevestiging legt vast wát er is gemaild
+
+De mailkant **rekent niets**. De Azure-kosten, de beheeropslag en de uren boven bundel komen uit
+`IMonthlyStatementFigures`, één naad met één smalle retourvorm. Er is een broncodetest die elke
+rekenkundige operator naast de naam van een bedrag in `Soratus.Portal/Mail/` afkeurt: een tweede plek
+die een bedrag berekent is een tweede plek die het anders kan berekenen, en dan kan de mail een ander
+bedrag noemen dan het scherm.
+
+Elk bedrag op die naad is `decimal?`, en **`null` betekent onbekend en nooit nul**. Is een bedrag
+onbekend, of zegt de kostenkant dat de meting nog niet volledig is, dan gaat er **geen mail**. Er
+staat geen "onbekend" en geen streepje in een maandoverzicht: op een factuurregel is € 0,00 geen lege
+waarde maar een verkeerd bedrag, en dat is niet te herstellen door te verversen. Regel 1 van §9 van
+het haalbaarheidsrapport, en punt 15.
+
+**Het belangrijkste veld op de bevestiging zijn de bedragen zelf.** Er staat niet alleen dát er is
+gemaild maar ook *wat*. Zonder die drie getallen is de enige manier om te weten wat de klant heeft
+gekregen: het opnieuw uitrekenen — en dat levert over een maand een ander getal op, want de
+kostenmeting is dan bijgewerkt, de bundel kan zijn gewijzigd en er kan een urencorrectie zijn
+geplaatst. Bij een factuurdiscussie is "wat stond er in de mail die u op 3 september kreeg" de vraag.
+
+Wat er níet op staat is de opgemaakte tekst van de mail. Die is uit de bedragen en de vorm te
+herleiden en zou anders twee keer bestaan. De onderwerpregel staat er wél in: dat is de enige tekst
+die de klant in zijn postbuslijst ziet en dus het enige waarop hij de mail terugvindt.
+
+### 29.7 Een maandoverzicht gaat over een afgesloten maand
+
+Er wordt geweigerd zodra de gevraagde maand de lopende of een toekomstige maand is, en die controle
+staat vóór alle andere — hij is de goedkoopste en leest niets. Een overzicht over een lopende maand
+noemt een bedrag dat morgen anders is.
+
+Een onleesbare maand (`augustus`, `08-2026`, `2026-13`) levert **dezelfde** weigering op. Dat is geen
+luiheid: in beide gevallen is er geen afgesloten maand om een overzicht van te maken, en een aparte
+melding voor "dit is geen maand" zou een operator iets vertellen over de adresbalk in plaats van over
+zijn klant. De maandgrens loopt over de Nederlandse zone (`PortalTimeZone.Display`) en via
+`HourMonths.Of`, dezelfde grens als het urenscherm — zouden die twee verschillen, dan is op 1 augustus
+tussen middernacht en twee uur in de nacht juli op het ene scherm afgesloten en op het andere niet.
+
+### 29.8 De proefdraaimodus staat standaard aan, en legt niets vast
+
+`PortalMail:DryRun` is `true` als er niets is geconfigureerd. **De onveilige stand hoort iets te zijn
+dat iemand aanzet en niet iets dat je vergeet uit te zetten.** Dezelfde vorm als
+`SORATUS_UREN__DROOGLOOP` in de MCP-server, met dit verschil dat het daar de uitzondering is en hier
+de standaard: een urenregel is te corrigeren en een verzonden mail niet.
+
+Twee eigenschappen ervan zijn opzet:
+
+- **Een proefdraai legt niets vast.** Hij staat vóór de claim. Zou hij een document achterlaten, dan
+  staat er een bevestiging bij een mail die nooit is verstuurd — precies de stille onwaarheid met een
+  tijdstempel eronder die dit portaal elders al drie keer heeft afgewezen.
+- **De getoonde mail is letterlijk de mail die zou zijn verstuurd.** Geen markering in de tekst, geen
+  aanpassing. Een proefdraai die iets anders toont dan hij zou versturen, bewijst niets. De markering
+  staat op het scherm eromheen, bovenaan en niet onderaan: een operator die denkt dat hij heeft
+  gemaild terwijl er niets is verstuurd, is de gevaarlijkste van de twee vergissingen.
+
+### 29.9 De verzendbevestiging heeft geen klantvorm, en dat is het typeverschil
+
+Bij het contract- en het urenscherm zijn er twee overloads — een klantscope levert het klanttype, een
+schrijfrecht het operatortype. Hier is er **één**, en er is geen klantvariant van het viewmodel en
+geen klantvariant van het component. Een verzendbevestiging draagt de adressen waarop wij de klant
+hebben gemaild, de onderwerpregel, het aantal pogingen en de vaststelling van een operator over een
+mislukte verzending. Dat is allemaal Soratus-werk.
+
+`MonthlyStatementCard.razor` neemt daarom precies één parameter: een `CustomerWriteScope`. Dat type is
+door een klantgebruiker niet te produceren — de constructor is `internal` en alleen
+`CustomerScopeResolver.ResolveWriteAsync` levert hem — dus er is geen klantpagina die dit component
+kan renderen, ook niet per ongeluk. Er staat een reflectietest op dat dit de enige parameter is en een
+broncodetest dat er geen rolvoorwaarde in de markup staat.
+
+**De twee queryparameters doen niets, en dat is gemeten.** De kaart kent `?jaar=` en
+`?vaststellen=jjjj-MM`. Die tweede is een werkwoord in een `GET`, en dat is een vorm die aandacht
+verdient: een `GET` is aan te roepen door een link in een mail, door een prefetch van een browser, door
+een linkchecker, door een spamfilter dat elke URL in een bericht opent, en door een tabblad dat na een
+herstart zijn adressen opnieuw bezoekt. Bij een gewoon scherm is dat hinderlijk. Hier zou het de deur
+openzetten naar een tweede maandoverzicht, want *vaststellen dat er niets is aangekomen* is precies de
+handeling die opnieuw versturen toestaat.
+
+`?vaststellen=` is daarom uitsluitend een **keuze in het scherm**: hij bepaalt vóór welke maand het
+formulier wordt opgemaakt, en verder niets. De vaststelling zelf is de `POST` van dat formulier. Dat
+staat niet als afspraak maar als meting — `GetdoetnietsTests` rendert vier adressen en toetst daarna
+dat het document nog op precies dezelfde stand staat, zonder vaststelling, zonder extra poging, met
+dezelfde etag, en dat er niets is verstuurd en niets is geclaimd. Een mutatie die de vaststelling wél
+in `OnInitializedAsync` zet, maakt twee van die tests rood; een mutatie die er een verzending van maakt
+één.
+
+Twee dingen die daarbij níet zijn gemeten en die als zodanig horen te staan. bUnit rendert een
+`EditForm` als `<form blazor:onsubmit="1">` en niet als `<form method="post">` met een
+antiforgery-token — dat is de renderer van bUnit en niet die van static SSR. Dát de `POST` een `POST`
+met een token is, volgt hier dus uit de vorm (`EditForm` met een `FormName`, dezelfde vorm als de drie
+formulieren op het urenscherm) en niet uit een meting. Die meting kan pas als deze kaart op een pagina
+met een route staat en er een echte host omheen kan.
+
+Eén afwijking van het urenscherm, met de reden: **na een verzendpoging volgt géén redirect.** Op het
+urenscherm is die nodig omdat een verversing een tweede urenregel oplevert. Hier levert een verversing
+een tweede POST op die door de claim wordt tegengehouden, en de operator ziet "dit overzicht is al
+verstuurd" in plaats van dat er een tweede mail uitgaat. Dat is hier de sterkere van de twee: een
+redirect helpt niet tegen twee operators die tegelijk op de knop drukken, en een `409` wel.
+
+### 29.10 De rol in Azure: een custom role, en niet `Contributor`
+
+Gemeten in de resource provider (haalbaarheidsrapport §3): mail versturen met een managed identity
+vraagt `Microsoft.Communication/CommunicationServices/Read` en `.../Write`, en dat zijn
+**control-plane**-acties. Microsofts eigen voorbeeld noemt daarvoor `Contributor`. Die rol geeft er
+`ListKeys/action` bij — dus het recht om de connection string op te halen — en `Delete`. **Dan heb je
+een identity die machtiger is dan het geheim dat je met de identity wilde vermijden.** Dat is precies
+het patroon waarom het portaal ook geen brede Graph-rechten krijgt (punt 28, en `AccessDocument`).
+
+De ingebouwde rol `Communication and Email Service Owner` is beheerrecht en niet wat we zoeken.
+
+**Eén grens die niet klopt, en die hoort benoemd te worden.** Het `AssignableScopes` hieronder staat
+op `rg-soratus-prod`, dus de rol is alleen daar toe te wijzen. Maar `az role definition create` zelf
+is een schrijfactie op **abonnementsniveau** (`Microsoft.Authorization/roleDefinitions/write`): een
+roldefinitie leeft in het abonnement en niet in een resource group. De afspraak "schrijfrechten alleen
+in `rg-soratus-prod` en `MBV`" wordt door stap 1 dus overschreden, en er is geen versie van dit
+commando die dat niet doet. Dat is een besluit voor Marcel en geen implementatiedetail.
+
+#### Het blok
+
+Uitvoeren door Marcel, in Git Bash. Per commando één regel over wat het doet en wat de verwachte
+uitvoer is.
+
+```bash
+# ── 0. Voorbereiding ─────────────────────────────────────────────────────────────────────────
+# MSYS verbouwt op Windows argumenten die op een pad lijken, en een resource-id is er één.
+export MSYS_NO_PATHCONV=1
+
+# Het abonnement waarin rg-soratus-prod staat. Verwacht: één guid.
+SUB=$(az account show --query id -o tsv) && echo "$SUB"
+```
+
+```bash
+# ── 1. De roldefinitie ───────────────────────────────────────────────────────────────────────
+# Twee acties en niets meer: geen ListKeys, geen RegenerateKey, geen Delete. De payload staat in
+# een bestand en niet inline — inline JSON met quoting is in Git Bash in dit project al eerder
+# stukgelopen (zie punt 28 en mcp-uren.md stap 4).
+cat > /tmp/acs-verzender.json <<JSONEINDE
+{
+  "Name": "ACS Email Sender (Soratus portaal)",
+  "IsCustom": true,
+  "Description": "Lezen en schrijven op een Communication Services-resource: precies genoeg om mail te versturen met een managed identity. Geen ListKeys, dus geen weg naar de connection string.",
+  "Actions": [
+    "Microsoft.Communication/CommunicationServices/Read",
+    "Microsoft.Communication/CommunicationServices/Write"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": [
+    "/subscriptions/$SUB/resourceGroups/rg-soratus-prod"
+  ]
+}
+JSONEINDE
+
+# Verwacht: een object met roleName "ACS Email Sender (Soratus portaal)" en een guid als id.
+# Staat er "RoleDefinitionWithSameNameExists", dan is dit al gedaan; ga door naar stap 2.
+az role definition create --role-definition @/tmp/acs-verzender.json \
+  --query "{naam:roleName, id:name, bereik:assignableScopes}"
+```
+
+Let op: hier staat `<<JSONEINDE` **zonder** aanhalingstekens, want `$SUB` moet door de shell worden
+ingevuld. Dat is het omgekeerde van het blok in punt 28, waar de aanhalingstekens er juist wél om
+stonden om invulling te voorkomen. Het verschil is opzet en het is de reden dat er in dit bestand geen
+`$`-teken in de JSON staat behalve die ene.
+
+```bash
+# ── 2. Het principal-id van de portaal-identity ──────────────────────────────────────────────
+# Verwacht: één guid. Dit is het object-id van de managed identity en NIET het client-id.
+PRINCIPAL=$(az identity show \
+  --name id-soratus-portal \
+  --resource-group rg-soratus-prod \
+  --query principalId -o tsv) && echo "$PRINCIPAL"
+
+# Staat de identity in een andere resource group, dan levert het commando hierboven een
+# ResourceNotFound. Zoek hem dan op — verwacht: één regel met naam, groep en principalId.
+az identity list \
+  --query "[?name=='id-soratus-portal'].{naam:name, rg:resourceGroup, principal:principalId}" -o table
+```
+
+```bash
+# ── 3. Het resource-id van het communicatieaccount ───────────────────────────────────────────
+# Via `az resource show` en niet via `az communication show`: dat tweede vraagt de
+# communication-extensie, en een extensie installeren is een wijziging op de machine van de
+# uitvoerder. Verwacht: één resource-id dat eindigt op /acs-soratus-prod.
+ACS=$(az resource show \
+  --name acs-soratus-prod \
+  --resource-group rg-soratus-prod \
+  --resource-type Microsoft.Communication/CommunicationServices \
+  --query id -o tsv) && echo "$ACS"
+```
+
+```bash
+# ── 4. De roltoewijzing ──────────────────────────────────────────────────────────────────────
+# --assignee-object-id met --assignee-principal-type en NIET --assignee: dat laatste doet een
+# Graph-opzoeking en faalt bij een verse identity met "Cannot find user or service principal in
+# graph database" — een replicatievertraging die eruitziet als een rechtenfout.
+#
+# Het bereik is de ACS-resource en niet de resource group: het portaal hoort niet bij alles in
+# rg-soratus-prod te kunnen.
+#
+# Verwacht: een object met de rolnaam en het bereik. Bij een tweede keer "RoleAssignmentExists";
+# dat is geen fout.
+az role assignment create \
+  --assignee-object-id "$PRINCIPAL" \
+  --assignee-principal-type ServicePrincipal \
+  --role "ACS Email Sender (Soratus portaal)" \
+  --scope "$ACS" \
+  --query "{rol:roleDefinitionName, bereik:scope}"
+```
+
+```bash
+# ── 5. Nakijken ──────────────────────────────────────────────────────────────────────────────
+# Verwacht: vier regels. De drie uit het haalbaarheidsrapport B5 (Key Vault Secrets User op
+# kv-soratus-prod, Cost Management Reader en Reader op de resource group MBV) plus de nieuwe op
+# acs-soratus-prod. Staat "ACS Email Sender" er niet bij, dan is stap 4 niet aangekomen.
+az role assignment list --assignee "$PRINCIPAL" --all \
+  --query "[].{rol:roleDefinitionName, bereik:scope}" -o table
+
+# Opruimen. Er staat geen geheim in, wel de abonnementsstructuur.
+rm /tmp/acs-verzender.json
+```
+
+**Wat er daarna nog in configuratie moet, en dat is geen `az`-werk in dit blok:** de vijf sleutels van
+de sectie `PortalMail` op `app-soratus-prod`.
+
+```
+PortalMail__Endpoint        https://acs-soratus-prod.europe.communication.azure.com/
+PortalMail__FromAddress     DoNotReply@soratus.com
+PortalMail__ReplyToAddress  hallo@soratus.com
+PortalMail__DryRun          true      ← pas op false zetten ná de eerste proefdraai
+PortalMail__PortalBaseUri   https://portal.soratus.com
+```
+
+Geen van de vijf is een geheim, dus ze kunnen als gewone app-setting. `DryRun` hoort op `true` te
+blijven tot er één keer met eigen ogen is bekeken wat er zou zijn verstuurd. De endpoint hierboven is
+de vorm die ACS voor `dataLocation: europe` uitgeeft; controleer hem tegen stap 3 in plaats van hem
+over te typen.
+
+**Het afzenderadres blijft `DoNotReply@soratus.com`**, want dat is het enige geverifieerde adres en
+een tweede toevoegen kan pas ná een quotaverhoging (haalbaarheidsrapport §3). Daarom is er een
+`Reply-To`: een maandoverzicht waarop je niet kunt antwoorden stuurt de klant naar de telefoon.
+
+### 29.11 Wat er níet is: een plaatshouder voor de bedragenbron
+
+De naad `IMonthlyStatementFigures` wordt door de kostenkant geïmplementeerd. Zolang die er niet is, is
+`MonthlyStatementService` niet te registreren — en dat is **geen luie fout die pas bij de eerste
+aanroep opvalt**. In Development staat `ValidateOnBuild` aan op de DI-container, dus een onvervulbare
+`AddScoped` maakt `WebApplicationBuilder.Build()` onmogelijk en start het portaal niet.
+
+Gemeten, en het was duurder dan het klinkt: het nam **alle 26 tests van het urenendpoint** mee, want
+die starten via `WebApplicationFactory<Program>` het echte portaal. De melding wees naar
+`Program.cs` en naar het urenendpoint, en niet naar de mailkant — dus de sessie die de fout in beeld
+kreeg was niet de sessie die hem had gemaakt.
+
+Er lag een plaatshouder klaar: een implementatie die `null` teruggeeft ("over deze maand is niets
+gemeten"), geregistreerd vóór de echte, zodat de laatste registratie wint zodra de kostenkant de hare
+neerzet. Hij werkt, hij faalt dicht — `null` levert `NoFigures` op, dus geen mail en geen document —
+en hij is **afgewezen**. Twee redenen, en de tweede is de beslissende.
+
+De eerste: hij leunt op registratievolgorde. `Program.cs` legt twintig regels hoger bij
+`PostConfigure` juist uit waarom dit portaal dat vermijdt — dan hangt gedrag af van de volgorde
+waarin iemand regels neerzet.
+
+De tweede weegt zwaarder. **Die plaatshouder antwoordt "niets gemeten", en dat is niet te
+onderscheiden van een echte "niets gemeten".** Verdwijnt de echte registratie ooit — een hernoeming,
+een merge, iemand die opruimt — dan start de app gewoon door en wordt er stil nooit gemaild, met een
+reden die op het operatorscherm plausibel oogt. Dat is een storing die zich voordoet als werkende
+functionaliteit, en dat is precies de klasse fout die dit portaal elders overal dichtzet: de
+MCP-server die geen Cosmos-verbinding krijgt (ook niet als afgeschermde optie voor later), het portaal
+dat geen Graph-schrijfrecht krijgt, de toegangsdocumenten die in de Soratus-eigen opslag staan en niet
+in die van de klant.
+
+En het scherpste eraan: **een test die controleert of de container volledig is, zou op die
+plaatshouder groen staan.** Hij maakt de plaatshouder niet alleen een tijdelijk gemak maar een blinde
+vlek in de meting die ernaast is gebouwd.
+
+Wat er in plaats daarvan staat: de vier registraties die op zichzelf staan
+(`IStatementMailSender`, `IStatementStore`, `IStatementViews` en de opties), de vijfde als commentaar
+op de plek waar hij hoort met de reden erbij, en **drie tests op de registratie zelf** in
+`RegistratieTests`:
+
+| Test | Wat hij vastlegt |
+|---|---|
+| `DeDrieOnderdelenDieAltijdMoetenStaanStaanEr` | de drie die niet aan de naad hangen |
+| `DeNaadEnDeDienstZijnAllesOfNiets` | de duurzame regel: samen komen en samen gaan. Groen in beide eindstanden, rood in de gebroken tussenstand |
+| `ZolangDeNaadOntbreektIsDeMailkantNietAangesloten` | de tripwire. **Staat rood tot de naad landt**, en dat is opzet |
+
+Die laatste is een bewust rode test en geen storing. De onafheid van fase 4a is daarmee op precies één
+plek zichtbaar in plaats van nergens — en dat is wat een plaatshouder had weggenomen.
+
+**Waarom mijn eigen tests dit niet zagen, en dat is de les.** De tests van het verzendpad bouwen
+`MonthlyStatementService` met de hand op, met drie testdubbels. Dat is opzet: wat er in die klasse te
+meten valt is de volgorde claimen–versturen–vastleggen, en die meet je door de afhankelijkheden te
+vervangen en niet de klasse. Maar daarmee zagen ze de registratie nooit. Een testverzameling die elk
+onderdeel los uitoefent en de samenstelling niet, is blind voor precies deze klasse fout — en hier was
+de samenstelling het enige dat stuk was.
+
+**En één ding dat de kostenkant heeft rechtgezet.** `StatementFigureGap` had bij mij vijf waarden,
+waaronder `NoHourlyRate` en `NoSurcharge`. De adapter gooit met opzet weg *welk* contractveld
+ontbreekt, dus die twee waren onbereikbaar geworden — en een onbereikbare enumwaarde is in dit
+document al eerder een afwijkingspunt geweest. De enum is aan die kant gelijkgetrokken met wat er
+werkelijk aankomt. Niets in de mailkant schakelt op deze enum, dus dat kon zonder gevolgen: de
+weigeringen lopen over `StatementRefusal` en die is van deze kant.
+
+---
+
+## 30. Een geslaagd, leeg antwoord van Cost Management is niet nul — en dat is erger dan de 404
+
+**Gemeten op 21 augustus 2026**, `POST .../providers/Microsoft.CostManagement/query`,
+`api-version=2023-11-01`, ruim dertig aanroepen tegen `subscriptions/501a66d2-…` als `marcel@`.
+
+Het haalbaarheidsonderzoek (`docs/agent-portal/fase-4-haalbaarheid.md` §2) noemt als gevaarlijkste
+bevinding een **404** die "probeer opnieuw" betekent: `GtmDimensionDataProvider…returns null`, op een
+verzoek dat er vlak ervoor en vlak erna 200 op gaf. Dat is opnieuw gezien — tweemaal in ruim twintig
+aanroepen — en het klopt.
+
+Er is iets ergers, en het stond nog nergens opgeschreven.
+
+```
+POST .../resourceGroups/RG-BESTAAT-NIET-XYZ/providers/Microsoft.CostManagement/query
+→ HTTP 200
+  {"properties":{"nextLink":null,"columns":[…],"rows":[]}}
+
+POST .../resourceGroups/MBV/providers/Microsoft.CostManagement/query   (timeframe: alleen vandaag)
+→ HTTP 200
+  {"properties":{"nextLink":null,"columns":[…],"rows":[]}}
+```
+
+De eerste is een resource group die **niet bestaat**. De tweede is `MBV`, die élke dag € 1,88 kost,
+bevraagd over een periode die nog niet is geboekt. **Twee volstrekt verschillende werkelijkheden, één
+identiek geslaagd antwoord.** En daar komt de derde bij: een maand waarin werkelijk niets is verbruikt
+geeft hetzelfde.
+
+Waarom dit erger is dan de 404: **een 404 ziet uit als een storing en dit ziet uit als een antwoord.**
+Een normale client rendert er € 0,00 op, en dat is geen randgeval maar de gewone gang van zaken —
+tussen middernacht en ongeveer 08:00 UTC is er van de lopende dag nog niets geboekt, dus ook niet van
+de nieuwe maand. De `kosten-collector` uit §4 draait volgens het onderzoek dagelijks om 04:00. **Op de
+1e van de maand om 04:00 geeft een MonthToDate-query voor de nieuwe maand dus nul rijen, en een
+naïeve lezing daarvan is "deze klant kostte deze maand € 0,00".** Voor een klant met een typefout in
+zijn resource-groepnaam zou dat jaren zo blijven, zonder één rood lampje.
+
+### Het besluit: er is een subtotaal dan en slechts dan als er regels zijn
+
+`AzureCostReading.Subtotal` is `decimal?` en is de som van `Lines` — `null` zodra die lijst leeg is. Er
+is geen veld waarin een bedrag past dat niet uit regels komt. Dat is geen `if` maar een invariant, en
+het is dezelfde vorm als bij `HourBalance.Booked`, dat geen ander getal dan de som kán zijn.
+
+En de keerzijde is even belangrijk: **nul mét regels is een echte nul.** In de gemeten uitvoer staan
+`Bandwidth € 0,0000` en `Microsoft Entra € 0,0000` als gewone regels. Een maand die alleen zulke
+regels heeft, heeft een subtotaal van nul, en dát mag als `€ 0,00` op het scherm. Het verschil tussen
+een som die nul is en een som die niet bestaat is precies wat `decimal?` hier draagt en wat een
+`decimal` niet kan.
+
+`AzureCostState` heeft daarom **vier** waarden en niet twee:
+
+| | betekenis | handeling |
+|---|---|---|
+| `Unknown` | de lezing is niet gelukt, of er is nooit gemeten | opnieuw meten |
+| `NoLines` | de lezing is gelukt en gaf nul regels | **nakijken of we de juiste omgeving bevragen** |
+| `Partial` | er zijn bedragen, de maand is niet af | wachten |
+| `Measured` | volledig geboekt | factureren mag |
+
+Een `bool` "compleet ja/nee" kan het verschil tussen "de API zei niets" en "de API zei nul regels" niet
+dragen, en die twee vragen een verschillende handeling. Zelfde argument als bij de drie
+Entra-toestanden en bij de vierde urenstand (punt 19).
+
+### En de ambiguïteit die niet op te lossen is, staat op het scherm
+
+De code kan "niets verbruikt", "nog niet geboekt" en "verkeerde omgeving" niet uit elkaar halen. Dat is
+geen tekortkoming die met beter programmeren weggaat: het zijn drie oorzaken achter één identiek
+antwoord. Wat er dan overblijft is de vraag aan een mens stellen, en dat kan alleen als op het scherm
+staat wát er is bevraagd. Vandaar `AzureCostDocument.Scope`, die bij een maand zonder regels onder de
+rij komt te staan met "bevraagd: /subscriptions/…/resourceGroups/…".
+
+Dat is de enige beschikbare verdediging tegen een tikfout in een resource-groepnaam, en het is een
+patroon dat dit portaal al kent: een eigenschap die je niet kunt garanderen laat je zien in plaats van
+hem weg te rekenen (§1 van de spec, "eerlijke systeemeigenschappen benoemen").
+
+---
+
+## 31. De volledigheidscontrole rust op datums en niet op een percentage
+
+Het onderzoek (§6) geeft twee wegen om te voorkomen dat er een halve dag Azure op een factuur belandt:
+de volledigheid controleren, of de facturatie-agent later laten draaien. Het adviseert de eerste, met
+als toets "staat er voor de laatste dag van de maand een bedrag dat in de lijn ligt van de dagen
+ervoor?".
+
+**Die toets is gemeten en verworpen.** Op `MBV`, dagkorrel, 1 t/m 20 augustus:
+
+```
+19 volle dagen   € 1,87731 – € 1,87967   (spreiding 0,13%)
+de 20e om 06:55  € 1,80263               (95,97% van de mediaan)
+de 21e           ontbreekt volledig
+```
+
+De toets werkt daar prachtig, en juist dat is het bezwaar: een drempel zou tussen 96% en 99,9% moeten
+liggen. Die marge is gepast op een omgeving die elke dag hetzelfde kost omdat er een App Service in
+staat die altijd aan is. Een klant met een agent die één keer per week een batch draait heeft een
+dagspreiding die veel groter is dan 4% — en dan staat de controle permanent op "onvolledig" of laat hij
+een halve dag door, afhankelijk van welke kant je de drempel op zet. **Een grens die op één klant is
+gekalibreerd en op de volgende het omgekeerde doet, is geen grens.**
+
+**Wat er in de plaats komt is de vertraging zelf.** Uit dezelfde meting: de boeking loopt ongeveer acht
+uur achter. `AzureCostCompleteness.Judge` noemt een maand daarom volledig als de laatste dag van de
+maand in de gegevens staat **én** de meting minstens twee dagen ná het einde van de maand is gedaan
+(`SettlementDays = 2`). Geen percentage, één constante, en die constante heeft zijn meting ernaast
+staan.
+
+### Dit is het gemeten antwoord op openstaande vraag 9 van het onderzoek
+
+Die vraag was: staat de laatste dag van een maand om 06:00 op de 1e volledig in Cost Management?
+**Nee — en een meting op dat moment kan niet vaststellen dát hij er staat.** Om 06:55 op de 21e stond
+de 20e op 95,97%; om 06:00 op de 1e is het laatste uur van de vorige maand dus nog niet binnen. De cron
+`0 6 1 * *` uit §4 van de spec factureert daarmee een maand met een fractie van een dag te weinig, en
+dat is aan het bedrag niet te zien.
+
+Met deze controle is dat draaimoment onschadelijk in plaats van fout: een collector die om 04:00 op de
+1e loopt krijgt `Partial` te horen en factureert niet. **Het draaimoment hoeft dus niet te verschuiven,
+en dat is de winst van controleren boven later draaien.**
+
+### Wat er met opzet níet wordt gecontroleerd
+
+Een **gat midden in de maand**. Cost Management geeft voor een dag zonder kosten géén rij, dus een
+klant wiens omgeving een dag uit stond heeft een echt gat — en dat gat is niet te onderscheiden van een
+dag die nog niet is geboekt. Dat is dezelfde ambiguïteit als in punt 30, een niveau lager. Zou een gat
+tot "onvolledig" leiden, dan is die klant nooit te factureren; zou een gat aan het eind tot "volledig"
+leiden, dan factureren we een halve maand. Alleen de laatste dag bekijken lost precies het geval op dat
+wél te weten is.
+
+---
+
+## 32. Het bedrag staat in Cosmos en wordt niet bij het bekijken opgehaald
+
+Dit is de eerste van de twee weegvragen van dit werk. Het onderzoek beschrijft een `kosten-collector`
+die dagelijks draait en een cache van 6–12 uur; de vraag was of het portaal niet net zo goed live kan
+opvragen.
+
+**Het kan niet, en dat is gemeten.** Op 21 augustus, als één aanroeper:
+
+```
+06:59:28  200   (na 40 s stilte)
+06:59:38  429   entity-requests 2, clienttype-retry-after 29
+06:59:42  429   entity-requests 1, clienttype-retry-after 26
+06:59:45  429   entity-requests 0, clienttype-retry-after 22
+06:59:49  429   entity-retry-after 38, clienttype-retry-after 19
+```
+
+Vier aanroepen binnen elf seconden, vier keer 429. Een geslaagde aanroep vroeg dertig tot veertig
+seconden stilte ervoor. **Eén operator die twee klanten naast elkaar opent, trekt de emmer leeg** — en
+de tweede pageview zou dan een bedrag missen dat er wél is.
+
+Drie redenen, in gewicht:
+
+1. **Het budget verdraagt geen pageview**, zie boven. Het hangt aan de aanroeper en niet aan de scope
+   (de header heet `clienttype-retry-after`), dus meer klanten of meer abonnementen maken het niet
+   ruimer. Dat bevestigt §2 van het onderzoek.
+2. **Het lege antwoord is alleen met historie te wegen.** "Nul regels" betekent iets anders als er
+   gisteren wél regels waren (punt 30). Die vergelijking vraagt een bewaarde reeks, dus er is hoe dan
+   ook opslag nodig.
+3. **Wat er op het scherm hoort te staan als de verzameling van vannacht is mislukt, is de lezing van
+   eergisteren met het tijdstip erbij.** Dat getal is werkelijk gemeten; een mislukte aanroep heeft
+   niets gemeten. Van die twee is het eerste het eerlijkere antwoord, zolang erbij staat wanneer het is
+   gemeten — en dat staat er, per rij, want elke maand heeft zijn eigen laatste meting.
+
+**De prijs, eerlijk:** het scherm loopt tot een etmaal achter op wat Cost Management weet. Voor een
+maandbedrag dat achteraf wordt gefactureerd is dat geen bezwaar — de gegevens van Cost Management lopen
+zelf al acht uur achter, dus "live" bestaat hier niet. Het portaal zou een verse onnauwkeurigheid
+ruilen tegen een oude, en daar een aanroepbudget voor opbranden.
+
+### Vier headers die je niet moet gebruiken, en één hypothese die is weerlegd
+
+Het onderzoek waarschuwt terecht tegen `x-ms-ratelimit-remaining-subscription-resource-requests`: die
+stond in élke meting op **1099**, ook op de 429's. Er zijn nu vier headers bijgemeten die er wél nuttig
+uitzien en het niet zijn:
+
+```
+x-ms-ratelimit-remaining-microsoft.costmanagement-entity-requests      DefaultQuota:3 → 0
+x-ms-ratelimit-remaining-microsoft.costmanagement-tenant-requests      DefaultQuota:19 → 15
+x-ms-ratelimit-remaining-microsoft.costmanagement-clienttype-requests  DefaultQuota:0  (altijd)
+x-ms-ratelimit-microsoft.costmanagement-qpu-remaining                  QueriesPerHour:599 → 578
+```
+
+De eerste telt werkelijk af naar nul en is dus een echte teller. **En hij is toch onbruikbaar voor
+bewaking: geen van deze vier headers staat op een 200.** Een geslaagd antwoord draagt géén enkele
+cost-management-ratelimietheader — alleen de nutteloze 1099. Je kunt de ruimte dus pas zien nadat je er
+al door bent. `clienttype-requests` staat bovendien altijd op 0, óók op het antwoord vlak vóór een
+succes.
+
+Twee dingen die het ontwerp raken:
+
+- **Elke respons kost budget, ook een 404 en een 429.** `qpu-remaining` liep van 599 naar 578 over
+  eenentwintig aanroepen waarvan de meeste mislukten. **Opnieuw proberen is niet gratis**, dus een
+  backoff die snel herhaalt maakt het erger.
+- **De wachthint is onbetrouwbaar in beide richtingen.** Gemeten waarden voor
+  `clienttype-retry-after`: 1, 2, 8, 16, 17, 19, 22, 25, 26, 29, 34, 34, 35. Eén keer was 2 genoeg; het
+  onderzoek meldt een 1 die te kort was. Er blijkt bovendien een **tweede** hint te bestaan
+  (`entity-retry-after`) die alleen verschijnt zodra `entity-requests` op 0 staat, en die is groter.
+  Lees ze beide en neem de grootste, met een eigen backoff eronder.
+
+**Weerlegde hypothese, en hij is het opschrijven waard omdat hij plausibel was.** De header heet
+`clienttype-retry-after`, en "client type" wordt bij Azure vaak uit de `User-Agent` afgeleid. Als dat
+hier zo was, zou een eigen User-Agent een eigen emmer geven — en dan zou het portaal niet hoeven te
+vechten met elk ander gereedschap in deze tenant. Gemeten: vier snelle aanroepen met
+`User-Agent: Soratus.Portal/1.0 (kosten-collector)` gaven vier 429's, en de vijfde met
+`User-Agent: curl/8.0` erna gaf er nog een — met dezelfde aflopende teller. **De emmer is niet per
+User-Agent.** Dat is een meting die niets veranderde, en precies daarom hoort hij hier: de volgende
+lezer hoeft hem niet opnieuw te doen.
+
+---
+
+## 33. De dienstuitsplitsing komt uit de API, en de kolomvolgorde ook
+
+Het onderzoek (§2) meldt al dat §3.7 de diensten verkeerd benoemt. Bevestigd:
+
+| §3.7 zegt | de API geeft |
+|---|---|
+| Container Apps, Azure OpenAI, Storage, Log Analytics, Key Vault | `Azure App Service`, `Azure Cosmos DB`, `Bandwidth`, `Key Vault`, `Microsoft Entra` |
+
+Vier van de vijf namen uit de spec komen in de werkelijke uitvoer niet voor. De uitsplitsing komt
+daarom uit `AzureCostQuery.Read` en niet uit een lijst in onze code — een vaste lijst zou vandaag al de
+helft missen en zou op de dag dat er een dienst bijkomt stil geld buiten het subtotaal laten vallen.
+
+**Er zit een tweede valkuil in die het onderzoek niet noemt: de kolomvolgorde verschilt per vraag.**
+
+```
+granularity: None    → Cost, ServiceName, Currency
+granularity: Daily   → Cost, UsageDate, ServiceName, Currency
+```
+
+`ServiceName` staat op index 1 of op index 2, afhankelijk van of je dagkorrel vraagt. Een lezer met
+vaste indices haalt bij de tweede vorm de dienstnaam uit de datumkolom en levert een dienst `20260801`
+op met het bedrag van één dag. **Dat is geen crash maar een verkeerd bedrag per dienst, en het valt
+alleen op als iemand het subtotaal natelt.** De indices komen daarom uit `columns[]`, op naam en
+hoofdletterongevoelig.
+
+Verder: `nextLink` was op de gemeten scope altijd `null` (vijf diensten; met dagkorrel vijfenzestig
+rijen), maar hij wordt teruggegeven en niet weggegooid. Een lezer die een vervolgpagina laat liggen
+heeft een subtotaal dat te laag is, en dat is even onzichtbaar als de fout hierboven.
+
+En een onleesbaar bedrag **werpt** en wordt geen nul. De aanroeper hoort daar `AzureCostState.Unknown`
+van te maken. Een `catch` die de rij overslaat en doorgaat levert een subtotaal op dat te laag is — en
+een bedrag dat te laag is ziet er net zo geloofwaardig uit als een bedrag dat klopt.
+
+---
+
+## 34. Het beheeropslagpercentage blijft op het contract, tegen §6 in
+
+**Spec:** §6 zet `opslag%` op `AzureCost` (dus per maand). §3.9 vraagt het bij het aanmaken van een
+klant, en `ContractDocument.AzureSurchargePercentage` bestaat daar al sinds punt 15.
+
+**Besluit: het staat alleen op het contract, en het verbruiksdocument heeft het veld niet.**
+
+Twee redenen. Het is een **afspraak en geen meting**: de agent die het verbruik wegschrijft heeft geen
+mening over onze marge, en er is geen scherm waarop een percentage per maand wordt vastgelegd. Een veld
+dat niets ooit vult is een stille onwaarheid — dezelfde afweging als bij `AccessDocument`, waar om die
+reden geen "uitnodiging verstuurd"-veld staat. En twee plekken waar hetzelfde percentage kan staan is
+een tweede waarheid over onze marge; de eerste keer dat ze verschillen is dat een factuur die niet
+overeenkomt met het contract.
+
+Wat er in plaats van een invulveld op het facturatiescherm staat, is een regel die zegt waar het
+percentage hoort, met een link naar het contractscherm. Een operator die hier een veld verwacht en er
+geen vindt, hoort te weten waar hij moet zijn in plaats van te concluderen dat het niet kan.
+
+Blijkt er ooit een klant te zijn met een afwijkend percentage in één maand, dan is dat een veld op het
+verbruiksdocument **plus** een scherm dat het vult **plus** een regel over welke van de twee wint. Dat
+is dan een besluit en geen detail.
+
+### En het bedrag valt weg zodra het percentage ontbreekt
+
+`MonthlyChargeCalculator` geeft `null` voor het door te belasten bedrag als er geen opslag is
+afgesproken — niet het subtotaal, en niet het subtotaal plus nul. Dat is punt 15 op de plek waar hij
+werkelijk geld kost: nul procent opslag is een afspraak, geen opslag ingevuld is een afspraak die nog
+moet komen, en een niet-nullable `decimal` zou de tweede stil als de eerste doorrekenen. Het door te
+belasten bedrag zou dan gelijk zijn aan de inkoop — onze marge weg, zonder dat er iets aan het getal te
+zien is.
+
+**Eén onbekende maakt het hele totaal onbekend.** Geen deelsom. §3.7 zet Azure en de uren boven bundel
+uitdrukkelijk "op één totaal", en een totaal waarvan de helft ontbreekt is dat niet; erger, het is niet
+van een compleet totaal te onderscheiden en het is lager. Van de twee mogelijke fouten — geen getal of
+een te laag getal — is alleen de eerste zichtbaar. Datzelfde geldt een niveau hoger voor het
+jaartotaal.
+
+### Eén uitzondering die geen uitzondering is
+
+**Nul uur boven bundel kost nul euro, ook zonder afgesproken tarief.** Bij een klant die binnen zijn
+bundel blijft valt er niets te factureren, en dan is het ontbreken van een tarief geen belemmering. Zou
+hier `null` uitkomen, dan is een klant die netjes binnen zijn bundel blijft niet te factureren zolang
+niemand een tarief heeft ingevuld dat toch niet gebruikt wordt. Het tarief is pas nodig zodra er iets
+boven de bundel staat, en dán is het ontbreken ervan wél een blokkade.
+
+---
+
+## 35. Naar buiten toe verdwijnt het onderscheid tussen drie contractgaten, met opzet
+
+`MonthlyChargeGap` (operator) kent vier vlaggen: `AzureUnknown`, `NoSurchargeAgreed`, `NoBundleAgreed`,
+`NoRateAgreed`. Vlaggen en geen enkele waarde, want een klant zonder contract mist er drie tegelijk —
+en een operator die er één ziet gaat die oplossen en houdt dan een totaal dat nog steeds ontbreekt.
+
+**Naar de klant gaan er twee van de vier over, en dat is informatieverlies met een reden.** De
+klantvariant `CustomerChargeGap` heeft `ConsumptionUnknown`, `ContractIncomplete` en `NotCharged`. De
+drie contractgaten vallen op één waarde, want:
+
+- een waarde die `NoSurchargeAgreed` heet **noemt onze marge**, en de mededeling "we hebben nog geen
+  opslag afgesproken" vertelt een klant dat er een opslag ís. "beheeropslag" staat in de lijst met
+  woorden die op geen enkel klantscherm mogen staan (`KlantVangnetTests`);
+- het zijn alle drie contractafspraken, en de handeling die erop volgt is voor alle drie dezelfde.
+
+Dat de reden een **enum** is en geen `string` is de scherpste regel van deze keten, en hij komt van de
+mailkant: een reden die als tekst reist kan uit een `catch`-blok komen, en dan staat de tekst van een
+uitzondering in de inbox van een klant. Dat is de fout van de punten 13 en 14 voor de derde keer, nu in
+een inbox in plaats van op een scherm.
+
+### Het gevolg voor de mailkant: twee waarden waren onbereikbaar
+
+`StatementFigureGap` in `Soratus.Portal/Mail/` had `NoHourlyRate` en `NoSurcharge`. Die zijn met dit
+besluit **onbereikbaar** geworden: er is geen bron die ze ooit zet, want de kostenkant gooit het
+onderscheid weg voor het de klantvorm bereikt. Punt 11 van deze notitie gaat precies over zulke velden
+— waarden die bestaan, onwaar zijn en nooit worden gevuld — en één plek in dit portaal met dat gebrek
+is genoeg. Ze zijn vervangen door één `ContractIncomplete`, en er staat een test die opsomt welke
+waarden de adapter werkelijk kan opleveren en dat vergelijkt met de enum. Komt er een waarde bij zonder
+bron, dan gaat die test rood.
+
+### Twee vlaggen die niet hetzelfde zijn, en waar dat pas bleek
+
+`MonthlyCharge` had eerst alleen `IsFinal` — "de maand is volledig gemeten én er is een totaal". De
+adapter naar het maandoverzicht leunde daarop om te bepalen of het tijdvak nog liep, en **een test vond
+dat dat fout is**: een klant zonder contract kreeg "het tijdvak is nog niet volledig" te horen over een
+maand die allang volledig gemeten was. `IsFinal` is `false` zodra er íets ontbreekt, dus hij kan de twee
+redenen niet scheiden.
+
+Daarom staat er nu `IsPeriodComplete` naast, dat precies één ding zegt. Dat is een ware uitkomst met een
+onware reden die alsnog is opgelost — en het is de reden dat de gaten in een aparte enum zitten in plaats
+van uit een `bool` te worden afgeleid.
+
+**Wat hier nog niet klopt en gemeld is:** een interne beheerklant (§4) wordt niet doorbelast, dus er
+hoort geen maandoverzicht naartoe. `StatementFigureGap.NotCharged` zegt dat, maar `StatementRefusal`
+heeft geen bijpassende waarde — dus zo'n klant weigert vandaag met `AmountsIncomplete`. De uitkomst is
+goed (er gaat geen mail) en de reden is onwaar. Dat hoort in `StatementRefusal` te worden opgelost, of
+eerder: met een controle in `MonthlyStatementService` vóór de bedragen worden gelezen.
+
+---
+
+## 36. Drie lessen over het meten zelf
+
+Deze drie gaan niet over facturatie. Ze gaan over het gereedschap, en ze hebben in dit werk elk een uur
+gekost.
+
+### Een dode `cref` naast een compilatiefout kan een gevolg zijn en geen oorzaak
+
+`GenerateDocumentationFile` staat sinds vandaag aan voor de hele repo, en de eerste keer dat hij iets
+vond in nieuwe code meldde hij vier dingen: twee keer `CS1584` op een `cref="decimal?"` (een cref kan
+geen nullable-annotatie dragen — schrijf `<c>decimal?</c>`) en **twee keer `CS1574` op een type dat
+gewoon bestond**.
+
+Die twee `CS1574`'s waren geen achtergebleven tekst van een hernoeming. Ze verdwenen zonder dat er één
+verwijzing is aangeraakt, zodra de drie échte compilatiefouten in hetzelfde project weg waren: bij een
+mislukte compilatie kan de crefresolutie niet meer bij de typen van de bestanden die niet zijn
+gecompileerd.
+
+**De regel die daaruit volgt: eerst de compilatiefout, dan opnieuw meten, dán pas een cref aanraken.**
+Wie het omdraait haalt een goede verwijzing weg naar een type dat wel bestaat — en dat is precies de
+schade die deze vlag hoort te voorkomen.
+
+Nog één waarschuwing uit dezelfde vlag die het waard is om te kennen: `CS0419` (ambigue cref) sloeg toe
+op het moment dat er een tweede overload bijkwam, exact zoals `Directory.Build.props` voorspelt. De
+oplossing is de signatuur in de cref zetten.
+
+### `ValidateOnBuild` maakt van één ontbrekende registratie een storing in élke hosttest
+
+Er stond in dit werk een blok van **26 rode tests** in `Soratus.Portal.Tests`, waarvan 25 in `Urenapi`
+— een namespace die met kosten en mail niets te maken heeft. De oorzaak was één regel:
+
+```
+Unable to resolve service for type 'Soratus.Portal.Mail.IMonthlyStatementFigures'
+  while attempting to activate 'Soratus.Portal.Mail.MonthlyStatementService'
+  at Program.<Main>$
+```
+
+`MonthlyStatementService` was geregistreerd en `IMonthlyStatementFigures` had geen implementatie.
+`WebApplicationBuilder.Build()` werpt daarop, dus **elke test die de échte app opstart valt om**, ook de
+tests die iets heel anders beweren te testen. `Soratus.Portal` bouwde schoon: dit is geen
+compileerfout.
+
+Dat is luidruchtig in plaats van stil, en dus goed. Maar het betekent dat twee sessies elkaars
+testsuite kunnen platleggen met een halve registratie. **Zie je een blok rode hosttests dat niets met
+elkaar te maken heeft, kijk dan eerst naar de DI-validatie en niet naar de functionaliteit die ze
+beweren te testen.**
+
+### Een afgebroken mutatieronde laat productiecode gemuteerd achter
+
+De `finally` die de mutatie terugzet loopt bij een harde kill niet. Gemeten: na een afgebroken ronde
+stond `AzureCostCompleteness.SettlementDays` op `0` in plaats van op `2`, en de build was schoon —
+niets wees erop. Controleer na een afbreking met `git diff` of de boom is zoals hij hoort, en vertrouw
+niet op de assertie aan het eind van het script: die wordt bij een afbreking nooit bereikt.
+
+En de bijbehorende val in het script zelf: met `subprocess.run(..., shell=True)` geeft Windows de
+argumentenlijst aan `cmd.exe`, en die leest de `&` in een testfilter als een commandoscheiding. Het
+tweede deel van de filter valt dan weg. Gemeten: 1081 tests in plaats van 981, met vijf staande fouten
+die elke uitslag onleesbaar maakten. `shell=False`.
+
 ---
 
 ## Wat bewust nog niet is gebouwd
