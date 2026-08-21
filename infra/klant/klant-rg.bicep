@@ -309,7 +309,12 @@ resource agentsCosmosWrite 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignm
       cosmosDataContributorRoleId
     )
     principalId: agentsIdentity.properties.principalId
-    scope: cosmos.id
+    // Op de database en niet op het account. Vandaag staat er alleen telemetrie in, dus het
+    // verschil is nul — maar komt er ooit een tweede database bij, dan heeft deze identiteit
+    // daar zonder deze regel automatisch recht op. Let op de vorm: dit is een dataplane-pad
+    // en geen ARM-resource-id, en een ARM-id levert hier een uitrolfout op die what-if niet
+    // aankomen ziet.
+    scope: '${cosmos.id}/dbs/${telemetry.name}'
   }
 }
 
@@ -323,7 +328,12 @@ resource portalCosmosRead 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignme
       cosmosDataReaderRoleId
     )
     principalId: portalIdentityPrincipalId
-    scope: cosmos.id
+    // Op de database en niet op het account. Vandaag staat er alleen telemetrie in, dus het
+    // verschil is nul — maar komt er ooit een tweede database bij, dan heeft deze identiteit
+    // daar zonder deze regel automatisch recht op. Let op de vorm: dit is een dataplane-pad
+    // en geen ARM-resource-id, en een ARM-id levert hier een uitrolfout op die what-if niet
+    // aankomen ziet.
+    scope: '${cosmos.id}/dbs/${telemetry.name}'
   }
 }
 
