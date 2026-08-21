@@ -1,0 +1,42 @@
+<Project>
+
+  <!--
+    Documentatiegeneratie staat aan voor élk project in deze repo, en dat is geen cosmetische keuze.
+
+    Dit portaal draagt zijn redenering in XML-documentatie: waarom een bedrag nullable is, waarom
+    een klanttype een veld níet heeft, waarom een regel op één plek staat. De besluiten uit
+    docs/agent-portal/fase-0-afwijkingen.md staan als <remarks> naast de code die ze uitvoert, en
+    dat is precies waarom ze niet wegzakken. Een <see cref="..."/> naar iets dat niet meer bestaat
+    is dan geen schoonheidsfoutje maar een aanwijzing naar een veld dat de volgende lezer gaat
+    zoeken en nooit vindt.
+
+    Deze vlag is de enige controle daarop. Zonder hem verschuift het stil: één meting legde vier
+    dode verwijzingen en tien half gedocumenteerde methoden bloot, negen daarvan in code van één
+    dag oud.
+
+    CS1591 staat uit: dat is "geen documentatie op een publiek lid". Aanzetten zou op elk lid
+    afgaan en de melding onbruikbaar maken. Wat we wél willen zien zijn de vijf die over de
+    juistheid van bestaande documentatie gaan:
+
+      CS1574  dode cref
+      CS0419  ambigue cref — wordt het zodra er een tweede overload bijkomt
+      CS1573  parameter zonder tag terwijl andere parameters die wél hebben
+      CS1584  ongeldige cref-syntaxis
+      CS1587  documentatieblok op iets waar het niet op kan staan
+
+    Waarom hier en niet per project: op het moment van aanzetten stonden alle elf projecten op nul,
+    gemeten met een volledige rebuild. Eén plek betekent dat een twaalfde project de controle
+    meekrijgt in plaats van hem stil te missen — en dat is precies hoe de MCP-server aan elke
+    pipeline ontsnapte terwijl hij netjes in de solution stond.
+
+    Let op de sequentie als je dit ooit terugdraait en opnieuw invoert: eerst meten en opruimen,
+    dán aanzetten. Andersom staat de build meteen rood op werk van iemand anders, en dan is de vlag
+    er binnen een dag weer uit. Zo sneuvelen zulke controles, en een tweede poging is daarna
+    moeilijker te verkopen.
+  -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

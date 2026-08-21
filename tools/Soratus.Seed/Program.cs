@@ -132,18 +132,20 @@ static string Mode(SeedSettings settings) => (settings.Clean, settings.DryRun, s
         : "schrijven",
 };
 
-/// <summary>
-/// Houdt de hartslag van de geseede registraties vers tot iemand Ctrl+C drukt.
-/// </summary>
-/// <remarks>
-/// Dit is een demohulpstuk en het presenteert zich ook zo. Status is een afgeleide van de
-/// hartslag, en een seed-document klopt niet uit zichzelf door; zonder deze lus staat de hele
-/// demodata twee minuten na het seeden op <c>degraded</c> en verdwijnt precies het onderscheid
-/// waar hij voor gemaakt is. Wat hier gebeurt is dus simulatie, en dat hoort er met zoveel woorden
-/// bij te staan: er draait geen enkele echte agent.
-///
-/// Alleen de registraties worden herschreven. Runs en logregels blijven staan en worden ouder.
-/// </remarks>
+// Houdt de hartslag van de geseede registraties vers tot iemand Ctrl+C drukt.
+//
+// Gewoon commentaar en geen XML-documentatie: dit is een lokale functie in een top-level
+// programma, en daar kan geen documentatieblok op. Met /// erboven geeft de compiler CS1587 —
+// "niet op een geldig taalelement" — en dat is de enige waarschuwing die deze repo tegenhield
+// om GenerateDocumentationFile vast te zetten.
+//
+// Dit is een demohulpstuk en het presenteert zich ook zo. Status is een afgeleide van de
+// hartslag, en een seed-document klopt niet uit zichzelf door; zonder deze lus staat de hele
+// demodata twee minuten na het seeden op degraded en verdwijnt precies het onderscheid waar hij
+// voor gemaakt is. Wat hier gebeurt is dus simulatie, en dat hoort er met zoveel woorden bij te
+// staan: er draait geen enkele echte agent.
+//
+// Alleen de registraties worden herschreven. Runs en logregels blijven staan en worden ouder.
 static async Task KeepFreshAsync(CosmosSeeder seeder, SeedManifest manifest, SeedSettings settings)
 {
     using var stop = new CancellationTokenSource();

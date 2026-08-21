@@ -232,7 +232,7 @@ public class PortaaltijdvormTests
     /// Een credential die nooit om een token gevraagd wordt.
     /// </summary>
     /// <remarks>
-    /// Een <see cref="CosmosClient"/> aanmaken doet geen netwerkverkeer en vraagt dus ook geen
+    /// Een <c>CosmosClient</c> aanmaken doet geen netwerkverkeer en vraagt dus ook geen
     /// token. Een echte <c>DefaultAzureCredential</c> zou hier wel de omgeving van de bouwmachine
     /// gaan aftasten, en dan hangt een test over serialisatievorm aan de aanwezigheid van een
     /// Azure-aanmelding.
