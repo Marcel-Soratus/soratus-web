@@ -270,6 +270,53 @@ op de database in plaats van het account. Het klantdocument wijst erheen.
   uit, stopt de hartslag, en meldt het portaal alarm terwijl er niets aan de hand is. Een
   instelling buiten de code die de betekenis van de code omdraait.
 
+## DevOps: maandsprints voor MBV, en één regel die vastligt
+
+Board: organisatie `soratus`, project **MBVApp4 MAUI**, team **MBVApp4 MAUI Team**. DevOps is
+leidend en het portaal schrijft nooit terug — dat staat al in §3.4 en het blijft zo.
+
+Er stonden drie generieke iteraties (`Iteration 1` t/m `3`) **zonder datums**. Dat was stil
+kapot: de teaminstelling staat op `@currentIteration`, en die wordt door datums bepaald, dus er
+was helemaal geen huidige sprint. Er zijn nu vijf maandsprints aangemaakt en aan het team
+toegewezen — `2026-08 Augustus` t/m `2026-12 December`, met de kalendermaand als periode — en
+augustus is daarmee de huidige. De drie oude iteraties en hun werkitems zijn niet aangeraakt;
+die items verplaatsen is een beslissing van een mens.
+
+**Het portaal leidt de maand af uit de datums van een iteratie en nooit uit de naam.** De naam is
+voor mensen; `2026-08 Augustus` hernoemen naar `Augustus` mag de facturatiemaand niet verschuiven.
+Dit is dezelfde klasse fout als de resourcegroep die in een weergavetekst stond: een tikfout daar
+levert bij Cost Management een geslaagd leeg antwoord op, en dat wordt € 0,00 op een factuur.
+
+En let op: **DevOps laat de tijd van een iteratiedatum vallen.** Er is `31 augustus 23:59:59`
+verstuurd en `31 augustus 00:00:00` opgeslagen. Het zijn dus datums en geen momenten, en het
+portaal hoort ze zo te behandelen.
+
+## De verzendlaag voor mail moet geëxtraheerd worden
+
+Nog geen nieuwe functionaliteit maar een extractie, en het moment is nu. Er zijn twee plekken die
+zelf een `EmailClient` bouwen en `SendAsync` aanroepen — `Soratus.Web/Services/LeadSink.cs` voor
+terugbelverzoeken en `Soratus.Portal/Mail/StatementMailSender.cs` voor het maandoverzicht — en de
+storingsmelder van fase 6 wordt de derde. Drie kopieën van één handeling is precies wat de
+knipregel ons heeft gekost (punt 13).
+
+De asymmetrie maakt het scherper: de site authenticeert met een **connection string** (het geheim
+dat in platte tekst als app-setting staat) en het portaal met een **managed identity** met een
+custom role die alleen Read en Write mag — met opzet niet Contributor, want die geeft `ListKeys`
+erbij en is dan machtiger dan het geheim dat je wilde vermijden. Eén verzendlaag is ook hoe dat
+één keer wordt opgelost in plaats van twee keer.
+
+Wat in die laag hoort is de verzendsemantiek, niet een wrapper: **drie uitkomsten en geen twee**
+(verzonden / niet verzonden / onbekend), `4xx` als niet-verzonden inclusief een 429 omdat
+throttling "niet aangenomen" betekent, al het andere als onbekend, géén retry uit onbekend — daar
+komt een mens aan te pas, want een mail is niet terug te halen — en een proefdraaimodus die
+standaard aan staat. Per doel verschilt alleen de opmaak en de ontvanger.
+
+**Bouw hem met de storingsmelder als tweede aanroeper**, niet los: een gedeelde laag met één
+gebruiker bewijst niets. En let bij die melder op de val die al vastligt: `ShouldAlert` ontdubbelt
+met opzet niet, dus een melder die elke minuut draait mailt zestig keer per uur over dezelfde
+storing. Die ontdubbeling hoort in de melder en niet in de rekenregel, want het scherm gebruikt
+die regel ook.
+
 ## Drie manieren waarop een meting vandaag loog
 
 Alle drie gebeurd, alle drie kostten werk. Ze staan hier omdat ze niets met de code te maken
