@@ -66,8 +66,16 @@ public class PaginadienstenTests
         using var host = new Portaalhost();
         using var scope = host.Services.CreateScope();
 
-        Assert.NotNull(
-            scope.ServiceProvider.GetService(type));
+        // De paginanaam staat in de faalmelding en niet alleen in de testnaam. Zonder dat is de
+        // vraag "welke pagina is stuk" een zoektocht door de assembly-gekwalificeerde typenaam — en
+        // dat is precies het moment waarop iemand haast heeft.
+        Assert.True(
+            scope.ServiceProvider.GetService(type) is not null,
+            $"De pagina {pagina} injecteert {type.FullName}, en die dienst is niet uit de échte " +
+            "container te halen. Dat betekent dat de pagina op zijn route een DI-fout geeft, ook al " +
+            "renderen de zichtbaarheidstests hem groen — die gebruiken het testharnas, en daar staat " +
+            "de registratie blijkbaar wel.\n\n" +
+            "De reparatie staat in Program.cs en niet hier.");
     }
 
     [Fact]
