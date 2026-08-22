@@ -123,7 +123,7 @@ else
                   Dirty="HasCustomerChanges"
                   State="_customerState"
                   Error="@_customerError"
-                  FieldErrorCount="@((_nameError is null ? 0 : 1) + (_scopeError is null ? 0 : 1))"
+                  FieldErrorCount="@((_nameError is null ? 0 : 1) + (_scopeError is null ? 0 : 1) + (_boardError is null ? 0 : 1))"
                   OnSave="SaveCustomerAsync"
                   SaveLabel="@(_hasCustomerDocument ? "Omgeving bewaren" : "Omgeving vastleggen")"
                   Footnote="Het klant-id en de soort omgeving staan er als tekst omdat ze niet te wijzigen zijn: het eerste is de partitiesleutel van elk document van deze klant, het tweede bepaalt of er wordt gefactureerd. De klant leest van deze kaart alleen zijn naam en de korte omgevingsaanduiding. Verander je de naam, dan volgt de kop van deze pagina zodra je hem opnieuw opent.">
@@ -193,6 +193,19 @@ else
                            Placeholder="/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/MBV"
                            Hint="Het veld Resource-ID van de resource group in Azure; kopieer het daarvandaan. Leeg laten betekent: nog niet ingericht — er wordt dan niet gemeten en het facturatiescherm zegt dat, in plaats van € 0,00 te tonen."
                            maxlength="@AzureScope.MaximumScopeLength" />
+
+                @* En het bord waarop de sprintcollector leest. Dezelfde vorm en dezelfde reden als het
+                   veld erboven: een machineleesbare verwijzing náást de weergavetekst. Het gevaar is hier
+                   niet een leeg antwoord maar een verkeerd antwoord — een tikfout in de teamnaam die per
+                   ongeluk een ánder bestaand team raakt geeft de sprint van dat team, en dat is niet aan
+                   de vorm te zien. Zie DevOpsScope. *@
+                <FormField Label="DevOps-bord"
+                           @bind-Value="_customer.DevOpsScope"
+                           Mono="true"
+                           Error="@_boardError"
+                           Placeholder="soratus/MBVApp4 MAUI/MBVApp4 MAUI Team"
+                           Hint="Organisatie, project en team, uit de adresregel van het bord in Azure DevOps. Leeg laten betekent: nog niet ingericht — er wordt dan niets opgehaald en het sprintscherm zegt dat, in plaats van een leeg sprintoverzicht te tonen."
+                           maxlength="@DevOpsScope.MaximumScopeLength" />
 
                 @if (ScopeMismatch is { } mismatch)
                 {
@@ -541,6 +554,8 @@ else
 
         public string? AzureScope { get; set; }
 
+        public string? DevOpsScope { get; set; }
+
         public string? TelemetryEndpoint { get; set; }
 
         public string? TelemetryDatabase { get; set; }
@@ -628,6 +643,7 @@ else
     private string? _customerError;
     private string? _nameError;
     private string? _scopeError;
+    private string? _boardError;
 
     private CustomerDocument? _customerConflict;
     private IReadOnlyList<FieldChange> _customerChanges = [];
@@ -988,6 +1004,7 @@ else
         _customerError = null;
         _nameError = null;
         _scopeError = null;
+        _boardError = null;
 
         // De enige harde eis van CustomerEdit, en de melding komt onder het veld dat hem schendt in
         // plaats van als blok boven de knop. Dezelfde functie die de schrijfkant gebruikt zou hier
@@ -1009,8 +1026,9 @@ else
         // als blok boven de knop — en dan zoekt een operator welk van de zeven velden hij bedoelt.
         // Dit is geen tweede definitie: het is dezelfde aanroep, twee keer.
         _scopeError = AzureScope.Validate(_customer.AzureScope);
+        _boardError = DevOpsScope.Validate(_customer.DevOpsScope);
 
-        if (_scopeError is not null)
+        if (_scopeError is not null || _boardError is not null)
         {
             _customerState = FormSaveState.Failed;
             return;
@@ -1027,6 +1045,7 @@ else
             Environment = NullIfBlank(_customer.Environment),
             EnvironmentDetail = NullIfBlank(_customer.EnvironmentDetail),
             AzureScope = NullIfBlank(_customer.AzureScope),
+            DevOpsScope = NullIfBlank(_customer.DevOpsScope),
             TelemetryEndpoint = NullIfBlank(_customer.TelemetryEndpoint),
             TelemetryDatabase = NullIfBlank(_customer.TelemetryDatabase),
             BasedOnETag = _customerETag,
@@ -1213,6 +1232,7 @@ else
         Environment = view.Environment,
         EnvironmentDetail = view.EnvironmentDetail,
         AzureScope = view.AzureScope,
+        DevOpsScope = view.DevOpsScope,
         TelemetryEndpoint = view.TelemetryEndpoint,
         TelemetryDatabase = view.TelemetryDatabase,
     };
@@ -1230,6 +1250,7 @@ else
         Environment = document.Environment,
         EnvironmentDetail = document.EnvironmentDetail,
         AzureScope = document.AzureScope,
+        DevOpsScope = document.DevOpsScope,
         TelemetryEndpoint = document.TelemetryEndpoint,
         TelemetryDatabase = document.TelemetryDatabase,
     };
@@ -1350,7 +1371,7 @@ else
     private IReadOnlyList<FieldChange> Changes(CustomerDocument document)
     {
         var current = EnvironmentFields(document);
-        var lijst = new List<FieldChange>(6);
+        var lijst = new List<FieldChange>(7);
 
         Compare("Klantnaam", _customerOriginal.Name, current.Name);
         Compare("Omgeving", _customerOriginal.Environment, current.Environment);
@@ -1359,6 +1380,7 @@ else
             _customerOriginal.EnvironmentDetail,
             current.EnvironmentDetail);
         Compare("Azure-scope", _customerOriginal.AzureScope, current.AzureScope);
+        Compare("DevOps-bord", _customerOriginal.DevOpsScope, current.DevOpsScope);
         Compare("Cosmos-endpoint", _customerOriginal.TelemetryEndpoint, current.TelemetryEndpoint);
         Compare("Databasenaam", _customerOriginal.TelemetryDatabase, current.TelemetryDatabase);
 

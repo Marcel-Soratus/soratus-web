@@ -3338,6 +3338,534 @@ valse metingen in de stand van zaken: een groen signaal over de verkeerde verzam
 
 ---
 
+## 45. De sprint komt uit de datums van een iteratie, en het veld dat je daarvoor zou willen gebruiken bestaat en liegt
+
+De sprintweergave van §3.4, read-only uit Azure DevOps. Wat er staat: `Soratus.Portal/Sprints/`
+(bord, keuze, statistieken, client, opslag, collector), `Views/Sprint*.cs`,
+`Components/Pages/Klant/{Sprint,CustomerSprint,OperatorSprint}.razor` + `SprintText.cs`, en een
+gevalideerd veld `devOpsScope` op het klantdocument met beide formulieren erachter.
+
+**DevOps is leidend en het portaal schrijft nooit terug.** Dat is §3.4 en het is in de code een
+eigenschap en geen afspraak: `IPortalSprintStore` heeft geen schrijfmethode, `IDevOpsSprintClient`
+heeft alleen een `ReadAsync`, en de enige `POST` die de deur uit gaat is de veldenbatch — een
+leesaanroep met een lijst nummers in het lichaam omdat een URL daar te kort voor is. Er staat een
+test die élk verzoek van de client afloopt en eist dat het een `GET` is of díe ene `POST`.
+
+### De harde regel, en het veld dat hem zou breken
+
+Het portaal leidt de sprint af uit de **datums** van een iteratie en nooit uit de naam. De naam is
+voor mensen: `2026-08 Augustus` hernoemen naar `Augustus` mag niets verschuiven. Dat is dezelfde
+klasse fout als de resourcegroep die uit een weergavetekst werd afgeleid (punt 30, punt 37).
+
+**En er is een veld dat precies het antwoord lijkt te zijn. Gemeten op 22 augustus 2026** geeft
+`GET .../{team}/_apis/work/teamsettings/iterations` per iteratie een `timeFrame` mee:
+
+```
+2026-08 Augustus    startDate 2026-08-01Z  finishDate 2026-08-31Z  timeFrame 1   (current)
+2026-09 September   startDate 2026-09-01Z  finishDate 2026-09-30Z  timeFrame 2
+2026-10 Oktober … 2026-12 December                                 timeFrame 2
+Iteration 1 / 2 / 3 startDate null         finishDate null         timeFrame 2
+```
+
+De drie iteraties **zonder datums** staan op dezelfde `2` als de vier maanden in de toekomst. Dat
+veld kan "ligt in de toekomst" dus niet van "heeft geen datums" onderscheiden, en dat is exact het
+onderscheid waar deze lane om draait. `timeFrame` wordt daarom gelezen noch gebruikt, en hij staat
+ook niet in de DTO — een veld dat je niet gebruikt hoort er niet in te staan, want dan denkt de
+volgende lezer dat het klopt.
+
+**En de datums zijn datums en geen momenten.** Er is `31 augustus 23:59:59` verstuurd en
+`2026-08-31T00:00:00Z` teruggekomen. De vergelijking loopt daarom op dagen en is aan beide kanten
+inclusief. Zou de einddatum als moment worden gelezen, dan eindigt augustus op 31 augustus om
+middernacht en is de laatste dag van **elke** maand geen sprintdag — één dag per maand waarop het
+portaal "er loopt vandaag geen sprint" meldt op een bord waar niets aan de hand is.
+
+### Zes toestanden, want vijf ervan vragen iets anders van een mens
+
+`SprintState` heeft zes waarden en dat is geen weelde. Elke waarde vraagt een andere handeling; een
+waarde die dezelfde handeling vraagt als zijn buur hoort er niet te zijn.
+
+| | betekenis | handeling |
+|---|---|---|
+| `Unknown` | niet gelukt, of nooit gelezen | opnieuw kijken / rechten |
+| `NoIterations` | gelezen; het team heeft geen enkele iteratie | iteraties aanmaken |
+| `NoDatedIterations` | gelezen; er zijn iteraties en géén heeft datums | **datums invullen** |
+| `NoCurrentSprint` | gelezen; er zijn periodes en vandaag valt in geen ervan | volgende sprint nakijken |
+| `Ambiguous` | méér dan één periode bevat vandaag | de periodes corrigeren |
+| `Current` | precies één periode bevat vandaag | niets |
+
+`NoDatedIterations` bestaat omdat dat de werkelijke stand van dit bord was tot 21 augustus: er stond
+werk op het bord en er was geen huidige sprint, want `@currentIteration` wordt door datums bepaald.
+Een weergave die die toestand niet kan uitdrukken toont een leeg scherm dat op "geen werk" lijkt.
+
+`NoCurrentSprint` mag met opzet niet samenvallen met `Unknown`. "Wij hebben het niet kunnen ophalen"
+en "wij hebben het opgehaald en er loopt nu niets" zijn twee verschillende uitspraken, en de tweede
+is een geldige stand van een gezond project. Vallen ze samen, dan belt een klant over een storing
+die er niet is — en erger: dan ziet een échte weigering uit als een rustige maand.
+
+Bij `Ambiguous` wordt er **géén** sprint gekozen. Twee overlappende periodes zijn twee antwoorden op
+"welke sprint loopt nu", en stil de eerste of de kortste nemen is een verzonnen antwoord dat op het
+scherm niet van een juist antwoord te onderscheiden is. Dezelfde keuze als bij een geslaagd leeg
+antwoord van Cost Management: een ambiguïteit die niet op te lossen is hoort zichtbaar te zijn in
+plaats van weggerekend.
+
+### De drie iteraties zonder datums staan op het scherm, óók bij een gezonde sprint
+
+Er staat op dat bord werk dat in geen enkele maand valt, met opzet niet aangeraakt. Die items komen
+dus op geen enkele sprintweergave voor. Een scherm dat het werk van augustus toont zonder te zeggen
+dat er werk buiten valt, biedt een onvolledig beeld aan als volledig — en juist bij een volle sprint
+is dat de mededeling die niemand anders doet.
+
+**Hoeveel items er in die iteraties staan wordt niet geteld, en het scherm zegt dat.** Dat aantal
+kost een aanroep per iteratie en de mededeling hangt er niet van af; een gedeeltelijk opgehaald
+aantal zou te laag zijn, en van de twee mogelijke fouten is alleen "geen aantal" zichtbaar. Maar een
+ontbrekend aantal leest als nul, dus het staat er uitdrukkelijk bij.
+
+### Een som bestaat dan en slechts dan als er iets is om op te tellen
+
+De statistieken van §3.4 zijn `decimal?` waar het sommen zijn en `int` waar het aantallen zijn, en
+dat verschil komt uit een meting. Van de zestien work items in `Iteration 1` had **géén enkel item**
+een waarde in `RemainingWork`, `CompletedWork` of `StoryPoints`, en géén had `System.Tags`: die
+sleutels stonden niet in het antwoord van `workitemsbatch`. Een leeg veld staat er niet als `null`
+in — het staat er *niet*.
+
+Een implementatie die daar `Sum()` op doet, zet "openstaande uren: 0" op het scherm. Dat is een getal
+dat er niet is: het betekent "niemand heeft uren ingevuld" en niet "er is geen werk over". Dat is
+`AzureCostReading.Subtotal` één niveau hoger (punt 30), en het is punt 15 op een urenveld.
+
+**De keerzijde weegt even zwaar en staat er als eigen test:** nul mét waarden is een echte nul, en
+een *aantal* is nooit een streepje. "Hoeveel van deze items dragen de blokkademarkering" heeft het
+antwoord nul zodra we de items hebben gelezen. Óf we hebben gelezen staat in `SprintState` en niet in
+die getallen — dezelfde scheiding als bij de kosten, waar de toestand op het document staat en niet
+in het bedrag.
+
+Gemeten bijkomstigheid die dit makkelijker maakt: een veld dat een werkitemsoort niet heeft geeft
+géén fout maar ontbreekt. `Microsoft.VSTS.Scheduling.StoryPoints` is bij een `Task` opgevraagd en de
+sleutel was er simpelweg niet. Er is dus geen veldenlijst per soort nodig.
+
+### §3.4 schrijft vijf statenamen voor die op dit bord niet bestaan
+
+De spec noemt `New/Active/Blocked/Resolved/Closed`. Dat is de dummydata van de mockup. **Gemeten**
+heeft het werkitemtype `Task` van `MBVApp4 MAUI` er vier: `New` (categorie `Proposed`), `Active`
+(`InProgress`), `Closed` (`Completed`) en `Removed` (`Removed`). Geen `Blocked` en geen `Resolved`,
+en in de veldenlijst van dat type staat ook geen blokkadeveld.
+
+Statenamen zijn dus per proces en per werkitemsoort anders. Wat DevOps wél garandeert is de
+**categorie**, en die is per werkitemsoort opvraagbaar. De statenaam gaat ongewijzigd naar het scherm
+— dat is het woord dat een mens op het bord ziet — en de categorie bepaalt wat het portaal ermee
+rekent. De categorie wordt opgezocht op *soort + state* en niet op state alleen: twee soorten kunnen
+een gelijknamige state met een andere categorie hebben.
+
+`Resolved` telt **niet** als afgerond. §3.4 zet `Resolved` en `Closed` in de mockup op dezelfde
+groene kleur; voor de statistiek "afgerond" is dat verkeerd — opgelost is niet gedaan, en een sprint
+die op grond daarvan als klaar wordt gelezen is een sprint waarvan niemand het restwerk ziet.
+
+Een categorie die we niet kennen maakt de lezing **onleesbaar** en wordt niet stil "niet afgerond":
+een item dat niet te classificeren is maakt de statistiek te laag, en dat is de fout die onzichtbaar
+is.
+
+En "geblokkeerd" is op dit bord alleen een tag. De instelling heet daarom `BlockedMarker` en niet
+`BlockedTag`, en hij matcht op een tag **of** op een statenaam: een ander project met een eigen
+procestemplate heeft die state misschien wél, en een controle die alleen naar tags kijkt zou daar
+precies de statistiek te laag maken die §3.4 vraagt. Nul is hier een echte nul — "geen van de items
+die we hebben gelezen draagt dit woord" is een gemeten uitkomst.
+
+### Herkomst is een enum met drie waarden, en vandaag is de uitkomst "onbekend"
+
+§3.4 vraagt per work item de herkomst: "aangemaakt door agent of handmatig". Dat lijkt een `bool` en
+dat kan het niet zijn. **Gemeten: er staat in DevOps niets dat dat onderscheid draagt.** Elk work
+item op dit bord is door een mens gemaakt, maar dat weten we niet uit het bord — we weten alleen wie
+het heeft aangemaakt, en of die iemand een agent is hangt af van een lijst die wij bijhouden.
+
+`WorkItemOrigin` heeft daarom `Unknown` als eerste waarde, en met een lege
+`PortalSprints:AgentIdentities` komt élk item daar op uit — niet op `Manual`. "Handmatig" zou de
+bewering zijn dat we hebben nagekeken dat er geen agent bij was, en er is niets om na te kijken.
+Punt 15 op een enum.
+
+**Een identiteit en geen tag, en die keuze is echt.** Een tag `agent` zou goedkoper zijn en zou
+vandaag al werken, maar een tag is door een mens te zetten en te verwijderen — dan is "aangemaakt
+door een agent" een bewering van wie het laatst op het bord heeft geklikt. `System.CreatedBy` wordt
+door DevOps gezet bij het aanmaken en is door niemand te wijzigen. Zodra `devops-sync` (§4) zijn
+eigen service principal heeft, hoort die in die lijst en klopt de kolom vanaf dat moment; voor de
+items van daarvóór blijft hij eerlijk leeg.
+
+### Het klantdocument krijgt een machineleesbaar `devOpsScope`, náást de weergavetekst
+
+Precies de vorm van punt 37, en om dezelfde reden: er was geen veld waarmee een programma kon weten
+welk DevOps-project bij welke klant hoort, en een weergavetekst ontleden gaat stil fout.
+
+`CustomerDocument.DevOpsScope`, tekst, `null` toegestaan, in de vorm
+`organisatie/project/team` — bijvoorbeeld `soratus/MBVApp4 MAUI/MBVApp4 MAUI Team`.
+`Sprints.DevOpsScope` is het type dat hem leest en controleert.
+
+**Drie segmenten en niet twee, want een sprint is een teambegrip.** Iteraties bestaan in een project
+en worden aan een team *toegewezen*, en `@currentIteration` is een teaminstelling (gemeten:
+`defaultIterationMacro: "@currentIteration"` op `MBVApp4 MAUI Team`). Zonder team is er geen sprint.
+
+**Waar dit afwijkt van `AzureScope`, en dat is één punt en het is eerlijk op te schrijven.** Daar
+luidt het argument "het is letterlijk de tekenreeks die de deur uit gaat"; hier zijn het er drie —
+de iteraties hangen aan het team, de WIQL aan het project, de veldenbatch aan de organisatie. Dat is
+géén tweede waarheid en het verschil met "twee velden die het scherm en de collector elk zelf
+samenstellen" is precies aan te wijzen: er is één opgeslagen waarde, één ontleding, en drie
+voorvoegsels die uit diezelfde ontleding volgen (`OrganizationPath`, `ProjectPath`, `Path`). Wat er
+op het scherm staat is `Path`, en de andere twee zijn er prefixen van — er staat een test op dat ze
+dat werkelijk zijn.
+
+**Wat er wordt gecontroleerd:** drie niet-lege segmenten; een organisatienaam van ten hoogste vijftig
+tekens met alleen letters, cijfers en koppelstreepjes, beginnend en eindigend op een letter of cijfer;
+project- en teamnamen van ten hoogste vierenzestig tekens zonder de verboden tekens van Azure DevOps,
+niet beginnend met een onderstrepingsteken en niet beginnend of eindigend op een punt. Unicodeletters
+zijn toegestaan — een project met een accent in de naam bestaat, net als een resourcegroep die `café`
+heet. De schrijfwijze blijft van de operator, om dezelfde reden als bij de resourcegroepnaam: deze
+tekenreeks komt op het scherm terug als "bevraagd: …", en daar hoort te staan wat er is ingevuld.
+
+**Wat er níet in staat: een area path.** §3.4 vraagt de work items "van deze klant" en de verleiding
+is om daarop te filteren. Gemeten staat het team op `defaultAreaPath: "MBVApp4 MAUI"` met
+`includeChildren: false`, dus het area path van dit team is het hele project en een filter erop zou
+niets doen. Een vierde segment dat vandaag niets filtert is een veld dat een operator moet invullen
+zonder dat iemand kan zien of het klopt — en dat is de fout waar dit type tegen bestaat.
+
+**En de prijs van een fout is hier ánders dan bij de kosten, wat het type juist rechtvaardigt.** Een
+project of team dat niet bestaat geeft een `404` en is dus zichtbaar; dát is de vriendelijke kant. Wat
+wél stil is: een tikfout in de teamnaam die per ongeluk een **ánder bestaand team** raakt. Dan komt er
+een geslaagd antwoord met de sprint van dat team, en dat is niet aan de vorm te zien. De verdediging
+is dezelfde als bij de kosten en bestaat uit twee delen die elkaar niet vervangen: controleren wat te
+controleren is (dit type) en tonen wat er is bevraagd (`SprintDocument.Scope`, op het operatorscherm
+naast het vastgelegde bord — en die twee mogen verschillen).
+
+**Leeg is een geldige toestand** en betekent "niet ingericht". Een klant zonder bord wordt niet
+bevraagd, er komt geen document, en het operatorscherm zegt *"Voor deze klant is geen DevOps-bord
+vastgelegd, dus er wordt niets opgehaald"* — niet een leeg sprintoverzicht dat op "geen werk" lijkt.
+Er is een derde geval met een eigen tekst: een bord dat er wél is en niet te gebruiken is. Dat kan
+alleen als iemand het document met de hand heeft aangepast (beide formulieren valideren) en het is
+niet van een ontbrekend bord te onderscheiden aan een lege pagina, terwijl de handeling anders is:
+corrigeren in plaats van invullen. Punt 37, één op één.
+
+Bestaande documenten zijn niet gemigreerd. Vaste lijn, en hier goedkoop: de demoklanten zijn
+verzonnen en van de echte klant is het bord met de hand in te vullen op het contractscherm.
+
+### Er zijn drie schrijfpaden naar een klantdocument en niet twee
+
+Nagemeten met een test die élke `new CustomerDocument` in de productiecode opzoekt: het aanmaken, het
+bewaren, en de eenmalige migratie uit `appsettings.json`. Die derde zet met opzet géén van de twee
+scopevelden — een `CustomerRecord` heeft ze niet, en er een raden uit `envFull` zou precies de fout
+maken waartegen ze bestaan.
+
+Dat is meer dan een aantekening. Een veld toevoegen aan het klantdocument raakt vier lagen en twee
+mappings, en als de tweede wordt vergeten is er **niets** roods: het formulier vult het veld, het
+aanmaken schrijft het weg, en de eerste keer bewaren gooit het stil weg — waarna het scherm netjes
+meldt dat er niets is ingericht, met een tekst die is geschreven om waar te zijn. Dat is gat 4 van
+punt 41. `KlantdocumentveldenTests` bewaakt het nu vooruit: hij somt de bewerkbare velden van
+`CustomerDocument` op via reflectie, eist dat elk ervan op `CustomerEdit` én op `NewCustomerRequest`
+staat, leest de drie initialisaties uit de bron en eist dat elk veld in twee ervan wordt gezet, en
+legt vast dat er precies drie schrijvers zijn.
+
+Wat die test niet kan zien: een veld dat aan de verkéérde bron wordt toegewezen
+(`DevOpsScope = Clean(edit.AzureScope)`). Dat is de grens van een broncodetest en hij staat
+opgeschreven in plaats van dat iemand hem later ontdekt; er staat daarnaast een eilandtest die meet
+dat de twee scopevelden onafhankelijk van elkaar worden bewaard, en die vángt dat geval wel.
+
+### Het gat dat niet in de code zit maar in de rendermode
+
+`SaveCustomerAsync` vervangt het hele klantdocument. Voor een veld dat het formulier draagt is dat
+opgelost. Maar er is een tweede weg naar hetzelfde gevolg: een operator heeft het contractscherm
+open, er wordt uitgerold, en daarna drukt hij op Bewaren. Bij een **static-SSR**-formulier gaat er
+dan een POST de deur uit die het nieuwe veld niet bevat, het model bindt `null`, en `null` betekent
+hier "wissen". Precies de vorm die het portaal een keer heeft platgelegd met een lege app-setting die
+als `""` bond in plaats van als afwezig.
+
+Dat gebeurt vandaag niet, en **niet door de code maar door de rendermode**: `ContractPanel` is een
+`InteractiveServer`-eiland, de formulierstaat leeft in een circuit, een uitrol beëindigt dat circuit,
+en de gebruiker krijgt de reconnect-modal. `@rendermode="InteractiveServer"` op regel 67 van
+`Contract.razor` is daarmee **dragend voor gegevensintegriteit**, en daar keek niets naar. Dat eiland
+omzetten naar static SSR is een redelijke wijziging — bijvoorbeeld om een render te versnellen — en
+het gevolg zou stil zijn.
+
+Er staat nu een test op die rendermode, met de hele uitleg in de faalmelding, plus een tegenhanger
+die eist dat die aanroep te vinden is en precies één keer voorkomt (anders is de eerste stil groen op
+een bestand dat is hernoemd). **Dit is geen nieuwe schuld van deze lane:** `AzureScope` stond al
+onder dezelfde bescherming en niemand had het opgeschreven. Het bord is de tweede die eronder valt,
+en dat maakte het zichtbaar.
+
+### Waar de gegevens blijven: verzamelen en niet bij het openen ophalen
+
+§3.4 zegt "het portaal haalt bij openen de laatste status op" en §4 zet `devops-sync` op "elke 15
+min". Die twee spreken elkaar tegen. Het is verzamelen geworden, met drie argumenten in gewicht:
+
+1. **§3.4 vraagt zelf het tijdstip van laatste ophalen op het scherm.** Bij een ophaling per
+   paginaweergave is dat tijdstip altijd "nu" en zegt het niets. Dat veld heeft alleen betekenis als
+   de lezing ouder kan zijn dan de pagina — de spec vraagt er met dat ene veld dus om dat dit een
+   momentopname is.
+2. **Bij een mislukte ophaling is de vorige lezing mét tijdstip eerlijker dan een verse mislukking**,
+   want die heeft niets gemeten (punt 32, punt 39). Hier geldt dat om een eigen reden: de vraag die
+   een klant op dit scherm stelt is "schiet mijn werk op", en "veertien minuten oud" beantwoordt die
+   vraag terwijl een foutmelding hem niet beantwoordt. En zonder opslag *ís* er geen vorige lezing —
+   een ophaling per paginaweergave kan die regel dus niet volgen, hoe je hem ook programmeert.
+3. **Het aanroepbudget van DevOps is niet gemeten**, en dat is geen reden om aan te nemen dat het
+   schaars is. Het is wel een reden om de kant te kiezen waar het aantal aanroepen niet van het aantal
+   openstaande tabbladen afhangt. Eén operator met twee tabbladen trok de emmer van Cost Management
+   leeg; of dat hier kan is onbekend, en verzamelen maakt het onmogelijk in plaats van onwaarschijnlijk.
+
+**De prijs, eerlijk: het scherm loopt tot een kwartier achter, en dat is minder te verdedigen dan bij
+de kosten.** Daar loopt de bron zelf al acht uur achter, dus "live" bestaat er niet. Hier bestaat live
+wél en het portaal kiest er bewust tegen. Wat dat goedmaakt is dat het tijdstip op het scherm staat.
+
+**Wat er níet is gemeten, en dat is het eerlijkste deel van deze lane.** De metingen zijn via een
+MCP-server gedaan die als `marcel@` praat en het antwoord bewerkt. Daaruit volgt een scherpe scheiding:
+
+- **Gemeten:** de veldnamen, dat een leeg veld niet in het woordenboek staat, dat een veld dat een
+  soort niet heeft geen fout geeft, de datums op middernacht, `workItemRelations` met `target.id`, en
+  de `states`-lijst met `name` en `category`.
+- **Niet gemeten:** de omhulsels. Dat een lijstantwoord `{ "count": n, "value": [ … ] }` is komt uit
+  de documentatie — de server pakte het uit. Hetzelfde voor de vorm van een identiteitsveld: er kwam
+  `"Dennis Verhamme <dennis@soratus.com>"` als tekenreeks terug, terwijl de REST-API volgens de
+  documentatie een object met `displayName` en `uniqueName` geeft. De lezer kan daarom **beide** vormen
+  aan, en dat is geen gok naar twee kanten maar het enige eerlijke antwoord op een veld waarvan de
+  ruwe vorm niet te meten viel. Uit de tekenreeksvorm wordt géén adres gepeuterd, terwijl het er wel
+  in staat: die vorm is niet gegarandeerd, en een ontleedregel op een weergavetekst is de fout waar
+  `DevOpsScope` tegen bestaat. Wat het kost is dat de herkomst dan op de weergavenaam vergelijkt; wat
+  het oplevert is dat er nooit een adres op een scherm staat dat wij niet als adres hebben herkend.
+- **Ook niet gemeten:** het budget. De server geeft geen responsheaders door, dus de
+  `X-RateLimit-*`-headers en de `Retry-After` die de documentatie belooft zijn nooit gezien. Ze worden
+  gelezen als ze er zijn en er wordt niet op gepland. Wat er wél te melden is, is de som die iemand
+  tegen de gepubliceerde grens hoort te leggen zodra die te meten is: **twee vaste aanroepen per klant
+  per ronde** (de teamiteraties en de nummers van de sprint), **plus één per tweehonderd work items**,
+  **plus één per werkitemsoort** in de sprint. Op dit bord: 1 + 1 + 1 + 2 = **vijf**, dus twintig per
+  uur per klant. Een sprint zonder items kost er twee — er wordt niet naar velden gevraagd als er geen
+  nummers zijn.
+- En de derde `MaxAttempts` is er alleen omdat het budget hier *niet* gemeten is. Bij de kosten staat
+  hij op twee omdat élke respons budget kost, ook een 429; die meting geldt daar en niet hier.
+
+**De wederzijdse uitsluiting tussen twee portaalinstanties is géén claimdocument, en dat is een
+afwijking van punt 38 met een reden.** Daar is het één document per dag met een `CreateItemAsync`, en
+dat werkt omdat het één per dag is. Per kwartier zou het zesennegentig documenten per dag zijn in een
+container zonder TTL — rommel die niemand opruimt, voor een budget dat niet is gemeten. In de plaats
+staat een puntlezing van het tijdstip van de vorige lezing: is die jonger dan het interval maal
+`FreshnessFactor` (0,8), dan wordt de klant overgeslagen. Eén RU, en het laat niets achter.
+
+**Wat het níet is, is een slot:** twee instanties die binnen dezelfde seconde tikken komen er beide
+langs. De prijs is een verdubbeling van het aantal aanroepen en niet een verkeerd getal op het scherm
+— er wordt niets opgeteld en de tweede lezing overschrijft de eerste met dezelfde waarde. Blijkt er
+ooit een emmer te zijn die dat niet verdraagt, dan is de claimvorm van punt 38 de opwaardering en dat
+is een kleine wijziging.
+
+**De dag komt uit de weergavezone en niet uit UTC, en dat is precies omgekeerd aan de
+kostencollector.** Daar gaat UTC naar de volledigheidscontrole omdat Azure in UTC boekt, en een
+oordeel over de boeking van Azure hoort niet van de Nederlandse zomertijd af te hangen. Hier is het
+andersom: een iteratie is een *kalenderperiode* die een mens op een bord heeft ingevuld, en op 1
+september om 00:30 Nederlandse tijd is het in UTC nog 31 augustus. Zou UTC de dag bepalen, dan wees
+het portaal in dat halfuur augustus aan terwijl het bord september zegt — een grens twee uur na
+middernacht die niemand heeft afgesproken.
+
+### Geen PAT: een Entra-token van de managed identity, en wat er bij Marcel moet gebeuren
+
+Een personal access token is een geheim dat kopieerbaar is, aan een persoon hangt en verloopt zonder
+dat iemand het merkt. Er staat in dit portaal nergens een accountsleutel; op de Cosmos-accounts is
+local auth uit zodat er geen kan bestaan. Azure DevOps accepteert Entra-tokens op zijn REST-API, dus
+er is geen reden voor een uitzondering.
+
+De client vraagt een token voor de scope `499b84ac-1321-427f-aa17-267ca6975798/.default` — de vaste
+resource-id van Azure DevOps, gelijk in elke tenant — via de `TokenCredential` die al in de container
+staat. Dat getal staat als constante in de code en niet in configuratie: het is een eigenschap van het
+platform en geen instelling, en een instelbare tokenscope is een instelling waarmee iemand per
+ongeluk een token voor een ander publiek aanvraagt.
+
+**Gemeten op 22 augustus 2026, en dit is de stand van vandaag:**
+
+```
+az identity show -n id-soratus-portal -g rg-soratus-prod --subscription 501a66d2-…
+→ clientId    01a9e919-4b73-46a7-94eb-ccca01012d88
+  principalId e48ffac5-672c-4e2b-aab9-340871fb2d62      (de objectId van de service principal)
+  tenantId    091b5069-3bea-4abd-80ec-b1c3e6ed1d51
+
+identiteitszoekopdracht in de organisatie 'soratus':
+  "marcel@soratus.com"  → gevonden, descriptor …ClaimsIdentity;091b5069-…\marcel@soratus.com
+  "id-soratus-portal"   → GEEN IDENTITEITEN GEVONDEN
+```
+
+Twee dingen volgen daaruit. De organisatie hangt aan **dezelfde tenant** als de identiteit
+(`091b5069-…`), dus een token van deze identiteit is voor deze org uitgeefbaar — die voorwaarde is
+vervuld. En de identiteit is **geen lid** van de organisatie, dus élke aanroep levert vandaag een
+geweigerd verzoek op. Dat de zoekopdracht op een mens hem wél vindt is het bewijs dat dit een echt
+antwoord is en geen kapot gereedschap.
+
+**Het kan dus zonder PAT, en er is één handeling van een mens voor nodig.** Die handeling is
+organisatiebreed en valt buiten de twee resource groups waar deze sessie mag schrijven, dus hij staat
+hier als blok en is niet uitgevoerd. Per stap één regel over wat hij doet en wat de verwachte uitkomst
+is:
+
+1. **Organization settings → Users → Add users** in `dev.azure.com/soratus`.
+   Identiteitstype **Service Principal or Managed Identity**, en dan de objectId
+   `e48ffac5-672c-4e2b-aab9-340871fb2d62` (of de naam `id-soratus-portal`).
+   *Verwacht:* de identiteit staat als lid in de gebruikerslijst van de organisatie.
+   *Waarom via het portaal:* hier bestaat geen `az devops`-subcommando voor. De scriptbare vorm is
+   `POST https://vsaex.dev.azure.com/soratus/_apis/serviceprincipalentitlements?api-version=7.1-preview.1`,
+   en die is **niet nagemeten** — het portaal is de gedocumenteerde weg.
+2. **Toegangsniveau: Basic.**
+   *Verwacht:* de identiteit kan work items en boards lezen.
+   *Wat niet is gemeten:* of **Stakeholder** genoeg is. Dat niveau is gratis en mag work items zien,
+   maar of de `teamsettings/iterations`- en `workitemtypes`-aanroepen eronder vallen is niet
+   uitgeprobeerd. Basic is de veilige kant; er zijn vijf gratis Basic-plekken per organisatie.
+3. **Project settings → Permissions → Readers** van `MBVApp4 MAUI`, de identiteit als lid toevoegen.
+   *Verwacht:* leesrecht op het project. Alternatief scriptbaar:
+   `az devops security group membership add --group-id <Readers> --member-id <descriptor>`.
+   *Waarom Readers en niet Contributors:* het portaal schrijft nooit terug (§3.4), en een rol die meer
+   mag dan er nodig is, is een rol waarmee een fout iets kán veranderen op het bord van een klant.
+4. **Controleren zonder uit te rollen:** dezelfde identiteitszoekopdracht op `id-soratus-portal`.
+   *Verwacht:* nu één treffer met een descriptor. Zolang die leeg is, is stap 1 niet gelukt.
+
+**Zolang die stappen niet zijn gezet doet het scherm precies wat het hoort te doen**, en dat is geen
+bijzaak want dit is de werkelijke stand. De aanroep wordt geweigerd, er wordt **niets** weggeschreven
+(punt 39), en is er nog nooit een lezing geweest dan staat er `Unknown` met op het operatorscherm de
+reden *"Het portaal mag dit bord niet lezen. De identiteit heeft leesrecht op het project nodig."* De
+klant leest dat de sprint nog niet is opgehaald, zonder die reden — die noemt onze rolverlening en dat
+is een koppelingsdetail (§2). Een `401`, `403` en `404` worden **niet** herhaald: die gaan niet over
+van zichzelf. Dat is een andere keuze dan bij Cost Management, waar de 404 gemeten "probeer opnieuw"
+bleek te betekenen; die meting geldt daar en niet hier, en dat verschil is het punt.
+
+### §2 geeft de sprint aan beide rollen, dus dit is wat er dan tóch operator-only is
+
+Zes dingen op de weergave en drie op een work item, en ze vallen allemaal in dezelfde categorie: ze
+gaan niet over het werk van de klant maar over onze koppeling en over de hygiëne van het bord.
+
+| | wat | waarom |
+|---|---|---|
+| 1 | het vastgelegde bord | §2: "Koppelingen (MCP/DevOps-details)" |
+| 2 | het bord waartegen de lezing is gedaan | idem, en het verschil met 1 is de diagnose |
+| 3 | de reden van een mislukte ophaling | noemt een rolverlening of een identiteit |
+| 4 | de paden van de iteraties zonder datums | boordhygiëne; de klant krijgt het áántal |
+| 5 | de overlappende iteraties bij naam | idem; de handeling is corrigeren in DevOps |
+| 6 | hoeveel iteraties er datums hebben | een diagnose over de inrichting van het bord |
+| 7 | wie een work item heeft aangemaakt | §3.4 zegt de klant de *herkomst* toe, niet de persoon |
+| 8 | het adres van die aanmaker | idem, plus een persoonsgegeven |
+| 9 | het adres van de toegewezen persoon | de naam krijgt de klant wél; een adres is een contactgegeven |
+
+Nummer 7 is de scherpste en het minst voor de hand liggend: §3.4 vraagt "aangemaakt door agent of
+handmatig", en dat is een andere vraag dan "door wie". De klant krijgt het antwoord op de eerste.
+
+**Twee dingen waar ik over heb geaarzeld en die ik expliciet maak.** Het **boardpad** staat er wél
+voor de klant: §3.4 noemt hem bij naam als een van de vier kopgegevens en het is het pad binnen het
+project van de klant zelf. Wat §2 dichtzet is de *koppeling* — organisatie, team, rechten, MCP — en
+niet waar het werk van de klant op zijn eigen bord staat. Het tegenargument is echt: dat pad bevat een
+projectnaam uit DevOps. Wie dat anders weegt haalt één eigenschap weg. En de **toegewezen naam** staat
+er ook: een sprint zonder te zien wie waaraan werkt is geen sprintweergave. Wat er niet doorheen komt
+is het adres.
+
+Dat is alles een typeverschil en geen filter: `CustomerSprintView` en `CustomerSprintRow` *hebben* die
+velden niet. Er staat een tweede net onder het eerste — een test die eist dat geen enkel klanttype van
+dit scherm een eigenschap heeft met `Address`, `Email`, `Adres`, `UniqueName` of `Mail` in de naam,
+óók niet als iemand vergeet hem in de lijst op te sommen.
+
+### Wat de mutatieronde vond, en de vier gaten
+
+Vijftig mutaties over `DevOpsScope`, `SprintSelection`, `SprintTally`, `DevOpsSprintClient`,
+`SprintCollector`, `SprintViews`, `SprintText`, de twee formulieren en de klantdocumentmapping. Elke
+mutatie met een controle erachter dat het bestand daarna bit-identiek is. **Drieënveertig deden wat ze
+hoorden te doen. Zeven maakten niets rood; vier daarvan zijn gedicht en elk opnieuw gemuteerd om te
+bewijzen dat de nieuwe test bijt.**
+
+**Gat 1 — de belangrijkste vondst, en het is een les over assérties.** Het omzetten van
+`SprintText.Hours(null)` van een streepje naar `"0 u"` bleef groen, terwijl dat de invariant is waar
+dit hele scherm om draait. Er *stónd* een test. Die was groen om een reden die niets met het onderwerp
+te maken had: hij zocht of er **érgens** een streepje in de markup stond, en dat is ook waar als één
+kolom er geen meer heeft — de story points en de aanmakerkolom hebben er ook een. Twee streepjes uit
+twee kolommen dekten elkaars afwezigheid. Er staat nu een eenheidstest op de opmaakfunctie zelf,
+zonder pagina eromheen.
+
+**De gegeneraliseerde regel is scherper dan het geval, en hij hoort breder te gelden: een assertie op
+de aanwezigheid van een teken of woord in markup zegt alleen iets als dat teken in die markup uniek
+is.** Kan het meer dan één keer voorkomen, dan meet je dat er íets is en niet dat het juiste er is.
+Dat is dezelfde klasse als punt 41 — twee stukken code die per ongeluk hetzelfde doen dekken elkaars
+afwezigheid — maar op de assertiekant in plaats van de codekant. **Vervolgpunt: de suite hoort hierop
+doorzocht te worden.** Die zoektocht is hier niet gedaan; het is een eigen ronde. En dit soort vals
+groen is niet te vinden door ernaar te kijken — alleen met een mutatie, en niemand muteert een test
+die al groen is.
+
+**Gat 2 — de mapping tussen de twee naden had geen test.** `ToDocument` laten vallen van de iteraties
+zonder datums bleef groen: de collectortests meten wat er in de `SprintWrite` staat en de schermtests
+wat er uit een `SprintDocument` komt, en niemand keek naar de stap ertussen. Punt 41 doet als voorstel
+om die mapping uit de Cosmos-methode te halen zoals `ToDocument` elders; hier is dat **meteen gedaan**
+in plaats van opgeschreven, want het was een nieuw bestand en het kostte niets. Hij is
+`internal static` en puur, dus een test roept de productiemapping aan en bouwt hem niet na — precies
+het gat dat punt 41 bij de klantdocumentmapping als *echt* gat noteert.
+
+**Gat 3 — de datumlezing was cultuurafhankelijk te maken.** `TryParseExact("yyyy-MM-dd")` omzetten naar
+`TryParse` maakte niets rood, want geen test gaf een datum in een andere vorm. Dan hangt het antwoord
+af van de cultuur van de server: `08/31/2026` is in de ene lezing 31 augustus en in de andere onzin.
+Gedicht met drie invoervormen.
+
+**Gat 4 — de bordcontrole in `CustomerEdit.Validate` had geen test**, en de oorzaak is gat 2 van punt
+41 in het klein: het omgevingsblok valideert zelf zodat de melding onder het veld komt, dus het komt
+bij een onbruikbaar bord niet eens tot een aanroep aan de opslag. Elke test die via het scherm loopt is
+daarmee groen zonder de controle in de opslag aan te raken — en die weggevallen helft is de
+belangrijkste van de twee, want hij is de enige die ook geldt voor een aanroeper die het formulier
+omzeilt.
+
+**Drie gaten blijven staan, met de reden erbij:**
+
+| mutatie | waarom hij niet gedekt is |
+|---|---|
+| `Escape` wordt de identiteit (geen URL-escaping meer) | **Onbereikbaar per constructie**, en dat is een verantwoording en geen "geen test". `Uri` normaliseert een spatie zelf naar `%20`, en de tekens die een URL wél van betekenis veranderen (`?`, `#`, `%`, `&`) zijn al door de validatie verboden — dus er *is* geen invoer waarmee het verschil zichtbaar is. **De laag die erop staat is wél gemeten:** `?` weghalen uit die verbodenlijst wordt rood. De escaping blijft daarom staan als vangnet voor de dag dat iemand die lijst versoepelt; hem weghalen omdat "er geen test op staat" is precies de verkeerde conclusie |
+| de logregel met de verhouding "hoeveel klanten hebben een bord" verdwijnt | er staat in dit project geen enkele test op logniveaus of logteksten. Bewust, en punt 41 noteert het al voor het logniveau van een 429 |
+| de `kind`-controle op de puntlezing van het sprintdocument verdwijnt | `CosmosPortalSprintStore` praat met Cosmos en heeft geen test. Hetzelfde eerlijke gat als bij `CosmosAzureCostCollectorStore`. Wat er tegenover staat is gat 2 hierboven: de mapping die ertussen zit is er wél uit gehaald en heeft een eigen test |
+
+### Een vierde manier waarop een meting liegt, en hij is nieuw in dit project
+
+`stand-van-zaken.md` heeft er drie: `--no-build` tegen een oude assembly, een vergrendelde `bin`
+(`MSB3061`), en filteren op één waarschuwingscode. Er is een vierde, en hij is de gevaarlijkste van de
+vier omdat de andere drie een teken in de uitvoer hebben en deze niet.
+
+**Een mutatieronde van een andere sessie is een venster waarin de productiecode met opzet kapot is, en
+van buiten is dat niet van een defect te onderscheiden.** Het is hier gebeurd: tijdens mutatie 41
+stonden er drie tests rood, ze zijn aan deze lane toegewezen als bevinding, en er was niets kapot. Wat
+het verraadt is de **vorm** van het antwoord — drie tests die alle drie precies één regel dekken en
+verder niets rood. Nagemeten na een volledige rebuild: die drie stonden groen en de weggehaalde regel
+stond weer op regel 91 en 323 van `PortalEdits.cs`.
+
+De coördinatieregel die eruit volgt: **een mutatieronde is een aangekondigd venster.** Melden bij start
+en bij einde, en wie in dat venster meet gooit de meting weg.
+
+**En dezelfde val zat in het mutatiescript zelf.** Bij eenentwintig mutaties meldde het netjes
+"compileert niet" — met een compileerfout uit een *ander* project van een andere sessie, dus er was
+niets gemeten terwijl er een resultaat op het scherm stond. Het script kijkt nu of het bestand met de
+compileerfout het bestand is dat is gemuteerd; is dat niet zo, dan meldt het
+**"BOOM GEBROKEN DOOR ANDERE LANE"** en telt die mutatie niet mee. Diezelfde ronde leerde ook dat
+`"rood"` zonder namen erbij geen resultaat is: de regex las de testnaam tot de eerste witruimte en een
+theorienaam draagt zijn parameters mee. Twee reparaties op de meetlaag en niet op het geval — samen
+zijn ze één punt over mutatietesten in een gedeelde boom, en dat is nieuw hier: tot nu toe draaide er
+nooit meer dan één ronde tegelijk.
+
+### Twee registratieregels die niet van deze lane zijn, en vervolgpunten
+
+De registraties in `Program.cs` en de ene regel in `Portaalrendertest.MeldAan` zijn door de
+hoofdsessie geplaatst; de sprintcollector staat daar achter een `IsDevelopment`-voorwaarde in code en
+niet als vlag in `appsettings.Development.json`. Dezelfde vorm als bij de kostencollector, met een
+reden die een graad zwaarder is: die collector *leest* bij Azure, deze **schrijft** sprintdocumenten in
+de partitie van een echte klant. Een laptop die aan blijft staan vult dus de opslag van een klant met
+wat het DevOps-token van die ontwikkelaar mocht ophalen.
+
+- **`devops-sync` meldt zich niet als agent.** §4 noemt hem in de lijst met beheeragents en de
+  kostencollector publiceert zich inmiddels wél. Die aankondiging hoort in `Soratus.Portal/Platform/`,
+  en dat is de map van een andere sessie. Wat er ontbreekt is de zichtbaarheid: dat deze taak vannacht
+  niet heeft gedraaid staat alleen in een logregel en niet als laatste run naast een gepubliceerd plan.
+- **`CustomerWriteScope` is misgenoemd, en de stand is twee.** Hij wordt nu op twee *leespaden* gebruikt
+  als bewijs dat iemand operator is, zonder dat er iets te schrijven valt:
+  `IPortalCostsStore.GetAzureCostsAsync` en `IPortalSprintStore.GetSprintAsync`. Dat is geen fout maar
+  een verkeerde naam met twee gebruikers. **Bij een derde hoort hij te heten wat hij bewijst.** De
+  tellerstand staat hier zodat de volgende sessie hoeft te tellen in plaats van af te wegen.
+- **De sprinthistorie bestaat niet.** Er is één document per klant en de lezing van dit kwartier
+  vervangt die van het vorige, dus er is straks geen manier om te zien hoe augustus eruitzag toen hij
+  liep. Bewust, en goedkoop terug te draaien: een sleutel met de sprint erin plus een bereikquery is
+  dezelfde vorm die de kosten al hebben. Zolang er geen lezer is, zou het een lijst zijn die per
+  kwartier groeit en waarvan niemand de laatste versie kan aanwijzen.
+- **De veldenbatch met meer dan één pagina is niet gemeten.** De grootste gemeten iteratie had zestien
+  work items, dus er is nooit een tweede batch geweest; dat er tweehonderd per aanroep in gaan komt uit
+  de documentatie.
+- **`SprintDocumentKeys` hoort naar `PortalDocumentKinds` en `PortalDocumentIds`**, zodra dit werk is
+  samengevoegd. Nu staat hij apart om dezelfde organisatorische reden als
+  `AzureCostDocumentKeys`: meer dan één sessie in dezelfde boom, en een nieuw bestand botst niet.
+
+---
+
 ## 44. Het platform meldt zichzelf: een geherbergde agent mag een klok hebben, en zijn volgende run is een mededeling en geen herberekening
 
 **Spec:** §4 (de beheeragents van Soratus als interne klant) en §7 fase 6, "het platform meldt zichzelf".

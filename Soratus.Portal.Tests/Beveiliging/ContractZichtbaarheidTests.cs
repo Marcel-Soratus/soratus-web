@@ -39,6 +39,13 @@ public class ContractZichtbaarheidTests
             "van de operator: SaveCustomerAsync vervangt het hele klantdocument, dus een veld dat " +
             "het formulier niet draagt wordt bij het bewaren leeggemaakt — en dan zet een operator " +
             "die de klantnaam verbetert de kostenmeting van die klant uit."),
+        ("DevOpsScope",
+            "§2 zet \"Koppelingen (MCP/DevOps-details)\" voor de klant op nee, en dit veld ís die " +
+            "koppeling: organisatie, project en team van ons DevOps-bord. Het staat naast " +
+            "AzureScope en om dezelfde reden op het omgevingsblok van de operator — " +
+            "SaveCustomerAsync vervangt het hele klantdocument, dus een veld dat het formulier niet " +
+            "draagt wordt bij het bewaren leeggemaakt, en dan zet een operator die de klantnaam " +
+            "verbetert de sprintweergave van die klant uit."),
         ("ContractETag",
             "Een etag is een schrijfvoorwaarde. De klant schrijft niet, dus hij heeft er niets aan — " +
             "en een veld dat niemand leest is precies het veld dat later ergens opduikt."),

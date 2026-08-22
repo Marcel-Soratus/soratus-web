@@ -368,9 +368,9 @@ met opzet niet, dus een melder die elke minuut draait mailt zestig keer per uur 
 storing. Die ontdubbeling hoort in de melder en niet in de rekenregel, want het scherm gebruikt
 die regel ook.
 
-## Drie manieren waarop een meting vandaag loog
+## Vier manieren waarop een meting loog
 
-Alle drie gebeurd, alle drie kostten werk. Ze staan hier omdat ze niets met de code te maken
+Alle vier gebeurd, alle vier kostten werk. Ze staan hier omdat ze niets met de code te maken
 hebben en dus in geen enkele test te vangen zijn.
 
 - **`dotnet test --no-build` ná het bouwen van één project meet tegen een oude assembly.** Dat
@@ -385,6 +385,19 @@ hebben en dus in geen enkele test te vangen zijn.
   cref náást een compilatiefout is een **gevolg** en geen oorzaak — de crefresolutie valt om zodra
   het project niet compileert. Wie hem dan "repareert" haalt een goede verwijzing weg. Eerst de
   compilatiefout, dan opnieuw meten, dán een cref aanraken.
+- **Een mutatieronde van een andere sessie is een venster waarin de productiecode met opzet kapot
+  is.** Dit is de vierde, hij is er op 22 augustus bijgekomen, en hij is de gevaarlijkste van de vier
+  — de andere drie hebben een teken in de uitvoer en deze niet. Van buiten is een boom onder mutatie
+  niet van een boom met een defect te onderscheiden. Het is gebeurd: tijdens één mutatie stonden er
+  drie tests rood, ze zijn als bevinding aan een lane toegewezen, en er was niets kapot. Wat het
+  verraadt is de **vorm** van het antwoord: drie tests die alle drie precies één regel dekken en
+  verder niets rood. Nagemeten na een volledige rebuild stonden ze groen en stond de weggehaalde
+  regel er weer. Vandaar de coördinatieregel: **een mutatieronde is een aangekondigd venster** —
+  melden bij start en bij einde, en wie erin meet gooit de meting weg. Dezelfde val zit in het
+  mutatiescript zelf: dat meldde bij eenentwintig mutaties "compileert niet" met een compileerfout
+  uit een ánder project, dus een resultaat zonder meting. Een script dat muteert hoort te controleren
+  of de compileerfout ín het gemuteerde bestand staat. Zie punt 45 van
+  `fase-0-afwijkingen.md`.
 
 ## Eén valkuil om te onthouden
 

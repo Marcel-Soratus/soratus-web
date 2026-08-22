@@ -89,6 +89,21 @@ public sealed class NewCustomerForm
     /// </remarks>
     public string? AzureScope { get; set; }
 
+    /// <summary>
+    /// Het DevOps-bord waarvan de sprint wordt gelezen. Operator-only (§2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Mag leeg blijven: dan is deze klant nog niet ingericht voor de sprintweergave, en dat is een
+    /// geldige toestand. Zie <see cref="Sprints.DevOpsScope"/> — een verplicht veld zou hier een verzonnen
+    /// bord opleveren, en dan is "niet ingericht" niet meer van "verkeerd ingericht" te onderscheiden.
+    /// </para>
+    ///
+    /// <para>De controle staat in <see cref="FieldErrors"/> en niet alleen in
+    /// <see cref="NewCustomerRequest.Validate"/>, om dezelfde reden als bij
+    /// <see cref="AzureScope"/>: dit is een melding die onder één veld hoort te staan.</para>
+    /// </remarks>
+    public string? DevOpsScope { get; set; }
+
     /// <summary>De eigen Cosmos-endpoint van de telemetrie van deze klant, of leeg.</summary>
     public string? TelemetryEndpoint { get; set; }
 
@@ -220,6 +235,11 @@ public sealed class NewCustomerForm
             errors[nameof(AzureScope)] = scopeError;
         }
 
+        if (Sprints.DevOpsScope.Validate(DevOpsScope) is { } boardError)
+        {
+            errors[nameof(DevOpsScope)] = boardError;
+        }
+
         if (!ContractText.TryNumber(BundledHours, out _))
         {
             errors[nameof(BundledHours)] = ContractText.NumberError("8", BundledHours);
@@ -304,6 +324,7 @@ public sealed class NewCustomerForm
         Environment = NullIfBlank(Environment),
         EnvironmentDetail = NullIfBlank(EnvironmentDetail),
         AzureScope = NullIfBlank(AzureScope),
+        DevOpsScope = NullIfBlank(DevOpsScope),
         TelemetryEndpoint = NullIfBlank(TelemetryEndpoint),
         TelemetryDatabase = NullIfBlank(TelemetryDatabase),
         Contract = ToContract(),

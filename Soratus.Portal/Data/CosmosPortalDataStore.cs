@@ -132,6 +132,11 @@ internal sealed class CosmosPortalDataStore(
             // resourcegroepnaam blijft die van de operator, want deze tekenreeks komt terug op het
             // scherm als "bevraagd: …". Zie AzureScope.
             AzureScope = Clean(request.AzureScope),
+
+            // Zelfde regel, ander bord: gevalideerd hierboven, en de schrijfwijze blijft die van de
+            // operator omdat deze tekenreeks op het sprintscherm terugkomt als "bevraagd: …". Zie
+            // Sprints.DevOpsScope.
+            DevOpsScope = Clean(request.DevOpsScope),
             TelemetryEndpoint = Clean(request.TelemetryEndpoint),
             TelemetryDatabase = Clean(request.TelemetryDatabase),
             CreatedAt = now,
@@ -248,6 +253,13 @@ internal sealed class CosmosPortalDataStore(
             // Een leeg veld betekent hier dus werkelijk leeg — "niet meer ingericht" — en dat is de
             // enige manier om een verkeerde scope weg te halen zonder in Cosmos te hoeven.
             AzureScope = Clean(edit.AzureScope),
+
+            // En hetzelfde voor het DevOps-bord. Dit is precies de regel die gat 4 van punt 41 dicht:
+            // deze methode vervangt het hele klantdocument, dus een veld dat hier niet staat wordt bij
+            // het eerste bewaren leeggemaakt — en dan zet een operator die de klantnaam verbetert de
+            // sprintweergave van die klant uit, waarna het scherm "niet ingericht" zegt en niemand weet
+            // waardoor.
+            DevOpsScope = Clean(edit.DevOpsScope),
             TelemetryEndpoint = Clean(edit.TelemetryEndpoint),
             TelemetryDatabase = Clean(edit.TelemetryDatabase),
             CreatedAt = current?.CreatedAt ?? now,

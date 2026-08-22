@@ -396,6 +396,17 @@ public sealed record OperatorContractView
     public string? AzureScope { get; init; }
 
     /// <summary>
+    /// Het DevOps-bord waarvan de sprint wordt gelezen, of <c>null</c>. Operator-only.
+    /// </summary>
+    /// <remarks>
+    /// Staat hier om exact dezelfde reden als <see cref="AzureScope"/> hierboven, en het gevolg van
+    /// vergeten is hetzelfde: een operator die de klantnaam verbetert zou de sprintweergave van die klant
+    /// uitzetten. Operator-only omdat §2 de koppelingsdetails (MCP/DevOps) aan de operator toewijst en
+    /// niet aan de klant; zie <see cref="Sprints.DevOpsScope"/>.
+    /// </remarks>
+    public string? DevOpsScope { get; init; }
+
+    /// <summary>
     /// De Cosmos-endpoint van de telemetrie van déze klant, of <c>null</c> voor het
     /// standaardaccount. Operator-only.
     /// </summary>

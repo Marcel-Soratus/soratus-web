@@ -1,0 +1,291 @@
+@* De sprintweergave zoals de klant hem ziet (§3.4): sprintnaam, periode, boardpad, tijdstip van
+   laatste ophalen, de statistieken en de work items.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DIT COMPONENT KAN DE KOPPELING EN DE ADRESSEN NIET TONEN, EN DAT IS DE HELE OPZET
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §2 geeft de sprint aan beide rollen — "Sprint (DevOps): ✓ read-only" voor de klant én de
+   operator — en zet in dezelfde tabel "Koppelingen (MCP/DevOps-details)" dicht voor de klant. Wat
+   er dan tóch operator-only is, staat hier niet als @if maar in de parameter:
+
+     CustomerSprintView   heeft geen DevOpsScope, geen QueriedScope, geen ScopeNotice,
+                          geen Failure, geen Undated-lijst met paden, geen Overlapping,
+                          geen DatedCount
+     CustomerSprintRow    heeft geen CreatedBy, geen CreatedByAddress,
+                          geen AssignedToAddress
+
+   Er is dus geen uitdrukking te schrijven in dit bestand die ons DevOps-project, onze
+   rolverleningen of het e-mailadres van een medewerker op het scherm zet. Een vergeten @if lekt;
+   een ontbrekende property compileert niet. Voor de zevende keer dezelfde vorm — CustomerBilling
+   (§3.7), CustomerHours (§3.6), CustomerLogLine (§12), CustomerRunRow (§14), CustomerAgentsView
+   (§9) en de contractmarge (§2) — en om dezelfde reden.
+
+   Wat de klant van de herkomst wél krijgt is het woord: "agent", "mens" of "onbekend". Dat is de
+   vraag die §3.4 stelt, en die is te beantwoorden zonder een naam te noemen.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   EEN STREEPJE IS GEEN NUL, EN EEN LEGE PAGINA IS GEEN "GEEN WERK"
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Twee gemeten regels van dit scherm, en ze zijn elkaars spiegelbeeld.
+
+   Een urenkolom kan ontbreken en dan staat er een streepje, nooit een nul: van de zestien work
+   items op dit bord had géén enkel item een waarde in RemainingWork, CompletedWork of
+   StoryPoints — die velden stonden niet in het antwoord van DevOps. Nul zou betekenen dat iemand
+   nul heeft ingevuld.
+
+   Maar een áántal is nooit een streepje. "Hoeveel van deze items zijn afgerond" heeft altijd een
+   antwoord zodra we de items hebben gelezen, en dat antwoord kan nul zijn. Of we hebben gelezen
+   staat in State en niet in een getal — vandaar dat een lege lijst hier nooit zonder mededeling
+   verschijnt.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   GEEN KNOP, GEEN LINK NAAR DEVOPS
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §3.4: het portaal schrijft niets terug. Dat staat als tekst op het scherm en niet alleen als
+   afwezigheid van knoppen (§1: laat de beperking zien in plaats van hem weg te poetsen).
+
+   En er staat geen link naar het work item in DevOps. Dat lijkt een gemis en is het niet: een
+   link naar een bord waar deze klant geen toegang tot heeft, is een link naar een inlogscherm —
+   een belofte die niet wordt nagekomen. *@
+
+<div class="stack">
+    <FormCard Title="@(View.SprintName ?? "Geen sprint")"
+              Mode="FieldMode.ReadOnly"
+              Layout="FieldLayout.Row"
+              Footnote="@View.SnapshotNotice">
+        <HeaderContent>
+            <span class="mono" title="@Moment">@SprintText.Age(View.ReadAt, View.GeneratedAt)</span>
+        </HeaderContent>
+        <ChildContent>
+            @* Vier feiten, in de volgorde van §3.4: sprintnaam, periode, boardpad, tijdstip van
+               laatste ophalen. De naam staat in de kop van de kaart en dus niet nog een keer als
+               veld — twee plekken met dezelfde waarde is hier geen tweede waarheid, maar het is
+               wel ruis op een kaart met vier regels. *@
+            <FormField Label="Periode"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@SprintText.Period(View.Start, View.Finish)"
+                       Title="de laatste dag hoort bij de sprint: DevOps bewaart een iteratiedatum als datum en niet als moment" />
+
+            <FormField Label="Boardpad"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@(View.BoardPath ?? SprintText.Dash)"
+                       Mono="true"
+                       Title="waar deze sprint op het bord in Azure DevOps staat" />
+
+            <FormField Label="Laatst opgehaald"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@Moment"
+                       Mono="true"
+                       Title="het moment van de lezing zelf, niet van het opslaan" />
+        </ChildContent>
+    </FormCard>
+
+    @if (View.StateNotice is { } notice)
+    {
+        @* De toestand als zin en niet als lege pagina. Vijf van de zes toestanden komen hier langs,
+           en ze vragen alle vijf iets anders van een mens — daarom is het een tekst per toestand en
+           geen algemene "geen gegevens". Zie SprintNotice.
+
+           Een gewone melding en géén StatusNotice, en dat is geen gemak: dat component neemt een
+           AgentStatus en kleurt in groen/amber/rood. §1 reserveert die kleuren voor status, en "er
+           loopt vandaag geen sprint" is geen storing. Amber daarvoor gebruiken zou een gezond
+           project laten oplichten alsof er iets mis is. *@
+        <p class="meta notice"><strong>@StateTitle</strong> — @notice</p>
+    }
+
+    @if (View.State == SprintState.Current)
+    {
+        <div class="kpi-grid">
+            <KpiTile Label="Work items"
+                     Value="@SprintText.Count(View.Tally.Items)"
+                     Sub="@RemovedSub" />
+            <KpiTile Label="Afgerond"
+                     Value="@SprintText.Count(View.Tally.Completed)"
+                     Sub="@CompletedSub" />
+            <KpiTile Label="Openstaande uren"
+                     Value="@SprintText.Hours(View.Tally.OpenHours)"
+                     Sub="@HoursSub(View.Tally.OpenHours)" />
+            <KpiTile Label="Gedane uren"
+                     Value="@SprintText.Hours(View.Tally.DoneHours)"
+                     Sub="@HoursSub(View.Tally.DoneHours)" />
+            <KpiTile Label="Story points"
+                     Value="@SprintText.Points(View.Tally.StoryPoints)"
+                     Sub="@HoursSub(View.Tally.StoryPoints)" />
+            <KpiTile Label="Geblokkeerd"
+                     Value="@SprintText.Count(View.Tally.Blocked)"
+                     Sub="@BlockedSub" />
+        </div>
+
+        <DataCard Grid="ItemColumns" Title="Work items in deze sprint">
+            <DataRowHeader />
+
+            @if (View.Items.Count == 0)
+            {
+                <p class="table-empty">@SprintNotice.NoItems</p>
+            }
+            else
+            {
+                @foreach (var item in View.Items)
+                {
+                    <DataRow @key="item.Id">
+                        <DataCell Class="num mono">@SprintText.Number(item.Id)</DataCell>
+                        <DataCell Truncate="true">
+                            <span>@item.Title</span>
+                            <span class="mono-meta">@Meta(item)</span>
+                        </DataCell>
+                        <DataCell>
+                            <span class="@SprintText.StageBadgeClass(item.Stage, item.IsBlocked)"
+                                  title="@SprintText.StageTitle(item.Stage, item.State)">
+                                <span class="badge__glyph" aria-hidden="true">@SprintText.StageGlyph(item.Stage, item.IsBlocked)</span>@item.State
+                            </span>
+                        </DataCell>
+                        <DataCell Truncate="true">@(item.AssignedTo ?? Unassigned)</DataCell>
+                        <DataCell Class="num">@SprintText.Hours(item.OpenHours)</DataCell>
+                        <DataCell Class="num">@SprintText.Hours(item.DoneHours)</DataCell>
+                        <DataCell Class="num">@SprintText.Points(item.StoryPoints)</DataCell>
+                    </DataRow>
+                }
+            }
+        </DataCard>
+    }
+
+    @if (View.UndatedNotice is { } undated)
+    {
+        @* Staat er óók als er een gezonde sprint loopt, en dat is het punt: juist dan is "er valt
+           werk buiten elke periode" iets wat niemand anders zegt. Het aantal iteraties staat erbij
+           en het aantal items niet — en de tekst zegt dat, want een ontbrekend aantal leest als
+           nul. *@
+        <p class="meta notice"><strong>@UndatedTitle</strong> — @undated</p>
+    }
+
+    <p class="meta notice">@View.HoursNotice</p>
+    <p class="meta notice">@View.ReadOnlyNotice</p>
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomsporen: nummer, titel, state, toegewezen, open uren, gedane uren, punten (§3.4).
+    /// </summary>
+    /// <remarks>
+    /// Zeven kolommen. De operatorvariant heeft er acht — daar komt de aanmaker bij — en dat is de
+    /// reden dat er twee <see cref="RowGrid"/>'s zijn en niet één met een verborgen kolom. Een
+    /// verborgen kolom is een filter, en §2 vraagt hier een typeverschil: dit component heeft geen
+    /// waarde om in die kolom te zetten, en dat hoort ook uit zijn kolomdefinitie te blijken.
+    /// Dezelfde afweging als bij <c>CustomerBilling</c>.
+    /// </remarks>
+    private static readonly RowGrid ItemColumns = new(
+        new GridColumn("Id", "70px", Align: CellAlign.End),
+        new GridColumn("Titel", "minmax(0, 1fr)", Labelled: false),
+        new GridColumn("State", "130px"),
+        new GridColumn("Toegewezen", "minmax(0, 140px)"),
+        new GridColumn("Open", "90px", Align: CellAlign.End),
+        new GridColumn("Gedaan", "90px", Align: CellAlign.End),
+        new GridColumn("Punten", "80px", Align: CellAlign.End));
+
+    /// <summary>Wat er staat als een item aan niemand is toegewezen.</summary>
+    /// <remarks>
+    /// Een woord en geen streepje: dit is geen getalkolom, en "niet toegewezen" is een toestand die
+    /// iemand kan verhelpen terwijl een streepje niets zegt. Het viewmodel draagt hier <c>null</c>,
+    /// want dit woord is opmaak.
+    /// </remarks>
+    private const string Unassigned = "niet toegewezen";
+
+    /// <summary>De sprintweergave van de klant.</summary>
+    /// <remarks>
+    /// Dit type is de afdwinging van §2; zie de toelichting bovenaan dit bestand.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public CustomerSprintView View { get; set; } = default!;
+
+    /// <summary>Het absolute moment van de laatste ophaling, voor de tooltip (§1).</summary>
+    private string Moment =>
+        View.ReadAt is { } moment ? TimeFormat.Absolute(moment) : "nog nooit opgehaald";
+
+    /// <summary>De kop boven de toestandsmelding.</summary>
+    /// <remarks>
+    /// Per toestand een eigen kop, want de zin eronder is per toestand anders en een algemene kop
+    /// ("Geen sprint") zou bij <see cref="SprintState.Unknown"/> onwaar zijn — daar weten we niet of
+    /// er een sprint is.
+    /// </remarks>
+    private string StateTitle => View.State switch
+    {
+        SprintState.Unknown => "Nog niet opgehaald",
+        SprintState.NoIterations => "Dit bord heeft geen iteraties",
+        SprintState.NoDatedIterations => "Geen enkele iteratie heeft datums",
+        SprintState.NoCurrentSprint => "Er loopt vandaag geen sprint",
+        SprintState.Ambiguous => "Meerdere periodes lopen tegelijk",
+        _ => "Sprint",
+    };
+
+    /// <summary>De kop boven de melding over de iteraties zonder datums.</summary>
+    private string UndatedTitle => View.UndatedCount == 1
+        ? "Eén iteratie zonder datums"
+        : $"{View.UndatedCount} iteraties zonder datums";
+
+    /// <summary>De subregel bij de tegel met het aantal work items.</summary>
+    /// <remarks>
+    /// Alleen als er verwijderde items zijn. Die tellen niet mee in het aantal — een verwijderd item
+    /// is geen werk — en dat hoort erbij te staan, want anders is het aantal niet te rijmen met wat
+    /// iemand op het bord ziet.
+    /// </remarks>
+    private string? RemovedSub => View.Tally.Removed == 0
+        ? null
+        : $"{SprintText.Count(View.Tally.Removed)} verwijderd, niet meegeteld";
+
+    /// <summary>De subregel bij de tegel met het aantal afgeronde items.</summary>
+    private string? CompletedSub =>
+        View.Tally.Items == 0 ? null : $"van {SprintText.Count(View.Tally.Items)}";
+
+    /// <summary>De subregel bij de tegel met het aantal geblokkeerde items.</summary>
+    /// <remarks>
+    /// Bij nul staat er uitdrukkelijk dat dit een gemeten nul is en geen ontbrekende meting. Dat is
+    /// het onderscheid dat op dit scherm overal geldt en hier het makkelijkst verkeerd wordt gelezen:
+    /// er is niets in DevOps dat een blokkade draagt behalve een tag, dus nul is hier "geen item
+    /// draagt die tag" en niet "wij weten het niet".
+    /// </remarks>
+    private string? BlockedSub => View.Tally.Blocked == 0 ? "geen" : "loopt vast";
+
+    /// <summary>
+    /// De subregel bij een tegel met een som, of <c>null</c>.
+    /// </summary>
+    /// <param name="sum">De som, of <c>null</c>.</param>
+    /// <returns>De subregel.</returns>
+    /// <remarks>
+    /// <strong>Bij een ontbrekende som staat er waarom.</strong> Zonder deze regel leest het streepje
+    /// als een storing, en dan gaat iemand het "oplossen" door in DevOps een nul in te vullen — en dan
+    /// is de informatie werkelijk weg. Gemeten had géén van de zestien items op dit bord een van deze
+    /// drie velden.
+    /// </remarks>
+    private static string? HoursSub(decimal? sum) =>
+        sum is null ? "niet ingevuld in DevOps" : null;
+
+    /// <summary>
+    /// De metaregel onder de titel: soort, herkomst en tags (§3.4).
+    /// </summary>
+    /// <param name="item">Het item.</param>
+    /// <returns>De regel.</returns>
+    /// <remarks>
+    /// <para>§3.4 vraagt "titel + tags + herkomst" als één cel, en dat is hier één cel met een
+    /// metaregel eronder — dezelfde vorm als de omschrijving met haar categorie op de
+    /// urenspecificatie. Een eigen kolom per gegeven zou de tabel breder maken dan 1280px (§8).</para>
+    ///
+    /// <para>De herkomst staat er altijd, ook als hij onbekend is. Dat is met opzet: een lege plek zou
+    /// als "handmatig" gelezen worden, en dat is precies de bewering die niemand heeft gemeten.</para>
+    /// </remarks>
+    private static string Meta(CustomerSprintRow item)
+    {
+        var delen = new List<string>(3)
+        {
+            item.Type,
+            $"herkomst: {SprintText.Origin(item.Origin)}",
+        };
+
+        if (item.Tags.Count > 0)
+        {
+            delen.Add(string.Join(", ", item.Tags));
+        }
+
+        return string.Join(" · ", delen);
+    }
+}

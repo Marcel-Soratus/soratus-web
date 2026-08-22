@@ -154,6 +154,7 @@ public class PaginatitelTests : Portaalrendertest
             "Soratus.Portal.Components.Pages.Klant.Agents",
             "Soratus.Portal.Components.Pages.Klant.Contract",
             "Soratus.Portal.Components.Pages.Klant.Facturatie",
+            "Soratus.Portal.Components.Pages.Klant.Sprint",
             "Soratus.Portal.Components.Pages.Klant.Uren",
         };
 
@@ -234,6 +235,13 @@ public class PaginatitelTests : Portaalrendertest
                 // en zet dus een titel. Wat er niet in staat is de beheeropslag; dat wordt door de
                 // theorie hierboven gemeten en niet door deze lijst.
                 "Soratus.Portal.Components.Pages.Klant.Facturatie",
+
+                // Fase 5. Het sprintscherm rendert voor een klant inhoud — de kaartjes van de sprint
+                // die nu loopt, want §3.4 geeft hem een readonly weergave van het bord — en zet dus
+                // een titel. DevOps is leidend en het portaal schrijft nooit terug; wat er niet in
+                // de titel staat is de projectnaam of een woord uit de koppeling, en dát wordt door
+                // de theorie hierboven gemeten en niet door deze lijst.
+                "Soratus.Portal.Components.Pages.Klant.Sprint",
 
                 // Fase 3. Het urenscherm rendert voor een klant inhoud — zijn verbruik tegen de
                 // bundel — en zet dus een titel ("Uren · Acme Logistiek · Agent Portal"). Wat er

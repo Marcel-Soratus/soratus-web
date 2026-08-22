@@ -1,0 +1,325 @@
+@* De sprintweergave zoals de operator hem ziet (§3.4): alles wat de klant ziet, plus de koppeling.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAT ER HIER BIJ KOMT, EN WAAROM PRECIES DIT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §2 geeft de sprint aan béide rollen: "Sprint (DevOps): ✓ read-only" staat er twee keer. Dit
+   bestand is dus het antwoord op de vraag wat er dan tóch operator-only is, en het zijn zes
+   dingen die allemaal in dezelfde categorie vallen — ze gaan niet over het werk van de klant maar
+   over ónze koppeling en over de hygiëne van het bord:
+
+     1. het vastgelegde bord (organisatie/project/team) — §2: "Koppelingen (MCP/DevOps-details)"
+     2. het bord waartegen de lezing die hier staat werkelijk is gedaan
+     3. de reden waarom de laatste ophaling niets opleverde
+     4. wie een work item heeft aangemaakt, en de adressen bij aanmaker en toewijzing
+     5. de paden van de iteraties zonder datums, en de overlappende iteraties bij naam
+     6. hoeveel iteraties er wél datums hebben
+
+   Punt 4 is het scherpste en het minst voor de hand liggend: §3.4 vraagt aan de klant de
+   *herkomst* — "aangemaakt door agent of handmatig" — en dat is een andere vraag dan "door wie".
+   De klant krijgt het antwoord op de eerste; de tweede is een koppelingsdetail én een
+   persoonsgegeven van een medewerker.
+
+   Dat alles staat hier niet als @if maar in de parameter: View is een OperatorSprintView en de
+   rijen zijn OperatorSprintRow. De klantvarianten hébben die velden niet.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   TWEE SCOPES DIE MOGEN VERSCHILLEN, EN DAT VERSCHIL IS HET ANTWOORD
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   "Bord" is wat er vanaf nu wordt bevraagd; "bevraagd" is het bord waartegen de lezing die hier
+   staat is gedaan. Bij een gecorrigeerde tikfout is het verschil tussen die twee precies het
+   antwoord op de vraag waarom er nog een sprint van een ander team op het scherm staat. Dezelfde
+   constructie als bij de kosten, waar de scope op het facturatiescherm naast de scope per maand
+   staat — en om dezelfde reden: een DevOps-bord dat niet bestaat geeft een 404, maar een tikfout
+   die per ongeluk een ánder bestaand team raakt geeft een geslaagd antwoord met de verkeerde
+   sprint. Dat is niet aan de vorm te zien; wél aan deze twee regels naast elkaar. *@
+
+<div class="stack">
+    <FormCard Title="@(View.SprintName ?? "Geen sprint")"
+              Mode="FieldMode.ReadOnly"
+              Layout="FieldLayout.Row"
+              Footnote="@View.SnapshotNotice">
+        <HeaderContent>
+            <span class="mono" title="@Moment">@SprintText.Age(View.ReadAt, View.GeneratedAt)</span>
+        </HeaderContent>
+        <ChildContent>
+            <FormField Label="Periode"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@SprintText.Period(View.Start, View.Finish)"
+                       Title="de laatste dag hoort bij de sprint: DevOps bewaart een iteratiedatum als datum en niet als moment" />
+
+            <FormField Label="Boardpad"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@(View.BoardPath ?? SprintText.Dash)"
+                       Mono="true"
+                       Title="waar deze sprint op het bord in Azure DevOps staat" />
+
+            <FormField Label="Laatst opgehaald"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@Moment"
+                       Mono="true"
+                       Title="het moment van de lezing zelf, niet van het opslaan" />
+
+            <FormField Label="Bord"
+                       Mode="FieldMode.ReadOnly"
+                       ReadOnlyText="@(View.DevOpsScope ?? "niet vastgelegd")"
+                       Mono="true"
+                       Title="het bord dat bij deze klant is vastgelegd en dat vanaf nu wordt bevraagd; vast te leggen op het contractscherm, in het blok Omgeving" />
+
+            @if (View.QueriedScope is { } queried
+                 && !string.Equals(queried, View.DevOpsScope, StringComparison.Ordinal))
+            {
+                @* Alleen als hij afwijkt. Twee identieke regels naast elkaar is ruis, en ruis is
+                   precies wat later een échte afwijking onzichtbaar maakt. *@
+                <FormField Label="Bevraagd"
+                           Mode="FieldMode.ReadOnly"
+                           ReadOnlyText="@queried"
+                           Mono="true"
+                           Title="het bord waartegen de lezing hierboven werkelijk is gedaan — hij wijkt af van het vastgelegde bord, dus deze sprint komt van een ander bord dan er nu staat" />
+            }
+
+            @if (View.DatedCount > 0)
+            {
+                <FormField Label="Iteraties met datums"
+                           Mode="FieldMode.ReadOnly"
+                           ReadOnlyText="@SprintText.Count(View.DatedCount)"
+                           Title="hoeveel iteraties van dit team een begin- en einddatum hebben; alleen die kunnen een sprint zijn" />
+            }
+        </ChildContent>
+    </FormCard>
+
+    @if (View.ScopeNotice is { } scope)
+    {
+        @* Dit is het onderscheid dat de lege pagina zelf niet kan maken: "niet ingericht" tegenover
+           "nog niet opgehaald". Zonder deze regel wacht een operator op een ophaling die nooit komt.
+           Boven de toestandsmelding, want hij verklaart hem. *@
+        <p class="meta notice"><strong>Er wordt niets opgehaald</strong> — @scope</p>
+    }
+
+    @if (View.StateNotice is { } notice)
+    {
+        @* Een gewone melding en géén StatusNotice: dat component neemt een AgentStatus en kleurt in
+           groen/amber/rood. §1 reserveert die kleuren voor status, en "er loopt vandaag geen sprint"
+           is geen storing — amber daarvoor zou een gezond project laten oplichten. *@
+        <p class="meta notice"><strong>@StateTitle</strong> — @notice</p>
+    }
+
+    @if (View.Failure is { } failure)
+    {
+        @* De reden van de laatste mislukte ophaling, in gewone taal en zonder statuscode. Zie
+           SprintDocument.Failure: de technische vorm staat in de logregel van de collector, met
+           api.retry ervoor. Operator-only — zo'n tekst kan een rolverlening of een adres noemen. *@
+        <p class="meta notice"><strong>Wat er misging</strong> — @failure</p>
+    }
+
+    @if (View.Overlapping.Count > 0)
+    {
+        @* Zonder deze namen is de melding "er lopen meerdere periodes" niet te gebruiken: de
+           handeling erachter is de periodes corrigeren, en dan moet je weten welke. *@
+        <DataCard Grid="IterationColumns" Title="Iteraties die vandaag allemaal bevatten">
+            <DataRowHeader />
+            @foreach (var iteration in View.Overlapping)
+            {
+                <DataRow @key="@($"overlap-{iteration.Path}")">
+                    <DataCell Truncate="true">@iteration.Name</DataCell>
+                    <DataCell Truncate="true" Class="mono">@iteration.Path</DataCell>
+                </DataRow>
+            }
+        </DataCard>
+    }
+
+    @if (View.State == SprintState.Current)
+    {
+        <div class="kpi-grid">
+            <KpiTile Label="Work items"
+                     Value="@SprintText.Count(View.Tally.Items)"
+                     Sub="@RemovedSub" />
+            <KpiTile Label="Afgerond"
+                     Value="@SprintText.Count(View.Tally.Completed)"
+                     Sub="@CompletedSub" />
+            <KpiTile Label="Openstaande uren"
+                     Value="@SprintText.Hours(View.Tally.OpenHours)"
+                     Sub="@HoursSub(View.Tally.OpenHours)" />
+            <KpiTile Label="Gedane uren"
+                     Value="@SprintText.Hours(View.Tally.DoneHours)"
+                     Sub="@HoursSub(View.Tally.DoneHours)" />
+            <KpiTile Label="Story points"
+                     Value="@SprintText.Points(View.Tally.StoryPoints)"
+                     Sub="@HoursSub(View.Tally.StoryPoints)" />
+            <KpiTile Label="Geblokkeerd"
+                     Value="@SprintText.Count(View.Tally.Blocked)"
+                     Sub="@BlockedSub" />
+        </div>
+
+        <DataCard Grid="ItemColumns" Title="Work items in deze sprint">
+            <DataRowHeader />
+
+            @if (View.Items.Count == 0)
+            {
+                <p class="table-empty">@SprintNotice.NoItems</p>
+            }
+            else
+            {
+                @foreach (var item in View.Items)
+                {
+                    <DataRow @key="item.Id">
+                        <DataCell Class="num mono">@SprintText.Number(item.Id)</DataCell>
+                        <DataCell Truncate="true">
+                            <span>@item.Title</span>
+                            <span class="mono-meta">@Meta(item)</span>
+                        </DataCell>
+                        <DataCell>
+                            <span class="@SprintText.StageBadgeClass(item.Stage, item.IsBlocked)"
+                                  title="@SprintText.StageTitle(item.Stage, item.State)">
+                                <span class="badge__glyph" aria-hidden="true">@SprintText.StageGlyph(item.Stage, item.IsBlocked)</span>@item.State
+                            </span>
+                        </DataCell>
+                        <DataCell Truncate="true" title="@item.AssignedToAddress">
+                            @(item.AssignedTo ?? Unassigned)
+                        </DataCell>
+                        <DataCell Truncate="true" title="@CreatorTitle(item)">
+                            @(item.CreatedBy ?? SprintText.Dash)
+                        </DataCell>
+                        <DataCell Class="num">@SprintText.Hours(item.OpenHours)</DataCell>
+                        <DataCell Class="num">@SprintText.Hours(item.DoneHours)</DataCell>
+                        <DataCell Class="num">@SprintText.Points(item.StoryPoints)</DataCell>
+                    </DataRow>
+                }
+            }
+        </DataCard>
+    }
+
+    @if (View.Undated.Count > 0)
+    {
+        @* Staat er óók als er een gezonde sprint loopt, en dat is het punt: juist dan is "er valt werk
+           buiten elke periode" iets wat niemand anders zegt. De operator krijgt de paden erbij, want
+           hij is degene die ze in DevOps moet aanraken. *@
+        <DataCard Grid="IterationColumns" Title="@UndatedTitle">
+            <DataRowHeader />
+            @foreach (var iteration in View.Undated)
+            {
+                <DataRow @key="@($"undated-{iteration.Path}")">
+                    <DataCell Truncate="true">@iteration.Name</DataCell>
+                    <DataCell Truncate="true" Class="mono">@iteration.Path</DataCell>
+                </DataRow>
+            }
+        </DataCard>
+
+        <p class="meta notice">@View.UndatedNotice</p>
+    }
+
+    <p class="meta notice">@View.HoursNotice</p>
+    <p class="meta notice">@View.ReadOnlyNotice</p>
+</div>
+
+@code {
+    /// <summary>
+    /// De kolomsporen: nummer, titel, state, toegewezen, aangemaakt door, open, gedaan, punten.
+    /// </summary>
+    /// <remarks>
+    /// Acht kolommen, één meer dan de klantvariant. Twee <see cref="RowGrid"/>'s en niet één met een
+    /// verborgen kolom: een verborgen kolom is een filter, en §2 vraagt hier een typeverschil — het
+    /// klantcomponent heeft geen waarde om in die kolom te zetten, en dat hoort ook uit zijn
+    /// kolomdefinitie te blijken. Dezelfde afweging als bij <c>OperatorBilling</c>.
+    /// </remarks>
+    private static readonly RowGrid ItemColumns = new(
+        new GridColumn("Id", "70px", Align: CellAlign.End),
+        new GridColumn("Titel", "minmax(0, 1fr)", Labelled: false),
+        new GridColumn("State", "130px"),
+        new GridColumn("Toegewezen", "minmax(0, 130px)"),
+        new GridColumn("Aangemaakt door", "minmax(0, 130px)"),
+        new GridColumn("Open", "80px", Align: CellAlign.End),
+        new GridColumn("Gedaan", "80px", Align: CellAlign.End),
+        new GridColumn("Punten", "70px", Align: CellAlign.End));
+
+    /// <summary>De kolomsporen van een iteratielijst: naam en pad.</summary>
+    /// <remarks>
+    /// Eén definitie voor twee tabellen — de iteraties zonder datums en de overlappende. Dat is hier
+    /// geen hergebruik uit gemak: het zijn twee lijsten van hetzelfde type met dezelfde twee velden, en
+    /// twee kolomdefinities zouden op een dag uiteenlopen zonder dat het iets betekent.
+    /// </remarks>
+    private static readonly RowGrid IterationColumns = new(
+        new GridColumn("Iteratie", "minmax(0, 1fr)", Labelled: false),
+        new GridColumn("Pad", "minmax(0, 1.5fr)"));
+
+    /// <summary>Wat er staat als een item aan niemand is toegewezen.</summary>
+    private const string Unassigned = "niet toegewezen";
+
+    /// <summary>De sprintweergave van de operator.</summary>
+    [Parameter]
+    [EditorRequired]
+    public OperatorSprintView View { get; set; } = default!;
+
+    /// <summary>Het absolute moment van de laatste ophaling, voor de tooltip (§1).</summary>
+    private string Moment =>
+        View.ReadAt is { } moment ? TimeFormat.Absolute(moment) : "nog nooit opgehaald";
+
+    /// <summary>De kop boven de toestandsmelding.</summary>
+    private string StateTitle => View.State switch
+    {
+        SprintState.Unknown => "Nog niet opgehaald",
+        SprintState.NoIterations => "Dit bord heeft geen iteraties",
+        SprintState.NoDatedIterations => "Geen enkele iteratie heeft datums",
+        SprintState.NoCurrentSprint => "Er loopt vandaag geen sprint",
+        SprintState.Ambiguous => "Meerdere periodes lopen tegelijk",
+        _ => "Sprint",
+    };
+
+    /// <summary>De kop boven de tabel met de iteraties zonder datums.</summary>
+    private string UndatedTitle => View.Undated.Count == 1
+        ? "Eén iteratie zonder datums"
+        : $"{View.Undated.Count} iteraties zonder datums";
+
+    /// <summary>De subregel bij de tegel met het aantal work items.</summary>
+    private string? RemovedSub => View.Tally.Removed == 0
+        ? null
+        : $"{SprintText.Count(View.Tally.Removed)} verwijderd, niet meegeteld";
+
+    /// <summary>De subregel bij de tegel met het aantal afgeronde items.</summary>
+    private string? CompletedSub =>
+        View.Tally.Items == 0 ? null : $"van {SprintText.Count(View.Tally.Items)}";
+
+    /// <summary>De subregel bij de tegel met het aantal geblokkeerde items.</summary>
+    private string? BlockedSub => View.Tally.Blocked == 0 ? "geen" : "loopt vast";
+
+    /// <summary>De subregel bij een tegel met een som, of <c>null</c>.</summary>
+    /// <param name="sum">De som, of <c>null</c>.</param>
+    /// <returns>De subregel.</returns>
+    private static string? HoursSub(decimal? sum) =>
+        sum is null ? "niet ingevuld in DevOps" : null;
+
+    /// <summary>
+    /// De tooltip bij de aanmaker: het adres, en waarom de herkomst is wat hij is.
+    /// </summary>
+    /// <param name="item">Het item.</param>
+    /// <returns>De tekst.</returns>
+    /// <remarks>
+    /// <para><strong>Deze tooltip is het gereedschap achter de herkomstkolom.</strong> Staat er "herkomst:
+    /// onbekend" bij een item dat een agent heeft gemaakt, dan is de vraag welke identiteit er in DevOps
+    /// staat en of die in <c>PortalSprints:AgentIdentities</c> voorkomt — en dat is precies wat hier
+    /// staat. Zonder hem is de kolom een bewering zonder bewijs.</para>
+    /// </remarks>
+    private static string CreatorTitle(OperatorSprintRow item) =>
+        item.CreatedByAddress is { } address
+            ? $"{address} — {SprintText.OriginTitle(item.Origin)}"
+            : SprintText.OriginTitle(item.Origin);
+
+    /// <summary>De metaregel onder de titel: soort, herkomst en tags (§3.4).</summary>
+    /// <param name="item">Het item.</param>
+    /// <returns>De regel.</returns>
+    private static string Meta(OperatorSprintRow item)
+    {
+        var delen = new List<string>(3)
+        {
+            item.Type,
+            $"herkomst: {SprintText.Origin(item.Origin)}",
+        };
+
+        if (item.Tags.Count > 0)
+        {
+            delen.Add(string.Join(", ", item.Tags));
+        }
+
+        return string.Join(" · ", delen);
+    }
+}

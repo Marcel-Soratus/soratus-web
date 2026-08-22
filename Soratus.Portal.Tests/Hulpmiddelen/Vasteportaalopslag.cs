@@ -148,6 +148,7 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
                 Environment = "West-Europa",
                 EnvironmentDetail = Omgevingsdetail,
                 AzureScope = Standaardscope,
+                DevOpsScope = Standaardbord,
                 TelemetryEndpoint = Autorisatiebron.StandaardEndpoint,
                 TelemetryDatabase = "telemetry",
                 CreatedAt = Testgegevens.Nu - TimeSpan.FromDays(120),
@@ -439,6 +440,7 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
             Environment = request.Environment,
             EnvironmentDetail = request.EnvironmentDetail,
             AzureScope = request.AzureScope,
+            DevOpsScope = request.DevOpsScope,
             TelemetryEndpoint = request.TelemetryEndpoint,
             TelemetryDatabase = request.TelemetryDatabase,
             CreatedAt = Testgegevens.Nu,
@@ -512,6 +514,14 @@ internal sealed partial class Vasteportaalopslag : IPortalDataStore, IPortalHour
             Environment = edit.Environment,
             EnvironmentDetail = edit.EnvironmentDetail,
             AzureScope = edit.AzureScope,
+
+            // Deze regel ontbrak toen het veld werd toegevoegd, en de test die hem miste werd rood met
+            // "verwacht het bord, kreeg null" — precies het gat dat punt 41 beschrijft, maar dan in de
+            // fixture: die bouwt de klantdocumentmapping ná in plaats van de productiecode aan te roepen,
+            // dus élk nieuw veld moet hier apart worden bijgeschreven. Dat het hier rood werd en niet stil
+            // bleef is toeval van de richting: een vergeten regel in de fixture valt op, een vergeten regel
+            // in de productiemapping niet. Zie KlantdocumentveldenTests, die de tweede kant bewaakt.
+            DevOpsScope = edit.DevOpsScope,
             TelemetryEndpoint = edit.TelemetryEndpoint,
             TelemetryDatabase = edit.TelemetryDatabase,
             CreatedAt = partitie.Klant?.CreatedAt ?? Testgegevens.Nu,

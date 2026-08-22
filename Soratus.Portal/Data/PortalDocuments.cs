@@ -235,6 +235,40 @@ public sealed record CustomerDocument
     public string? AzureScope { get; init; }
 
     /// <summary>
+    /// Het Azure DevOps-bord waarvan de sprint van deze klant wordt gelezen, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>De tweelingbroer van <see cref="AzureScope"/>, en om dezelfde reden een eigen
+    /// gevalideerd veld naast <see cref="EnvironmentDetail"/>.</strong> Er was geen veld waarmee een
+    /// programma kon weten welk DevOps-project bij welke klant hoort. Uit een weergavetekst raden is
+    /// precies de fout waartegen <see cref="AzureScope"/> bestaat, en de tekst van deze klanten is niet
+    /// te ontleden.</para>
+    ///
+    /// <para><strong>De vorm is <c>organisatie/project/team</c></strong>, bijvoorbeeld
+    /// <c>soratus/MBVApp4 MAUI/MBVApp4 MAUI Team</c>. Drie segmenten en niet twee: een sprint is een
+    /// teambegrip. Iteraties worden aan een team toegewezen en <c>@currentIteration</c> is een
+    /// teaminstelling, dus zonder team is er geen sprint. Zie <see cref="Sprints.DevOpsScope"/> voor de
+    /// volledige afweging en voor wat er wel en niet te controleren is.</para>
+    ///
+    /// <para><strong><c>null</c> betekent "niet ingericht" en dat is een geldige toestand.</strong> Punt
+    /// 15 op de plek waar hij de sprintweergave raakt: een klant zonder bord wordt niet bevraagd, er komt
+    /// dus geen sprintdocument, en het scherm zegt dát er niets is ingericht in plaats van een leeg
+    /// sprintoverzicht te tonen dat op "geen werk" lijkt. Dat onderscheid is de kern van punt 15 en van
+    /// de hele kostenlane.</para>
+    ///
+    /// <para>Wat er staat is gevalideerd door de schrijfkant (<see cref="CustomerEdit.Validate"/>,
+    /// <see cref="NewCustomerRequest.Validate"/>), dus een onbruikbare waarde kan hier alleen komen als
+    /// iemand het document met de hand heeft aangepast. De leeskant behandelt dat als een fout die op het
+    /// scherm komt, en niet als een leeg veld.</para>
+    ///
+    /// <para><strong>Bestaande documenten zijn niet gemigreerd.</strong> Vaste lijn in dit project, en
+    /// hier goedkoop: de zeven demoklanten zijn verzonnen, en van de enige echte klant is het bord met de
+    /// hand in te vullen op het contractscherm.</para>
+    /// </remarks>
+    [JsonPropertyName("devOpsScope")]
+    public string? DevOpsScope { get; init; }
+
+    /// <summary>
     /// De Cosmos-endpoint van de telemetrie van déze klant, of leeg voor de standaard.
     /// </summary>
     /// <remarks>

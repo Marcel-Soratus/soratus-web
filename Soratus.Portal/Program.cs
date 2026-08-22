@@ -12,6 +12,7 @@ using Soratus.Portal.Data;
 using Soratus.Portal.Mail;
 using Soratus.Portal.Platform;
 using Soratus.Portal.Security;
+using Soratus.Portal.Sprints;
 using Soratus.Portal.Views;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -294,6 +295,46 @@ builder.Services.AddSingleton<IAzureCostCollectorStore, CosmosAzureCostCollector
 if (!builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<AzureCostCollector>();
+}
+
+// ── De sprintcollector (§3.4, fase 5) ────────────────────────────────────────────────────────
+// Geen ValidateOnStart, om dezelfde reden als bij PortalData, PortalMail en PortalCosts.
+builder.Services.AddOptions<SprintOptions>()
+    .Bind(builder.Configuration.GetSection(SprintOptions.SectionName))
+    .ValidateDataAnnotations();
+
+// Een benoemde HttpClient en geen typed client, om dezelfde reden als bij AzureCostClient: de
+// collector is een achtergronddienst en leeft zolang het portaal draait, dus een geïnjecteerde
+// HttpClient houdt jaren dezelfde handler vast en volgt een DNS-wijziging van dev.azure.com niet.
+builder.Services.AddHttpClient(DevOpsSprintClient.HttpClientName);
+builder.Services.AddSingleton<IDevOpsSprintClient, DevOpsSprintClient>();
+
+// Singleton, want SprintCollector is een hosted service en die kan geen scoped afhankelijkheid
+// krijgen. Een eigen interface naast IPortalSprintStore en niet twee methoden daar: elke methode
+// van die interface vraagt een scope, en de collector heeft geen mens en dus geen scope.
+builder.Services.AddSingleton<ISprintCollectorStore, CosmosSprintCollectorStore>();
+
+// De leeskant van het scherm. Scoped, net als IPortalCostsStore en om dezelfde reden.
+//
+// Het scherm roept DevOps niet aan; het leest uitsluitend wat de collector heeft weggeschreven,
+// precies zoals het facturatiescherm Cost Management niet aanroept bij het renderen. §3.4 vraagt
+// het tijdstip van laatste ophalen op het scherm, en bij een ophaling per paginaweergave is dat
+// tijdstip altijd "nu" en zegt het niets — de spec vraagt met dat ene veld om een momentopname.
+// Er is dus geen codepad waarlangs een paginaweergave aan dev.azure.com komt.
+builder.Services.AddScoped<IPortalSprintStore, CosmosPortalSprintStore>();
+builder.Services.AddScoped<ISprintViews, SprintViews>();
+
+// De collector draait niet in Development, en dat staat hier in code in plaats van als vlag in
+// appsettings.Development.json — dezelfde afweging als bij AzureCostCollector, met een reden die
+// een graad zwaarder is. Die collector *leest* bij Azure; deze schrijft sprintdocumenten in de
+// partitie van een echte klant. Een ontwikkelmachine die aan blijft staan vult dus de opslag van
+// een klant met wat het DevOps-token van die ontwikkelaar mocht ophalen — vervuiling van
+// klantgegevens vanaf een laptop, en niet alleen te veel meten uit dezelfde emmer.
+//
+// Wie hem bewust lokaal wil draaien haalt deze voorwaarde weg en ziet daarbij waarom hij er stond.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<SprintCollector>();
 }
 
 // ── De storingsmelder (§4, fase 6) ───────────────────────────────────────────────────────────

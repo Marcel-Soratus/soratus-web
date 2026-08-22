@@ -39,6 +39,14 @@ public sealed record NewCustomerRequest
     /// <remarks>Zie <see cref="CustomerDocument.AzureScope"/> en <see cref="Data.AzureScope"/>.</remarks>
     public string? AzureScope { get; init; }
 
+    /// <summary>
+    /// Het DevOps-bord waarvan de sprint wordt gelezen, of <c>null</c> om hem later vast te leggen.
+    /// </summary>
+    /// <remarks>
+    /// Zie <see cref="CustomerDocument.DevOpsScope"/> en <see cref="Sprints.DevOpsScope"/>.
+    /// </remarks>
+    public string? DevOpsScope { get; init; }
+
     /// <summary>De eigen Cosmos-endpoint van deze klant, of leeg voor de standaard.</summary>
     public string? TelemetryEndpoint { get; init; }
 
@@ -74,6 +82,15 @@ public sealed record NewCustomerRequest
         if (Data.AzureScope.Validate(AzureScope) is { } scopeError)
         {
             return scopeError;
+        }
+
+        // En hetzelfde voor het DevOps-bord, en om een reden die er net naast ligt. Een bord dat niet
+        // bestaat geeft een 404 en is dus zichtbaar, maar een tikfout die per ongeluk een ánder bestaand
+        // team raakt geeft een geslaagd antwoord met de sprint van dat andere team — en dat is niet aan
+        // de vorm te zien. Zie Sprints.DevOpsScope.
+        if (Sprints.DevOpsScope.Validate(DevOpsScope) is { } boardError)
+        {
+            return boardError;
         }
 
         if (Contract?.Validate() is { } contractError)
@@ -271,6 +288,17 @@ public sealed record CustomerEdit
     /// </remarks>
     public string? AzureScope { get; init; }
 
+    /// <summary>
+    /// Het DevOps-bord waarvan de sprint wordt gelezen, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Net als <see cref="AzureScope"/> een gewoon formulierveld dat te corrigeren is. En net als daar
+    /// hoort hij door <see cref="CosmosPortalDataStore.SaveCustomerAsync"/> te worden meegeschreven: die
+    /// methode vervangt het hele klantdocument, dus een veld dat dit type niet draagt wordt bij het eerste
+    /// bewaren leeggemaakt. Dat is gat 4 uit punt 41, en het is daar met een mutatie gevonden.
+    /// </remarks>
+    public string? DevOpsScope { get; init; }
+
     /// <summary>De eigen Cosmos-endpoint van deze klant, of leeg voor de standaard.</summary>
     public string? TelemetryEndpoint { get; init; }
 
@@ -285,13 +313,14 @@ public sealed record CustomerEdit
     /// </summary>
     /// <returns><c>null</c> als het klopt, anders de melding.</returns>
     /// <remarks>
-    /// De naam eerst en de scope daarna, in de volgorde van de velden op het scherm. Een leeg
-    /// scopeveld is toegestaan: zie <see cref="Data.AzureScope.Validate"/>.
+    /// De naam eerst en de twee scopes daarna, in de volgorde van de velden op het scherm. Beide
+    /// scopevelden mogen leeg zijn: zie <see cref="Data.AzureScope.Validate"/> en
+    /// <see cref="Sprints.DevOpsScope.Validate"/>.
     /// </remarks>
     public string? Validate() =>
         string.IsNullOrWhiteSpace(Name)
             ? "Vul een klantnaam in."
-            : Data.AzureScope.Validate(AzureScope);
+            : Data.AzureScope.Validate(AzureScope) ?? Sprints.DevOpsScope.Validate(DevOpsScope);
 }
 
 /// <summary>

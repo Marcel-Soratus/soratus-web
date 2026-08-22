@@ -143,6 +143,19 @@
                            Hint="Het veld Resource-ID van de resource group in Azure; kopieer het daarvandaan. Leeg laten mag: dan wordt er nog niet gemeten en zegt het facturatiescherm dat er niets is ingericht, in plaats van € 0,00 te tonen."
                            maxlength="@AzureScope.MaximumScopeLength" />
 
+                @* En het bord waarop de sprintcollector leest. Dezelfde vorm als het veld erboven en om
+                   dezelfde reden: een machineleesbare verwijzing náást de weergavetekst, want een
+                   weergavetekst ontleden gaat stil fout. Drie segmenten, want een sprint is een
+                   teambegrip — iteraties worden aan een team toegewezen. *@
+                <FormField Label="DevOps-bord"
+                           Name="@FieldName(nameof(Form.DevOpsScope))"
+                           Value="@Form.DevOpsScope"
+                           Mono="true"
+                           Error="@Error(nameof(Form.DevOpsScope))"
+                           Placeholder="soratus/MBVApp4 MAUI/MBVApp4 MAUI Team"
+                           Hint="Organisatie, project en team, uit de adresregel van het bord in Azure DevOps. Leeg laten mag: dan zegt het sprintscherm dat er geen bord is vastgelegd, in plaats van een leeg sprintoverzicht te tonen dat op 'geen werk' lijkt."
+                           maxlength="@DevOpsScope.MaximumScopeLength" />
+
                 <h2 class="colhead">Telemetrie</h2>
 
                 @* Staat niet in de veldenlijst van §3.9 en hoort er wel: de acceptatie van fase 2

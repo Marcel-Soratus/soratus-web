@@ -202,6 +202,16 @@ public abstract class Portaalrendertest : BunitContext
         Services.AddSingleton(Facturatie ?? VasteFactuurweergaven.Bouw(Opslag, lijst));
         Services.AddSingleton<IPortalCostsStore>(Opslag);
 
+        // De sprintpagina vraagt er één: de weergavelaag voor beide rollen. Hij staat hier en niet per
+        // test, om dezelfde reden als de regels erboven: elke pagina valt onder het zichtbaarheidsvangnet
+        // en dat rendert ze allemaal, en een pagina die op een ontbrekende dienst omvalt toont geen
+        // verboden woorden en laat dat vangnet dus groen staan om de verkeerde reden.
+        //
+        // Eén regel en geen twee: er is geen IPortalSprintStore-registratie nodig, want dit scherm
+        // schrijft niets — DevOps is leidend en het portaal schrijft nooit terug (§3.4). De fixture
+        // projecteert over dezelfde Opslag, zodat een test een sprintstand daar neerzet.
+        Services.AddSingleton(VasteSprintweergaven.Bouw(Opslag, lijst));
+
         // Het urenscherm leest de klok zelf om te bepalen welke maand "deze maand" is. Dezelfde
         // stilstaande klok als de weergavelaag, anders wijst de standaardweergave naar een andere
         // maand dan het viewmodel voorselecteert.

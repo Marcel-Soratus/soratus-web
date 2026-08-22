@@ -124,6 +124,11 @@ internal sealed class ContractViews(
             // is de waarheid — een uitrol is nooit de plek waar een meetscope wordt vastgelegd.
             AzureScope = customer?.AzureScope,
 
+            // Zelfde regel en dezelfde terugval-die-er-niet-is: het configuratierecord heeft geen
+            // DevOps-bord en hoort er geen te krijgen. Een uitrol is niet de plek waar een bord wordt
+            // vastgelegd.
+            DevOpsScope = customer?.DevOpsScope,
+
             // Ook deze twee komen mee, en niet omdat het scherm ze zo graag toont: het
             // omgevingsblok stuurt ze terug bij het bewaren. SaveCustomerAsync vervangt het hele
             // klantdocument, dus een veld dat het formulier niet draagt wordt bij het eerste

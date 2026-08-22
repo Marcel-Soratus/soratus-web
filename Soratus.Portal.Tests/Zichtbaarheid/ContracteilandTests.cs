@@ -479,6 +479,116 @@ public class ContracteilandTests : Portaalrendertest
     }
 
     [Fact]
+    public void HetBewarenVanDeOmgevingLaatHetDevOpsBordStaan()
+    {
+        // Dezelfde bevinding als bij de Azure-scope, op het veld naast hem. SaveCustomerAsync vervangt het
+        // hele klantdocument, dus een veld dat het formulier niet draagt wordt bij het eerste bewaren
+        // leeggemaakt — en dan zet een operator die de klantnaam verbetert de sprintweergave van die klant
+        // uit. Het sprintscherm zegt vanaf dat moment "geen DevOps-bord vastgelegd", en dat is een tekst
+        // die is geschreven om waar te zijn.
+        //
+        // Dit is gat 4 van punt 41 voor de tweede keer, nu met een test vóór de mutatie in plaats van erna.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Klantnaam", "Acme Logistiek BV");
+        BewaarOmgeving(cut);
+
+        Assert.Equal(Vasteportaalopslag.Standaardbord, Opslag.Klant()!.DevOpsScope);
+        Assert.Equal(
+            Vasteportaalopslag.Standaardbord,
+            Assert.Single(Opslag.Klantwijzigingen).DevOpsScope);
+    }
+
+    [Fact]
+    public void EenVerkeerdDevOpsBordIsOpHetSchermTeHerstellen()
+    {
+        // Waarom dit veld op het formulier staat en niet alleen op het document. Een bord dat niet bestaat
+        // geeft een 404 en is dus zichtbaar — maar een tikfout in de teamnaam die per ongeluk een ánder
+        // bestaand team raakt geeft een geslaagd antwoord met de sprint van dat team, en dat is niet aan de
+        // vorm te zien. Op het moment dat iemand dat opmerkt moet het te corrigeren zijn zonder in Cosmos
+        // te hoeven.
+        const string juist = "soratus/Acme Logistiek/Acme Logistiek Kernteam";
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Assert.Equal(Vasteportaalopslag.Standaardbord, Waarde(cut, "DevOps-bord"));
+
+        Vul(cut, "DevOps-bord", juist);
+        BewaarOmgeving(cut);
+
+        Assert.Equal(juist, Opslag.Klant()!.DevOpsScope);
+    }
+
+    [Fact]
+    public void EenOnbruikbaarDevOpsBordWordtNietBewaardEnMeldtZichOnderZijnVeld()
+    {
+        // De weergavetekst per ongeluk in het verkeerde veld geplakt, of de Azure-scope in het bordveld —
+        // die twee velden staan naast elkaar en hebben beide een pad-achtige vorm. Wat er in een document
+        // staat wordt door de collector bevraagd, dus een bord dat geen bord is hoort er niet in te komen.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "DevOps-bord", Vasteportaalopslag.Omgevingsdetail);
+        BewaarOmgeving(cut);
+
+        // Niet weggeschreven, en er is niet eens een poging naar de opslag gegaan: de melding hoort onder
+        // het veld te staan en niet als blok boven de knop.
+        Assert.Equal(Vasteportaalopslag.Standaardbord, Opslag.Klant()!.DevOpsScope);
+        Assert.Empty(Opslag.Klantwijzigingen);
+        Assert.Contains("organisatie/project/team", cut.Markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HetDevOpsBordLeeghalenIsToegestaanEnBetekentNietIngericht()
+    {
+        // De spiegel van de test hierboven, en zonder hem is er geen weg terug: leeg is een geldige
+        // toestand, en als leeghalen zou worden geweigerd is een verkeerd bord alleen te vervangen en nooit
+        // weg te halen.
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "DevOps-bord", "  ");
+        BewaarOmgeving(cut);
+
+        Assert.Null(Opslag.Klant()!.DevOpsScope);
+    }
+
+    [Fact]
+    public void DeTweeScopeveldenWordenOnafhankelijkVanElkaarBewaard()
+    {
+        // Ze staan naast elkaar op één kaart met één knop, hebben beide een pad-achtige vorm, en worden
+        // door twee verschillende collectors gelezen. Een bewerking die ze verwisselt of die er één van
+        // laat vallen is niet aan het scherm te zien: er staan twee gevulde velden en er wordt netjes
+        // bewaard.
+        //
+        // Deze test bestaat omdat de mapping in CosmosPortalDataStore twee regels naast elkaar heeft, en
+        // een copy-paste daar precies dit oplevert — DevOpsScope = Clean(edit.AzureScope), zonder dat er
+        // iets rood wordt.
+        const string bord = "soratus/Bakker/Bakker Team";
+        const string scope =
+            "/subscriptions/501a66d2-de54-4d4f-9f7c-1fbb55bec17f/resourceGroups/rg-bakker-prod";
+
+        MeldOperatorAan();
+
+        var cut = Eiland();
+
+        Vul(cut, "Azure-scope", scope);
+        Vul(cut, "DevOps-bord", bord);
+        BewaarOmgeving(cut);
+
+        var klant = Opslag.Klant()!;
+
+        Assert.Equal(scope, klant.AzureScope);
+        Assert.Equal(bord, klant.DevOpsScope);
+    }
+
+    [Fact]
     public void EenOmgevingswijzigingSchrijftHetContractNietOpnieuwWeg()
     {
         // Twee kaarten, twee documenten, twee knoppen. Eén kaart met één knop zou van elke correctie
