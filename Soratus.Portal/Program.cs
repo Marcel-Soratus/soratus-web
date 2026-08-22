@@ -13,6 +13,7 @@ using Soratus.Portal.Mail;
 using Soratus.Portal.Platform;
 using Soratus.Portal.Security;
 using Soratus.Portal.Sprints;
+using Soratus.Portal.Support;
 using Soratus.Portal.Views;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -296,6 +297,29 @@ if (!builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<AzureCostCollector>();
 }
+
+// ── Support (§3.8) ────────────────────────────────────────────────────────────────────────────
+// De draad staat in de container customers, naast klant, contract, urenregels en de
+// verzendbevestigingen. Scoped, net als IPortalHoursStore en IStatementStore en om dezelfde reden:
+// geen hosted service heeft hem nodig, en dan is scoped de standaard.
+builder.Services.AddScoped<ISupportStore, CosmosSupportStore>();
+builder.Services.AddScoped<ISupportViews, SupportProjection>();
+
+// Het schrijfpad van de klantkant. Concrete klasse en geen interface: er is één schrijfpad en het
+// heeft geen tweede implementatie, en een interface met één implementatie die nergens wordt
+// vervangen is een laag zonder werk.
+builder.Services.AddScoped<SupportDesk>();
+
+// En hier staat met opzet GEEN registratie van ISupportFirstLine.
+//
+// Dat is punt 29 toegepast: daar is een plaatshouder achter een naad afgewezen omdat hij "niets
+// gemeten" antwoordt en dat niet te onderscheiden is van een echte "niets gemeten". Hier zou een
+// plaatshouder altijd escaleren, en dat is niet te onderscheiden van een eerstelijn die het niet
+// weet — een storing die zich voordoet als werkende functionaliteit.
+//
+// SupportDesk haalt de naad daarom met GetService op en niet met GetRequiredService, en de
+// afwezigheid is een eigen toestand met een eigen tekst op het scherm. Een klant leest dan dat een
+// mens antwoordt, en dat is waar. Zie punt 46.
 
 // ── De sprintcollector (§3.4, fase 5) ────────────────────────────────────────────────────────
 // Geen ValidateOnStart, om dezelfde reden als bij PortalData, PortalMail en PortalCosts.
