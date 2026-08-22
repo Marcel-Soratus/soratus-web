@@ -1,6 +1,61 @@
-# Stand van zaken — 20 augustus 2026
+# Stand van zaken — 22 augustus 2026
 
 Werkdocument om verder mee te gaan. Vervangbaar; dit is geen ontwerpdocument.
+
+## Waar het werk stond aan het eind van 22 augustus
+
+Eenentwintig commits. **1926 tests groen over vijf projecten**, nul waarschuwingen op een volledige
+rebuild vanuit de wortel. Fase 0 t/m 4a staan uitgerold; fase 5 en 6 staan in de repo en zijn **niet
+uitgerold**.
+
+**Wat er vandaag bij is gekomen**, in drie commits die elk alleen staan (elk in een aparte worktree
+gebouwd en getest):
+
+- **De sprintweergave** (§3.4). Read-only uit Azure DevOps, met de collector achter de naad en het
+  scherm dat alleen Cosmos leest. Zes toestanden waar zes handelingen bij horen, en de maand komt uit
+  de **datums** van een iteratie en nooit uit een naam.
+- **De supportdraad** met de AI-eerstelijn als naad die is gedeclareerd en niet geregistreerd. Vier
+  sloten waarvan er geen één een instructie aan een model is; het scherpste is dat het antwoordtype
+  nergens een tekstveld heeft.
+- **Het platform meldt zichzelf** (fase 6). De kostencollector en de storingsmelder bestaan nu als
+  agent in ons eigen overzicht, langs hetzelfde contract als de agents van een klant.
+- En één commit die geen functionaliteit is: **één meetlaag voor de mutatierondes**.
+
+### Vijf dingen die op een mens wachten
+
+De vier van gisteren staan er nog, en er is één bij gekomen:
+
+- **`id-soratus-portal` lid maken van de DevOps-organisatie `soratus`** — als service principal, met
+  toegangsniveau Basic, en in de projectgroep **Readers** van `MBVApp4 MAUI`. Gemeten en niet
+  vermoed: de identiteit zit in dezelfde tenant als de organisatie, maar een identiteitszoekopdracht
+  geeft "No identities found" terwijl dezelfde zoekopdracht op een mens hem wél vindt. Zonder deze
+  stap levert élke DevOps-aanroep een geweigerd verzoek op. Dat is een wijziging op
+  organisatieniveau en valt buiten de twee resource groups waar wij mogen schrijven; het blok staat
+  in punt 45.
+- **Uitrollen.** Fase 5 en 6 staan in de repo en niet in Azure. Code en infra kunnen in willekeurige
+  volgorde: de schakelaar voor de platformtelemetrie is de app-setting met de endpoint, en zolang die
+  ontbreekt publiceert het portaal niets en blijft de interne klant naar de bestaande database
+  kijken. Er is dus geen tussenstand.
+
+### Wat de dag heeft geleerd
+
+1. **Een mutatieronde is een aangekondigd venster.** Dit is de vierde manier waarop een meting hier
+   kan liegen, en de gevaarlijkste van de vier: de andere drie laten een spoor in de uitvoer achter
+   en deze niet. Een boom waarin een andere sessie een mutatie heeft staan, is van buiten niet van
+   een boom met een defect te onderscheiden. Twee sessies hebben vandaag dezelfde drie rode tests aan
+   elkaar toegewezen als bevinding; het waren er geen. Wat het verraadt is de **vorm** van het
+   antwoord — een handvol tests die alle dezelfde ene regel dekken, en verder niets rood.
+2. **Een assertie op de aanwezigheid van een teken in markup zegt alleen iets als dat teken daar
+   uniek is.** Er stond een test op een kolom die groen bleef terwijl die kolom leeg raakte, omdat
+   twee ándere kolommen hetzelfde streepje hebben. Twee streepjes dekten elkaars afwezigheid. Dit is
+   niet te vinden door naar de test te kijken — hij was groen en hij las goed. Alleen een mutatie
+   vindt hem, en niemand muteert een test die al groen is. De suite is hier **niet** op doorzocht.
+3. **Een tweede laag die per constructie onbereikbaar is, is geen dode code.** De URL-escaping in de
+   sprintlane is met geen enkele test te raken, omdat de validatie de tekens die iets veranderen al
+   verbiedt. Hij blijft staan als vangnet voor de dag dat iemand die lijst versoepelt — en dát die
+   lijst gemeten is, is de helft die het rechtvaardigt. Wie alleen "geen test" leest, haalt hem weg.
+4. **Drie kopieën van hetzelfde meetgereedschap hadden drie verschillende fouten.** Niemand had ze
+   gevonden door het script te lezen; ze kwamen boven doordat het instrument valse uitkomsten gaf.
 
 ## Waar het werk stond aan het eind van 21 augustus
 
