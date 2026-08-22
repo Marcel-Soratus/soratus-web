@@ -165,11 +165,27 @@ internal sealed class Vastestoringsbron : IAgentFaultSource
     /// <summary>Hoe vaak er is gelezen.</summary>
     public int Aanroepen { get; private set; }
 
+    /// <summary>
+    /// De fout die het lezen oplevert, of <c>null</c> voor een geslaagde lezing.
+    /// </summary>
+    /// <remarks>
+    /// Bestaat om te meten wat er van een ronde wordt als het lezen omvalt. Dat is sinds fase 6 niet
+    /// meer alleen een logregel: de ronde is een run van de agent <c>storingsmelder</c>, en een ronde
+    /// die omvalt is een mislukte run. Dezelfde hook en dezelfde reden als
+    /// <c>Vastekostenopslag.Leesfout</c>.
+    /// </remarks>
+    public Exception? Leesfout { get; set; }
+
     /// <inheritdoc />
     public Task<IReadOnlyList<CustomerAgentScan>> ScanAsync(
         CancellationToken cancellationToken = default)
     {
         Aanroepen++;
+
+        if (Leesfout is not null)
+        {
+            throw Leesfout;
+        }
 
         return Task.FromResult<IReadOnlyList<CustomerAgentScan>>([.. Klanten]);
     }

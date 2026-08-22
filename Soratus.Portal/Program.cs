@@ -10,6 +10,7 @@ using Soratus.Portal.Api;
 using Soratus.Portal.Components;
 using Soratus.Portal.Data;
 using Soratus.Portal.Mail;
+using Soratus.Portal.Platform;
 using Soratus.Portal.Security;
 using Soratus.Portal.Views;
 
@@ -82,6 +83,19 @@ builder.Services.AddOptions<PortalTelemetryOptions>()
 builder.Services.AddOptions<PortalCustomerOptions>()
     .Bind(builder.Configuration.GetSection(PortalCustomerOptions.SectionName));
 
+// Waar de telemetrie van het platform zélf staat. Geen ValidateOnStart, om dezelfde reden als bij
+// PortalData: een verkeerd ingerichte telemetrie is een inrichtingsfout, en een inrichtingsfout die
+// het opstarten tegenhoudt neemt /healthz mee.
+//
+// Deze sectie voedt twee kanten en dat is met opzet: de publicatiekant hieronder, en de leeskant via
+// CustomerDirectory — die de interne beheerklant hierheen laat wijzen in plaats van naar
+// Telemetry:Database. Twee configuraties zouden de toestand toestaan waarin het portaal netjes
+// publiceert in een database waar het scherm niet kijkt, en dat levert geen fout op maar een leeg
+// overzicht.
+builder.Services.AddOptions<PlatformTelemetryOptions>()
+    .Bind(builder.Configuration.GetSection(PlatformTelemetryOptions.SectionName))
+    .ValidateDataAnnotations();
+
 // De portaaleigen opslag: klanten, contracten en toegang. Een andere opslag dan de telemetrie, en
 // dat is geen detail — zie PortalDataLocation. Geen ValidateOnStart op de endpoint: een lege
 // endpoint is een inrichtingsfout die het portaal moet overleven, want anders neemt hij /healthz mee.
@@ -104,6 +118,21 @@ builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential()
 // Eén CosmosClient per account-endpoint, gedeeld zolang de app draait. Zie CosmosClientCache.
 builder.Services.AddSingleton<CosmosClientCache>();
 builder.Services.AddSingleton<CosmosContainerProvider>();
+
+// ── Het portaal als agent-host (§4, fase 6) ──────────────────────────────────────────────────
+// Hier meldt het platform zichzelf: de kostencollector en de storingsmelder worden agents in ons
+// eigen overzicht, met een registratie, een hartslag en een run per tik van hun klok.
+//
+// Ná de TokenCredential en de TimeProvider hierboven, en dat is geen stijl: de bibliotheek zet die
+// twee met TryAddSingleton neer, dus in deze volgorde hergebruikt zij de credential en de klok van
+// het portaal. Andersom zou er een tweede DefaultAzureCredential staan.
+//
+// De uitkomst wordt ná Build() gelogd en niet hier: er is op dit punt nog geen logger. Dat het een
+// uitkomst is en geen stilte is het punt — een portaal dat zijn eigen agents niet publiceert hoort
+// dat te zeggen, want anders is een leeg beheeroverzicht niet van een kapotte inrichting te
+// onderscheiden. Deze aanroep werpt niet; zie PlatformAgents.AddSoratusPlatformAgents voor waarom
+// dat hier andersom is dan in de bibliotheek zelf.
+var platformAgents = builder.AddSoratusPlatformAgents();
 
 // Warmt na het opstarten elke klantopslag op. Gemeten: koud kost het overzicht bijna acht
 // seconden, warm ongeveer 200 ms — dat verschil hoort de eerste operator van de ochtend niet te
@@ -320,6 +349,10 @@ if (!builder.Environment.IsDevelopment())
 }
 
 var app = builder.Build();
+
+// Wat er van het aansluiten als agent-host terecht is gekomen. Hier en niet in de opstartcode: daar
+// bestaat de logger nog niet. Eén regel per start, met de reden erbij.
+app.Logger.Log(platformAgents.Level, "{Explanation}", platformAgents.Explanation);
 
 if (!app.Environment.IsDevelopment())
 {

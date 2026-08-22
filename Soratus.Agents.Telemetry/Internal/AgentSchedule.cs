@@ -1,23 +1,28 @@
-using Cronos;
-
 namespace Soratus.Agents.Telemetry.Internal;
 
 /// <summary>
 /// De cron-expressie van deze agent, één keer geparseerd.
 /// </summary>
 /// <remarks>
-/// Zowel de planner als het registratiedocument vragen hier de volgende run op. Daarom is dit
+/// <para>Zowel de planner als het registratiedocument vragen hier de volgende run op. Daarom is dit
 /// één object en geen twee berekeningen: het contract belooft dat <c>nextRunAt</c> de échte
-/// volgende run is, en dat is alleen waar als het scherm en de planner uit dezelfde bron putten.
+/// volgende run is, en dat is alleen waar als het scherm en de planner uit dezelfde bron putten.</para>
+///
+/// <para>Het parseren en uitrekenen zelf staat in <see cref="SoratusSchedule"/> en niet hier. Dat is
+/// geen laagje om een laagje: die klasse is publiek, omdat een host die zijn geherbergde klok-agents
+/// zelf plant dezelfde expressie moet kunnen aankondigen en erop wachten. Eén implementatie van "wat
+/// is het volgende moment", twee aanroepers.</para>
+///
+/// <para>Wat híer overblijft is wat alleen op het pad met één agent per proces bestaat: dat de
+/// expressie <em>mag</em> ontbreken, en dat een fout erin naar <c>SORATUS_AGENT__SCHEDULE</c>
+/// verwijst.</para>
 /// </remarks>
 internal sealed class AgentSchedule
 {
-    private readonly CronExpression? _expression;
-    private readonly TimeZoneInfo _timeZone;
+    private readonly SoratusSchedule? _schedule;
 
     internal AgentSchedule(string? expression, TimeZoneInfo timeZone)
     {
-        _timeZone = timeZone;
         Raw = string.IsNullOrWhiteSpace(expression) ? null : expression.Trim();
 
         if (Raw is null)
@@ -25,19 +30,19 @@ internal sealed class AgentSchedule
             return;
         }
 
-        // Cronos kent vijf velden (minuut-precisie) en zes (met seconden). Welke van de twee het
-        // is volgt uit de expressie zelf; de bouwer hoeft geen formaat mee te geven.
-        int fields = Raw.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        CronFormat format = fields >= 6 ? CronFormat.IncludeSeconds : CronFormat.Standard;
-
         try
         {
-            _expression = CronExpression.Parse(Raw, format);
+            _schedule = SoratusSchedule.Parse(Raw, timeZone);
         }
-        catch (CronFormatException exception)
+        catch (InvalidOperationException exception)
         {
+            // De binnenste melding en niet die van SoratusSchedule zelf: die zegt al "'x' is geen
+            // geldige cron-expressie", en dat twee keer in één regel zetten maakt de melding langer
+            // zonder hem duidelijker te maken. Wat hier wél bij hoort is de sleutel waar de expressie
+            // uit komt, want dat is de plek die de lezer moet aanpassen.
             throw new InvalidOperationException(
-                $"SORATUS_AGENT__SCHEDULE bevat geen geldige cron-expressie: '{Raw}'. {exception.Message}",
+                $"SORATUS_AGENT__SCHEDULE bevat geen geldige cron-expressie: '{Raw}'. "
+                + (exception.InnerException?.Message ?? exception.Message),
                 exception);
         }
     }
@@ -46,18 +51,11 @@ internal sealed class AgentSchedule
     internal string? Raw { get; }
 
     /// <summary>Of deze agent op een schema draait.</summary>
-    internal bool HasSchedule => _expression is not null;
+    internal bool HasSchedule => _schedule is not null;
 
     /// <summary>
     /// Het eerstvolgende moment na <paramref name="from"/>, altijd in UTC, of <c>null</c> zonder
     /// schema.
     /// </summary>
-    /// <remarks>
-    /// De tijdzone doet mee bij het <em>uitrekenen</em> — <c>0 6 1 * *</c> hoort in Nederland om
-    /// zes uur te lopen en niet om acht — maar wat er uit komt is UTC. Dat zijn twee dingen die
-    /// gescheiden moeten blijven: zodra de offset van de zone mee naar buiten gaat, staan er
-    /// gemengde offsets in de opslag en sorteert Cosmos ze lexicografisch verkeerd.
-    /// </remarks>
-    internal DateTimeOffset? GetNextOccurrence(DateTimeOffset from) =>
-        _expression?.GetNextOccurrence(from, _timeZone)?.ToUniversalTime();
+    internal DateTimeOffset? GetNextOccurrence(DateTimeOffset from) => _schedule?.NextAfter(from);
 }

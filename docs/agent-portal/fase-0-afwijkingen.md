@@ -3338,6 +3338,404 @@ valse metingen in de stand van zaken: een groen signaal over de verkeerde verzam
 
 ---
 
+## 44. Het platform meldt zichzelf: een geherbergde agent mag een klok hebben, en zijn volgende run is een mededeling en geen herberekening
+
+**Spec:** §4 (de beheeragents van Soratus als interne klant) en §7 fase 6, "het platform meldt zichzelf".
+Punt 38 bouwde de kostencollector in het portaal, punt 43 de storingsmelder, en 43.13 meldde wat er
+toen niet gebeurde: *"De storingsmelder publiceert zelf geen telemetrie … het gevolg vandaag: de melder
+staat niet in het portaal, dus dat hij stil is gevallen is alleen in het log te zien."* Dit punt sluit
+dat gat voor beide.
+
+Gemeten vóór dit werk: `Soratus.Portal` verwees alleen naar `Soratus.Agents.Contracts`. Het portaal
+*las* documentvormen en schreef ze niet. Het gevolg is scherper dan het klinkt: **de storingsmelder kon
+niet melden dat de storingsmelder stuk was**, en dat de collector vannacht niet had gedraaid stond
+alleen in een logregel.
+
+### 44.1 De ontwerpvraag, en waarom geen van de twee bestaande vormen paste
+
+De integratie van punt 42 is gebouwd voor agents die draaien **wanneer ze worden aangeroepen**: een run
+begint bij een inkomend verzoek. De collector en de melder draaien op een **klok**, en dan is de grens
+van een run een tik van die timer. Drie vormen waren kandidaat.
+
+**`AddSoratusAgent<TAgent>` — één agent per proces met een cron. Valt af, en dat is te meten en niet te
+beredeneren.** Die vorm zet één `AgentIdentity`, één `AgentSchedule` en één `AgentLifecycleState` als
+singleton neer en leest één `SORATUS_AGENT__SCHEDULE`; een tweede aanroep komt langs
+`if (services.Any(d => d.ServiceType == typeof(AgentIdentity))) return builder;` en doet dus **niets**.
+Het portaal is één proces met twee agents en straks meer (§4 noemt er vijf), dus de tweede zou stil
+verdwijnen — en twee verschillende schema's zijn in één configuratiesleutel niet uit te drukken.
+Daarnaast verschuift de betekenis: dan is het *portaal* de agent, terwijl het de host is waarin agents
+wonen. Er is bovendien een harde blokkade: `AddSoratusAgent` en `AddSoratusHostedAgents` werpen op
+elkaar, met opzet (punt 42).
+
+**`AddSoratusHostedAgents` — meerdere agents in één host. Past op alles behalve het plan.** Het
+*runbegrip* past wél: `ISoratusHostedAgent.RunAsync(trigger, body, ct)` neemt elk lijf aan, niet alleen
+een verzoek. Dat de aanroepkant van punt 42 in `Soratus.Agents.AspNetCore` staat is een *bron* van
+agents en geen eigenschap van de laag — de documentatie van `IHostedAgentSource` zegt het zelf: een
+wachtrijhost heeft exact dezelfde vorm. Een tik van een timer is gewoon een derde soort aanroeper.
+
+Wat die vorm **niet** kon uitdrukken is het plan. `HostedAgentDeclaration.Validate()` weigerde
+`TriggerKind.Timer` categorisch, en `HostedAgentsRegistrationService.BuildRegistration` zette
+`Schedule = null` en `NextRunAt = null` met de reden erbij: bij een dienst op aanvraag is er geen
+volgende run om te voorspellen.
+
+**En een plan is hier geen versiering.** Dat is het hele punt van deze opdracht. Zonder gepubliceerd
+plan is "laatste run 26 uur geleden" niet te beoordelen: er staat nergens hoe vaak deze agent hoort te
+draaien. Het plan is de maat waaraan stilte wordt afgelezen. De derde weg — de agents met een oneerlijke
+trigger aankondigen (`manual` betekent "alleen met de hand gestart") of met `timer` zonder cron — valt
+af om de reden die punt 42 al opschreef: dan staat er in het portaal een agent op schema zonder schema,
+en het scherm rendert dat als `op trigger · timer` met een lege volgende run. Een tegenspraak die de
+lezer moet oplossen in plaats van de bouwer.
+
+**Besluit: de aankondiging van een geherbergde agent mag een plan dragen, en `TriggerKind.Timer` is
+toegestaan precies dan.** Beide kanten werpen: een timer zonder plan én een plan zonder timer. Dat
+tweede is de spiegel die er eerst niet was — een plan bij een dienst die op een aanroep draait levert
+een "volgende run" op waar niets gebeurt.
+
+### 44.2 `Soratus.Agents.Contracts` is niet aangeraakt, en dat is een bevinding en geen voorzorg
+
+**Er is geen contractwijziging nodig geweest.** `AgentRegistration.Schedule`, `AgentRegistration.NextRunAt`
+en `TriggerKind.Timer` bestonden al en betekenen al precies dit; wat ontbrak zat in de *bibliotheek*, in
+de vorm van een weigering die voor de ene soort geherbergde agent juist was en voor de andere niet. Er is
+geen veld bijgekomen, geen enumwaarde, en de contractversie blijft 1 — een document van deze twee agents
+is voor het portaal niet te onderscheiden van dat van een klantagent met een schema, en dat is precies de
+bedoeling: ze staan in hetzelfde overzicht met dezelfde statusregel.
+
+**De twee gaten die punt 42 meldde, zijn hier niet nodig, en dat is het aardige van dit geval.** Gat 1
+was "er is geen verwachting van aanroep": bij een agent op aanvraag valt stilte niet te beoordelen. Bij
+een klok-agent *is* die verwachting er — dat is de cron — dus wat daar een contractuitbreiding zou
+vragen, is hier een bestaand veld. Gat 2 (`RunResult` mist "de aanroeper haakte af") gaat over een
+gebruiker die zijn tabblad sluit en bestaat bij een timer niet.
+
+### 44.3 De correctie op punt 42 die het meten opleverde: `nextRunAt` was géén detector van een gemiste run
+
+Punt 42 schreef: *"bij een agent met een schema zegt hij dat wél, want daar is een gemiste run zichtbaar
+doordat `nextRunAt` in het verleden ligt."* **Dat is onwaar zoals het gebouwd was**, en het is het soort
+bewering dat redelijk klinkt en niet is nagerekend.
+
+`AgentRegistrationService.BuildRegistration` zet `NextRunAt = schedule.GetNextOccurrence(DateTimeOffset.UtcNow)`
+— bij *elke* hartslag opnieuw uitgerekend vanaf **nu**. Die waarde ligt dus per constructie in de
+toekomst. Een planlus die is doodgevallen terwijl het proces vrolijk doorklopt, levert daarmee een
+`nextRunAt` op die er volstrekt gezond uitziet. De enige manier waarop dat veld in het verleden komt te
+liggen, is als de hártslag ook stopt — en dan is `Degraded` het signaal en niet de volgende run.
+
+Daarom is de volgende run bij een geherbergde klok-agent **een mededeling van de host**:
+`ISoratusHostedAgent.ReportNextRun(moment)`. De lus meldt het moment waarop hij wérkelijk wacht, vlak
+voordat hij gaat wachten. Schuift dat moment niet meer op terwijl de hartslag doorloopt, dan staat er in
+het portaal een volgende run in het verleden — en dat is het enige spoor dat een stilgevallen klok-agent
+in een levend proces achterlaat.
+
+Dat de bibliotheek dat *niet zelf uitrekent* is dus geen luiheid maar de hele eigenschap. Er staat een
+test op die de invariant vastpint en niet zijn gevolg: hij meldt een moment uit **2020** en eist dat het
+document dat toont. Met de mutatie die het veld weer uit de cron berekent — de fout die vandaag in het
+pad met één agent staat — vallen 3 van de 103 tests om, waaronder die ene.
+
+Bij een agent zonder plan wordt een gemeld moment **niet** gepubliceerd. Anders staat er een `nextRunAt`
+naast een `triggerKind` die zegt dat deze dienst op een aanroep draait, en dat is dezelfde tegenspraak
+die `Validate()` weigert, nu via een omweg.
+
+### 44.4 De klok blijft van de host, en dat is de belangrijkste keuze van dit punt
+
+De bibliotheek *kan* de klok overnemen — dat doet ze bij `IScheduledAgent`. Hier niet, en de reden is de
+afhankelijkheidsrichting: dan zou de kostencollector niet meer meten zodra de telemetrie niet is
+ingericht. Telemetrie mag het werk nooit omleggen, en **werk dat zonder telemetrie helemaal niet meer
+gebeurt is de scherpste vorm daarvan**. Een cron met een typefout zou dan de storingsmelder uitzetten.
+
+De collector en de melder houden dus hun eigen `BackgroundService` en hun eigen lus; wat de bibliotheek
+erbij doet is de run vastleggen en het plan publiceren. `ISoratusHostedAgents` is een **optionele**
+afhankelijkheid (een constructorparameter met standaardwaarde `null`): staat hij niet in de container,
+dan meet de collector precies hetzelfde en legt hij niets vast. Er staat een test op dat beide diensten
+uit de container van het échte portaal te bouwen zijn terwijl die dienst er niet in staat — want zou
+`ActivatorUtilities` daar de standaardwaarde níet voor gebruiken, dan start het portaal in productie
+niet.
+
+**Wat dat kost, en hoe dat is opgelost.** Als de host plant en de bibliotheek publiceert, kan de
+gepubliceerde cron uit de pas gaan lopen met de lus — precies wat `AgentRegistration.Schedule` verbiedt
+("de expressie waarmee daadwerkelijk wordt gepland, niet een losse beschrijving"). De reparatie zit in
+het **type**: `HostedAgentDeclaration.Schedule` is geen `string` maar een `SoratusSchedule`, en de lus
+wacht op precies het object dat hij aankondigt. Eén expressie, één evaluatie, geen tweede berekening om
+uit de pas te lopen. Vandaar dat `SoratusSchedule` publiek is; het parseren en uitrekenen van een cron
+staat nu op één plek, en `AgentSchedule` (het pad met één agent) is er een aanroeper van geworden in
+plaats van een tweede implementatie.
+
+### 44.5 Waar de telemetrie van het platform heen gaat: een eigen database, en dat is een veiligheidsgrens
+
+De interne beheerklant `soratus` heeft geen eigen telemetrie-endpoint en wees naar het standaardaccount
+`cosmos-soratus-prod`, database `telemetry`. **Daar mag het portaal met opzet niet schrijven**
+(`infra/portal/portal-rg.bicep`: een Cosmos Data Reader accountbreed, en schrijfrecht alléén op
+`platform`). Die grens is niet weggenomen en mocht niet worden weggenomen: het portaal is het ding waar
+klanten op inloggen, en een gecompromitteerd portaal dat in de telemetriedatabase kan schrijven kan
+telemetrie **verzinnen** — een agent die "alles in orde" meldt terwijl hij stilstaat. Dat is een ergere
+eigenschap dan de blindheid die dit punt komt wegnemen.
+
+**Cosmos-dataplane-rollen zijn per account, database of container te scopen en nooit per partitie.** De
+gereserveerde partitie `$portal` — waar de dagclaim van punt 38 en de markeringen van punt 43.5 in staan
+— is dus geen rechtengrens. Vandaar: een **eigen database** `platform-telemetry` op hetzelfde account,
+met de drie containers uit het contract (`agents` zonder verval, `runs` 400 dagen, `logs` 30 dagen — in
+Bicep letterlijk dezelfde `containers`-variabele als `telemetry`, want het is hetzelfde contract), en
+één dataplane-verlening van Data Contributor met `scope: '${cosmos.id}/dbs/platform-telemetry'`. Na die
+verlening kan het portaal overal lezen en op precies twee databases schrijven: `platform` en
+`platform-telemetry`. Zelfde argument als waarom de urenregels in `customers` bleven en waarom de
+MBV-telemetrie een eigen account kreeg: de grens ligt waar de rol hem kan leggen.
+
+**Er is een tweede, gemeten reden die het besluit alleen al zou dragen.** In `telemetry` staat onder
+klant `soratus` geseede demodata mét een agent `storingsmelder` en een agent `kosten-collector`
+(`tools/seed/telemetry.json`). Het registratiedocument heeft `agentName` als id **en** als
+partitiesleutel. Het portaal zou die twee documenten dus hebben overschreven: het echte werk en de demo
+zouden hetzelfde document zijn.
+
+**Eén sectie voedt beide kanten, en dat is geen ordelijkheid.** `PlatformTelemetry` zegt waar het
+portaal zijn eigen agents heen schrijft (via de sleutels die `Soratus.Agents.Telemetry` zélf leest) en
+waar de interne beheerklant ze vandaan leest (`CustomerDirectory`). Waren dat twee configuraties, dan
+bestaat de toestand "het portaal publiceert netjes in de ene database en het scherm kijkt in de andere",
+en die levert **geen fout op maar een leeg overzicht** — de klasse storing die zich voordoet als
+werkende functionaliteit.
+
+**En er is geen tussenstand.** De terugval van de interne klant hangt aan `IsConfigured` en niet aan
+`IsInternal` alleen: zolang `PlatformTelemetry__AccountEndpoint` niet is gezet, blijft die klant naar
+`telemetry` kijken. Die app-setting komt uit dezelfde uitrol die de database aanmaakt, dus de code kan
+vóór de infrastructuur worden uitgerold zonder dat de interne klant naar een database wijst die nog niet
+bestaat. Een uitdrukkelijke waarde op het klantdocument wint nog steeds — dat is de plek waar straks een
+eigen account komt te staan, en een configuratiesectie hoort niet stil te overrulen wat iemand heeft
+vastgelegd.
+
+**Wat het kost, en het is zichtbaar:** wat er vandaag in `telemetry` onder `soratus` staat verdwijnt van
+`/klant/soratus/agents`. Voor de vijf geseede beheeragents is dat de bedoeling. Voor de échte registratie
+van `heartbeat-demo` is het een gemis: die agent hoort in de nieuwe database thuis — hij is van ons en
+niet van een klant — en dat is één regel in zijn eigen configuratie (`SORATUS_TELEMETRY__DATABASE`).
+Gemeld en niet gedaan: dat is een andere lane.
+
+### 44.6 Hoe telemetrie het portaal niet kan omleggen, ook niet bij het opstarten
+
+Dit is waar de val zat. De bibliotheek belooft dat telemetrie een agent nooit omlegt, en dat klopt voor
+het *schrijven*: `TelemetryWriter` schrijft met een niet-blokkerende `TryWrite` in een begrensd kanaal en
+`WithRetryAsync` vangt élke uitzondering af — er komt niets uit die pompen. Maar bij het **opstarten**
+geldt die belofte niet: `AddSoratusHostedAgents` **werpt** bij een ontbrekende endpoint, een verkeerde
+URL of een gezette `SORATUS_AGENT__SCHEDULE`. Voor een agent is dat het juiste gedrag — daar is de
+telemetrie de hele opdracht en een agent die niets meldt bestaat niet. Hier is het andersom, en een
+uitzondering in de opstartcode is de hardste manier om `/` te raken: dan start de app niet, geeft
+`/healthz` geen 200, en rolt de pijplijn terug om iets dat het portaal had kunnen overleven.
+
+`PlatformAgents.AddSoratusPlatformAgents` werpt daarom niet, voor geen enkele configuratie. Wat er
+gebeurt is een uitkomst met een niveau en een reden, die ná `Build()` als één regel wordt gelogd —
+`app.Logger` bestaat op het moment van aansluiten nog niet. Dat het een uitkomst is en geen stilte is het
+punt: een leeg beheeroverzicht is anders niet van een kapotte inrichting te onderscheiden.
+
+**Dat een mislukte aansluiting geen halve registratie achterlaat, is gemeten en geen aanname over
+andermans code.** `AddSoratusHostedAgents` doet al zijn controles — de twee contractasserties, de
+schemasleutel, de identiteit en de opties — vóór de eerste `AddSingleton`. Er staat een test op die de
+container voor en na telt bij een mislukte aansluiting; de halve toestand is wat een `try` om een reeks
+registraties gevaarlijk zou maken.
+
+En de lus zelf: `Announce` staat buiten de `try` van `ExecuteAsync`, dus een uitzondering daaruit zou de
+host meenemen. Hij vangt daarom af en levert `null`, waarna de dienst onverstoord doorwerkt zonder
+zichtbaarheid. Om dezelfde reden **klemt** `PlatformAgentPlans` zijn invoer in plaats van te valideren:
+op `PortalCosts` en `PortalAlerts` staan `Range`-annotaties zónder `ValidateOnStart`, dus de eerste keer
+dat zo'n annotatie wordt gelezen is binnen een achtergronddienst — en dat is exact de fout die het
+portaal op 21 augustus heeft platgelegd. Er staat een test op dat `-1`, `0`, `99` en `int.MaxValue` alle
+vier een geldig plan opleveren.
+
+**`GetOrAdd` en niet `Find`, en dat is de derde plek waar de startvolgorde bijt.** `Find` zou afhangen
+van de vraag of de registratiedienst zijn eerste ronde al heeft gedraaid. `GetOrAdd` maakt de agent aan
+als hij er nog niet is en levert dezelfde als de aankondigingsbron dezelfde waarden heeft — vandaar dat
+`SoratusSchedule` waardegelijkheid heeft en niet die van een referentie. Zonder die gelijkheid leest de
+registry twee keer dezelfde aankondiging als een *conflict* en waarschuwt hij over een verschil dat er
+niet is.
+
+**En de registratie hangt niet aan de lus.** Beide agents staan ook als `IHostedAgentSource` in de
+container, dus `HostedAgentsRegistrationService` publiceert ze in zijn eigen `StartAsync` — vóór de
+eerste tik en onafhankelijk van de planlus. Een net uitgerold portaal toont dus meteen twee agents, met
+een lege volgende run tot de lus die een fractie later meldt.
+
+### 44.7 Wat er zichtbaar wordt, en wat een operator eruit mag concluderen
+
+Op `/klant/soratus/agents` staan `kosten-collector` (type Cost Management, plan `0 4 * * *`) en
+`storingsmelder` (type Monitoring, plan `* * * * *`) — de namen en typen van §4, en dezelfde als in de
+seed. Per agent: een registratie met een hartslag van het portaalproces, een plan, een volgende run, en
+**één run per tik van de klok**. Het aantal verwerkte items is voor de collector het aantal vastgelegde
+maanden en voor de melder het aantal verstuurde meldingen; een ronde zonder storingen is dus een run met
+nul items en resultaat `ok`, en dat is de juiste uitkomst — er was werk (kijken) en er was niets te
+melden.
+
+**Bijkomend, en het is meer dan het lijkt:** een gewone `ILogger`-aanroep binnen een lopende run belandt
+automatisch op naam van de juiste agent, met de runId erbij. Alle `warn`- en `error`-regels die punt 38
+en punt 43 in de hostlog zetten — `api.retry`, een onleesbaar antwoord, een onbruikbare ontvanger, een
+ronde die omvalt — staan daarmee op het logtabblad van de agent in het portaal. Dat was de plek waar ze
+hoorden en niet konden komen.
+
+**Wat een run mislukt maakt.** Alleen een uitzondering die uit de ronde ontsnapt; dan doet de bibliotheek
+de rest en staat de agent op `Failed`. Een `429` is géén mislukte run (punt 38, regel 1 — anders zou de
+collector permanent amber staan) en een klant zonder scope ook niet. Een onleesbaar antwoord is dat
+evenmin: dat is één maand van één klant, en één slechte maand hoort de hele collector niet rood te
+maken. Het staat als `error` op het logtabblad.
+
+**Wat een operator uit een grijze `Idle`-stip op deze twee mag concluderen** — en dit is dezelfde
+beperking als in punt 42, met één verschil:
+
+- het portaalproces leeft en heeft in de laatste twee minuten iets weggeschreven;
+- er liep op dat moment geen tik;
+- de laatst afgeronde tik is niet mislukt.
+
+Wat er **wél** bijkomt tegenover punt 42: er staat een plan naast, en een laatste run. "Laatste run 26
+uur geleden" bij een plan van `0 4 * * *` is dus te beoordelen, en "volgende run in het verleden" is een
+feit dat op het scherm staat.
+
+**Wat een operator er niet uit mag concluderen: dat de status het voor hem uitrekent.** Dat doet hij
+niet, en dat is de eerlijke helft van dit punt — zie 44.8.
+
+### 44.8 Wat er werkelijk gebeurt als een collector stilvalt, in drie gevallen
+
+Dit is het hele punt van de opdracht, dus het staat hier uitgesplitst in plaats van samengevat.
+
+**Geval 1 — het proces ligt stil (uitrol, crash, App Service laadt uit).** De hartslag van beide agents
+stopt tegelijk; na `AgentStatusThresholds.Degraded` (twee minuten) staan ze op `Degraded`, na tien
+minuten is er meldplicht. Eén proces betekent één `startedAt` en dus één groep (punt 43.5), dus daar
+hoort één mail over te gaan. **Maar de melder die dat zou doen is precies wat stilligt.** Op één instantie
+is dat een harde beperking: *dat de storingsmelder stuk is, is niet met de storingsmelder te melden.* Wat
+er wél is veranderd: de toestand staat nu in de opslag in plaats van alleen in een logregel, dus elk
+scherm dat die database kan lezen ziet hem — en op meer dan één instantie mailt de andere instantie wél.
+
+**Geval 2 — de ronde valt om terwijl het proces leeft.** De run staat op `failed`, de agent op `Failed`,
+en `ShouldAlert` meldt bij `Failed` meteen. De vólgende ronde leest die mislukking en mailt erover: **de
+melder meldt over de melder, en dat werkt** — zolang de ronde daarna nog loopt en het mailen zelf heel
+is. De ontdubbeling houdt het binnen de perken: één markering per agent, dus geen zestig mails per uur
+over dezelfde mislukte ronde. Dit is de kringloop die 43.13 aankondigde, nu bestaand en beschreven in
+plaats van stil. Voor de collector geldt hetzelfde: een kostenrun die omvalt was een logregel en is nu
+een `Failed` met een mail erachter.
+
+**Geval 3 — de planlus valt stil terwijl het proces leeft.** De hartslag komt van de host en blijft dus
+komen; de levensfase is `IdleWaiting`; de status blijft `Idle`, rang 1. **Er gaat geen mail en er kleurt
+geen rij.** Wat er wél gebeurt: de volgende run schuift niet meer op en komt daarmee in het verleden te
+liggen, naast een laatste run die veroudert en een plan dat zegt hoe vaak het had moeten gebeuren. Het is
+**te zien** en het wordt niet **gemeld**.
+
+Dat laatste is een besluit en geen omissie. Er over mailen zou vragen dat `AgentStatusCalculator` een
+zesde regel krijgt ("een plan is verstreken zonder run"), en dat is de statusregel die scherm en melder
+delen — de ene plek waar een wijziging twee schermen tegelijk verandert, en dus een besluit voor de
+eigenaar van het contract en niet voor deze sessie. **Gemeld als openstaand punt**, met de aantekening
+dat de gegevens er nu voor het eerst zijn: vóór dit punt bestond er geen `nextRunAt` van het platform om
+op te letten. Wat de goedkope tussenstap zou zijn: het scherm laten zien dát een volgende run in het
+verleden ligt (nu staat er alleen een tijdstip), want dat verandert de statusregel niet.
+
+En hoe waarschijnlijk geval 3 is, eerlijk: klein. Beide lussen vangen élke uitzondering af en gaan
+verder, dus er is geen pad waarlangs de lus zichzelf beëindigt behalve het afsluiten van de host. Wat het
+geval wél dekt is een tik die blijft hángen — een aanroep aan Cost Management die niet terugkomt, een
+query die niet afrondt — en dat is precies het geval waarin de gegevens de enige aanwijzing zijn.
+
+### 44.9 Kleinere besluiten, met de reden
+
+**Geen derde rij "het portaal".** Zijn hartslag zou per constructie gelijk zijn aan die van de twee, dus
+die rij voegt een regel toe zonder een feit toe te voegen. Zelfde afweging als bij de webhost van punt
+42. De hostidentiteit bestaat wel — hij levert klant, versie, omgeving en `startedAt` — en wordt niet
+gepubliceerd.
+
+**Alleen `Soratus.Agents.Telemetry` als projectreferentie, niet `Soratus.Agents.AspNetCore`.** Die tweede
+bestaat om inkomende verzoeken als run vast te leggen, en deze twee agents draaien op een klok. Het
+portaal is een webapplicatie, dus de `FrameworkReference` van punt 42 speelt hier geen rol — maar de
+referentie erbij zetten zou een aanroeplaag binnenhalen die niets doet.
+
+**Het plan van de melder is een cron, en een cron kent geen halve minuten.** `PortalAlerts:IntervalSeconds`
+staat op zestig (§4: "elke minuut") en dat is exact `* * * * *`. Een gevraagd interval dat geen heel
+aantal minuten is, kan een cron niet uitdrukken — dat is een gat in het contract (`Schedule` is getypeerd
+als cron-expressie) en geen keuze van deze code. Van de twee mogelijke antwoorden — een plan publiceren
+dat niet klopt, of afronden op wat een cron kán zeggen en op dat afgeronde plan draaien — is het tweede
+het eerlijke: dan is wat er op het scherm staat wat er werkelijk gebeurt. Negentig seconden wordt dus
+twee minuten, en de melder logt bij het opstarten dát hij afrondt. Sub-minuutintervallen worden één
+minuut. **Punt van twijfel, en het derde contractgat dat hier is opgeschreven.**
+
+**De `PeriodicTimer` van de melder is vervangen door hetzelfde plan.** Niet uit netheid: met een timer
+hier en een cron-expressie daar is "het document zegt waarop wordt gepland" een afspraak in plaats van
+een eigenschap.
+
+**De markeringen en de dagclaim blijven in `platform`.** Ze staan in de gereserveerde partitie `$portal`
+van `customers` en verhuizen niet mee: het is Soratus-eigen boekhouding over onze eigen meldingen, geen
+telemetrie, en er hangt geen bewaartermijn aan.
+
+### 44.10 De mutatieronde
+
+**Twintig mutaties: negentien werden meteen rood, één maakte niets rood.** De ronde liep in twee vensters
+en is aangekondigd; wat hieronder staat is buiten elk venster van een andere sessie gemeten.
+
+Op de bibliotheek (van de 103 tests in `Soratus.Agents.Telemetry.Tests`):
+
+| Mutatie | Rood |
+|---|---|
+| `NextRunAt` wordt niet gepubliceerd | 2 |
+| **`NextRunAt` weer uit de cron gerekend vanaf nu** — de fout die vandaag in het pad met één agent staat | **3** |
+| `Schedule` wordt niet gepubliceerd | 2 |
+| de controle "geen plan, dus geen volgende run" valt weg | 1 |
+| timer zonder plan mag | 1 |
+| plangelijkheid op referentie in plaats van op waarde | 1 |
+| geen `ToUniversalTime` op het volgende moment | 1 |
+| het volgende moment vervalt op het pad met één agent | 1 |
+| de cron wordt niet meer gepubliceerd op dat pad | 1 |
+| een onleesbare cron wordt stil genegeerd op dat pad | 1 |
+
+Op het portaal (van de tests in `Soratus.Portal.Tests`): de collector meldt zich nooit aan (3 rood), de
+volgende run wordt niet gemeld (2), het gemelde moment is niet het gewachte moment (2), het plan wordt
+niet uit één bron gehaald (compileerfout, dus gemeten met een afwijkend draaiuur: 2), de aankondigingen
+verdwijnen uit de container (4), de vlag `Enabled` wordt genegeerd (1), de terugval van de interne klant
+valt weg (2), `IsConfigured` wordt genegeerd (1), het plan geldt voor élke klant (2).
+
+**De mutatie die niets rood maakte**, en die hier hoort te staan: de tekst van de opstartregels van de
+collector en de melder. Er staat geen test op logteksten. Dat is dezelfde bewuste afweging als bij punt
+41 en 43.10 — de regel leeft in het gedrag en niet in een logregel — maar met een scherpe kant die de
+andere gevallen niet hadden: de melding "hij publiceert zich wel/niet als agent" is voor een operator de
+enige plek waar staat óf de zichtbaarheid aan is. Dat de *uitkomst* wordt gemeten en de *tekst* niet, is
+hier dus krapper dan elders. Genoteerd, niet gerepareerd.
+
+### 44.11 Twee metingen die logen, en de tweede was van mij
+
+**De eerste is de bekende vorm, voor de vierde keer.** Direct na `StartAsync` van een
+`BackgroundService` geteld hoeveel agents er waren aangekondigd: **nul**. Een fractie later: één. Het
+lijf van `ExecuteAsync` is dus niet gelopen als `StartAsync` terugkomt, ook niet op .NET 10 en ook niet
+als er vóór de eerste `await` code staat. Mijn eerste testversie leunde daarop en was daarmee een test
+die van de planner afhing. Wat er nu op `StartAsync` mag rusten, rust dat ook — de *registratie* van
+beide agents komt van de aankondigingsbron en niet van de lus — en wat er op zich laat wachten is alleen
+het moment van de volgende run. De test wacht daarop met een `TaskCompletionSource` in plaats van te
+pollen.
+
+**De tweede heeft mij anderhalf uur gekost en het is mijn eigen fout.** Mijn eerste versie van de
+opstarttest maakte per test een portaal aan met `WebApplicationFactory<Program>`, deed er een verzoek
+door de aanmeldketen op, en ruimde het weer op. Gemeten over zes volle runs van `Soratus.Portal.Tests`:
+**drie keer rood met vijftien tot eenentwintig gevallen tests op `/api/uren`** — allemaal een `401` waar
+een `400` of een `422` hoorde te staan. Dezelfde zes runs op de onveranderde boom: **zes keer groen**.
+Het was dus van mij, en het stond al opgeschreven: `Urenapihost` documenteert dat een
+`SymmetricSecurityKey` zijn eigen `CryptoProviderFactory` met een cache draagt en dat validaties van een
+tweede host stukgaan "zodra de eerste host was opgeruimd".
+
+Wat het **niet** was, gemeten: twee tests die na twee seconden omvielen zonder een portaal aan te maken
+deden niets, en twee tests die een portaal aanmaakten en netjes opruimden zonder erdoorheen te verzoeken
+deden ook niets. Het was de combinatie. Er is nu één portaal per testproces dat nooit wordt opgeruimd —
+hetzelfde wat `Urenapicollectie` met een collectiefixture doet, en om dezelfde reden. Zes runs daarna:
+zes keer groen.
+
+**En de les die breder is dan deze test.** De eerste keer dat dit langskwam, stond het in een
+mutatiemeting: één mutatie leverde "22 rood" op en de volgende "2 rood", met exact dezelfde code. Wie de
+eerste uitslag had opgeschreven, had een mutatie gerapporteerd die vier keer zoveel dekking leek te
+hebben dan hij had. **Een mutatiemeting die meer rood oplevert dan de mutatie kan verklaren, is een
+meting om te herhalen en niet om op te schrijven** — en de vorm die het verraadt is dat de extra rode
+tests niets met de gemuteerde regel te maken hebben.
+
+### 44.12 Wat er níet is gemeten, en dat hoort erbij
+
+**Er is niets naar Cosmos geschreven en er is niets in Azure gewijzigd.** De nieuwe database bestaat niet;
+de Bicep-wijziging staat in `infra/portal/portal-rg.bicep` met een `what-if` ernaast en wacht op een
+besluit. Dat betekent dat het volgende **niet** is gemeten en alleen is beredeneerd:
+
+- dat de dataplane-verlening op `/dbs/platform-telemetry` werkelijk schrijfrecht geeft op die database en
+  niet op `telemetry`. De vorm is dezelfde als die van de bestaande verlening op `platform`, die wél is
+  uitgerold en werkt, dus de vorm is niet nieuw — de scope is dat wel;
+- dat de telemetriebibliotheek naar een database schrijft die met deze Bicep is aangemaakt. Dat de
+  containernamen kloppen is uit de code afgeleid (`CosmosContainerNames`) en niet gezien;
+- de RU-kosten van twee agents die elke dertig seconden een registratie upserten. Dat is per dag
+  ongeveer 5 800 upserts van een klein document, en dat is niet gemeten maar geschat.
+
+**En de leeskant is niet end-to-end gezien.** Dat `/klant/soratus/agents` de twee agents toont, volgt uit
+de bestaande leescode die zeven klanten al zo toont; wat er nieuw aan is, is uitsluitend de locatie. Er is
+geen scherm bekeken met echte documenten erin, want die documenten bestaan niet.
+
+---
+
 ## Wat bewust nog niet is gebouwd
 
 Facturatie, sprint en support. Uit §9 van de spec staat daarmee nog één besluit open dat aan uren

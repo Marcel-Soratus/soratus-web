@@ -95,10 +95,12 @@ internal sealed class HostedAgentRegistry(
             TriggerKind = declaration.Trigger,
             TriggerDetail = declaration.TriggerDetail,
 
-            // Geen schema, dus ook geen volgende run. Zie HostedAgentDeclaration voor waarom dat
-            // hier geen weglating is maar de vorm van het geval.
-            Schedule = null,
-            ScheduleTimeZone = host.ScheduleTimeZone,
+            // Het plan van deze agent, of niets bij een dienst die op een aanroep draait. Bij een
+            // dienst op aanvraag is dat geen weglating maar de vorm van het geval; bij een agent op
+            // een klok in deze host is het plan de maat waaraan stilte wordt afgelezen. Zie
+            // HostedAgentDeclaration.Schedule.
+            Schedule = declaration.Schedule?.Expression,
+            ScheduleTimeZone = declaration.Schedule?.TimeZone ?? host.ScheduleTimeZone,
 
             // Het moment waarop dit proces startte, en niet het moment waarop deze agent voor het
             // eerst werd aangeroepen. 'Draait sinds' gaat over de host, want die draagt de hartslag.

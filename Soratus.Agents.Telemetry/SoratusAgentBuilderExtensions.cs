@@ -158,10 +158,12 @@ public static class SoratusAgentBuilderExtensions
     /// metadata op de endpoints zelf. Eén lijst op één plek, en die plek is de plek waar het werk
     /// staat: dan kan er geen tweede lijst zijn die ermee uit de pas loopt.</para>
     ///
-    /// <para><strong>Waarom een schema hier een fout is en niet een instelling.</strong> Een
-    /// geherbergde agent draait op een aanroep. Zou <c>SORATUS_AGENT__SCHEDULE</c> hier iets mogen
-    /// zeggen, dan staat er een cron-expressie in de configuratie die niets plant, en zulke
-    /// expressies worden geloofd.</para>
+    /// <para><strong>Waarom <c>SORATUS_AGENT__SCHEDULE</c> hier een fout is en niet een
+    /// instelling.</strong> Die sleutel hoort bij één agent per proces, en deze host herbergt er
+    /// meer. Er is dus niets dat zo'n expressie uitvoert, en dan staat er een cron in de
+    /// configuratie die niets plant — zulke expressies worden geloofd. Een geherbergde agent die
+    /// wél op een klok draait geeft zijn plan mee op zijn eigen aankondiging
+    /// (<see cref="HostedAgentDeclaration.Schedule"/>), en de host wacht op precies dat object.</para>
     /// </remarks>
     public static IHostApplicationBuilder AddSoratusHostedAgents(
         this IHostApplicationBuilder builder,

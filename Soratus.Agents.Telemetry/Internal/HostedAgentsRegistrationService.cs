@@ -155,10 +155,16 @@ internal sealed class HostedAgentsRegistrationService(
     /// Bouwt het registratiedocument van één geherbergde agent.
     /// </summary>
     /// <remarks>
-    /// De levensfase komt uit <see cref="HostedAgent.Lifecycle"/> — een waarneming van de
+    /// <para>De levensfase komt uit <see cref="HostedAgent.Lifecycle"/> — een waarneming van de
     /// bibliotheek — behalve tijdens het afsluiten. Dan is
     /// <see cref="AgentLifecycle.StoppedCleanly"/> de waarheid, ook als er nog een verzoek liep:
-    /// wat er van dat verzoek geworden is staat op de run en niet op de registratie.
+    /// wat er van dat verzoek geworden is staat op de run en niet op de registratie.</para>
+    ///
+    /// <para>Het plan en de volgende run komen uit twee verschillende bronnen, en dat is opzet. Het
+    /// plan staat op de aankondiging en verandert niet; de volgende run is wat de host <em>meldt</em>
+    /// dat hij afwacht (<see cref="HostedAgents.ISoratusHostedAgent.ReportNextRun"/>) en niet een herberekening
+    /// uit de cron vanaf nu. Dat tweede zou per constructie altijd in de toekomst liggen en dus
+    /// nooit een gemiste run kunnen laten zien.</para>
     /// </remarks>
     internal AgentRegistration BuildRegistration(HostedAgent agent) => new()
     {
@@ -171,10 +177,10 @@ internal sealed class HostedAgentsRegistrationService(
         StartedAt = agent.Identity.StartedAt,
         LastHeartbeatAt = clock.GetUtcNow(),
         Lifecycle = _stopping ? AgentLifecycle.StoppedCleanly : agent.Lifecycle,
-        Schedule = null,
+        Schedule = agent.Identity.Schedule,
         TriggerKind = agent.Identity.TriggerKind,
         TriggerDetail = agent.Identity.TriggerDetail,
-        NextRunAt = null,
+        NextRunAt = agent.NextRunAt,
         Environment = agent.Identity.Environment,
     };
 

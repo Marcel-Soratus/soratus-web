@@ -20,9 +20,42 @@ internal sealed class HostedAgent(
 {
     private int _inFlight;
 
+    /// <summary>
+    /// Het gemelde moment van de volgende run, als UTC-ticks; nul betekent "niet gemeld".
+    /// </summary>
+    /// <remarks>
+    /// Als <c>long</c> en niet als <c>DateTimeOffset?</c>, omdat <c>volatile</c> niet op dat type
+    /// kan en dit veld door de planlus wordt geschreven en door de hartslaglus gelezen. Nul als
+    /// "afwezig" kan hier: het is 1 januari van jaar 1, en dat is geen moment waarop iets plant.
+    /// </remarks>
+    private long _nextRunUtcTicks;
+
     public AgentIdentity Identity => identity;
 
     public int RunsInFlight => Volatile.Read(ref _inFlight);
+
+    /// <summary>
+    /// Het moment waarop de host op de volgende run wacht, of <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Leeg bij een agent zonder schema, ook als er een moment is gemeld: een <c>nextRunAt</c> naast
+    /// een trigger die zegt "op aanroep" is de tegenspraak die
+    /// <see cref="HostedAgentDeclaration.Validate"/> weigert, en die hoort dan ook niet via een
+    /// omweg in het document te komen.
+    /// </remarks>
+    internal DateTimeOffset? NextRunAt
+    {
+        get
+        {
+            if (identity.Schedule is null)
+            {
+                return null;
+            }
+
+            long ticks = Interlocked.Read(ref _nextRunUtcTicks);
+            return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+    }
 
     /// <summary>De aankondiging waaruit deze agent is ontstaan, om er een tweede tegen te toetsen.</summary>
     internal HostedAgentDeclaration Declaration => declaration;
@@ -85,6 +118,9 @@ internal sealed class HostedAgent(
             throw;
         }
     }
+
+    public void ReportNextRun(DateTimeOffset? moment) =>
+        Interlocked.Exchange(ref _nextRunUtcTicks, moment?.ToUniversalTime().Ticks ?? 0L);
 
     public void ReportEvent(LogLevel level, string eventName, string message, object? extra = null)
     {

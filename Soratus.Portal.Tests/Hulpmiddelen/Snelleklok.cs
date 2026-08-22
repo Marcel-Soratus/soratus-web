@@ -22,8 +22,21 @@ namespace Soratus.Portal.Tests.Hulpmiddelen;
 /// zou de callback aanroepen vóórdat <c>Task.Delay</c> zijn timer heeft opgeborgen, en dat is een race
 /// met de interne implementatie van de basisbibliotheek.</para>
 /// </remarks>
-internal sealed class Snelleklok(DateTimeOffset moment) : TimeProvider
+internal sealed class Snelleklok(DateTimeOffset moment, bool meteenAf = true) : TimeProvider
 {
+    /// <summary>
+    /// Of een gevraagde wachttijd meteen afgaat, of nooit.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>"Nooit" is er voor de lus van een achtergronddienst.</strong> Een klok die meteen
+    /// afgaat laat zo'n lus rondtollen tussen het starten en het stoppen van de dienst, en dan meet een
+    /// test die naar de eerste wachttijd kijkt zijn eigen ruis. Met een wachttijd die nooit afgaat parkeert
+    /// de lus precies één keer, en is wat er dán is vastgelegd — de gevraagde wachttijd, het gemelde
+    /// moment van de volgende run — deterministisch. Het stoppen van de dienst breekt het wachten af
+    /// via het annuleringstoken en niet via de klok.</para>
+    /// </remarks>
+    public bool MeteenAf { get; } = meteenAf;
+
     /// <summary>Het moment dat deze klok teruggeeft. Te verzetten binnen een test.</summary>
     public DateTimeOffset Nu { get; set; } = moment;
 
@@ -50,7 +63,7 @@ internal sealed class Snelleklok(DateTimeOffset moment) : TimeProvider
 
         Wachttijden.Add(dueTime);
 
-        return new Nulwachttijd(callback, state);
+        return MeteenAf ? new Nulwachttijd(callback, state) : new Nooitwachttijd();
     }
 
     /// <summary>Een timer die meteen afgaat.</summary>
@@ -66,6 +79,22 @@ internal sealed class Snelleklok(DateTimeOffset moment) : TimeProvider
         public void Dispose()
         {
             // Er is niets af te breken: de callback is al in de wachtrij gezet.
+        }
+
+        /// <inheritdoc />
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>Een timer die nooit afgaat; het wachten eindigt alleen door annulering.</summary>
+    private sealed class Nooitwachttijd : ITimer
+    {
+        /// <inheritdoc />
+        public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            // Er is niets af te breken: deze timer gaat nooit af.
         }
 
         /// <inheritdoc />

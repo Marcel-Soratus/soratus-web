@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Options;
 using Soratus.Agents.Contracts;
+using Soratus.Agents.Telemetry;
+using Soratus.Agents.Telemetry.HostedAgents;
 using Soratus.Portal.Mail;
+using Soratus.Portal.Platform;
 
 namespace Soratus.Portal.Alerts;
 
@@ -58,6 +61,28 @@ namespace Soratus.Portal.Alerts;
 /// is er geen mail waarmee dat te melden is — dat is het ding dat stuk is. Het staat dus als
 /// <c>error</c> in het log, en dat is de enige plek waar het kan staan. Dat is een echte beperking en
 /// geen detail: er is vandaag geen tweede kanaal.</para>
+///
+/// <para><strong>Sinds fase 6 publiceert de melder zich als agent, en daarmee ontstaat een kringloop
+/// die het opschrijven waard is (§4, <c>storingsmelder</c>).</strong> Elke tik is één run. Valt een
+/// ronde om, dan staat die run op <c>failed</c>, en de vólgende ronde leest die mislukking als
+/// storing van de agent <c>storingsmelder</c> en mailt erover. De melder meldt dus over de melder, en
+/// dat wérkt — zolang de ronde daarna nog loopt en het mailen zelf heel is. De ontdubbeling houdt het
+/// binnen de perken: één markering per agent, dus niet zestig mails per uur over dezelfde mislukte
+/// ronde.</para>
+///
+/// <para><strong>Waar die kringloop ophoudt, en dat is de eerlijke helft.</strong> Ligt het proces
+/// stil, dan stopt de hartslag van deze agent én van de kostencollector — één proces, dus één
+/// <c>startedAt</c> en één groep, en na tien minuten stilte hoort daar één melding over te gaan. Maar
+/// de melder die dat zou doen is precies wat er stilligt. Er gaat dan geen mail; wat er wél is, is een
+/// registratiedocument dat na twee minuten <c>Degraded</c> oplevert en op elk scherm te zien is dat de
+/// opslag nog kan lezen — draait het portaal op meer dan één instantie, dan is dat de andere instantie,
+/// en die mailt wel. Op één instantie is de beperking hard: <em>dat de storingsmelder stuk is, is niet
+/// met de storingsmelder te melden.</em> Wat het wel is geworden: zichtbaar in de opslag in plaats van
+/// alleen in een logregel.</para>
+///
+/// <para><strong>De telemetrie is optioneel en het werk niet.</strong> Zelfde richting en zelfde
+/// reden als bij <c>AzureCostCollector</c>: is <see cref="ISoratusHostedAgents"/> er niet, dan kijkt
+/// deze melder precies hetzelfde rondje en legt hij niets vast.</para>
 /// </remarks>
 internal sealed class AgentFaultAlerter(
     IAgentFaultSource source,
@@ -66,7 +91,8 @@ internal sealed class AgentFaultAlerter(
     IOptions<AgentAlertOptions> options,
     IOptions<PortalMailOptions> mailOptions,
     TimeProvider timeProvider,
-    ILogger<AgentFaultAlerter> logger) : BackgroundService
+    ILogger<AgentFaultAlerter> logger,
+    ISoratusHostedAgents? hostedAgents = null) : BackgroundService
 {
     private readonly AgentAlertOptions _options = options.Value;
 
@@ -83,29 +109,43 @@ internal sealed class AgentFaultAlerter(
             return;
         }
 
-        logger.LogInformation(
-            "De storingsmelder kijkt elke {Interval} s en herhaalt een onveranderde storing na "
-            + "{Repeat} uur, hoogstens {Max} melding(en) per ronde.",
-            _options.IntervalSeconds,
-            _options.RepeatAfterHours,
-            _options.MaxMailsPerRun);
+        var declaration = PlatformAgents.AlertsDeclaration(_options);
+        var plan = PlatformAgentPlans.Alerts(_options.IntervalSeconds);
+        var planned = PlatformAgentPlans.PlannedInterval(_options.IntervalSeconds);
+        var agent = Announce(declaration);
 
-        using var timer = new PeriodicTimer(_options.Interval, timeProvider);
+        logger.LogInformation(
+            "De storingsmelder kijkt op '{Plan}' en herhaalt een onveranderde storing na {Repeat} "
+            + "uur, hoogstens {Max} melding(en) per ronde. Hij publiceert zich {Published} als agent "
+            + "'{AgentName}'.",
+            plan.Expression,
+            _options.RepeatAfterHours,
+            _options.MaxMailsPerRun,
+            agent is null ? "niet" : "wel",
+            PlatformAgentNames.Alerts);
+
+        if (planned != _options.Interval)
+        {
+            // Een afronding die niemand ziet is een verschil tussen wat er is ingesteld en wat er
+            // gebeurt. Zie PlatformAgentPlans.Alerts: een cron-expressie kan geen halve minuten.
+            logger.LogWarning(
+                "PortalAlerts:IntervalSeconds staat op {Requested} s, maar een plan wordt als "
+                + "cron-expressie gepubliceerd en die kent alleen hele minuten. De melder kijkt "
+                + "daarom elke {Planned} s, en dat is ook wat er in het portaal staat.",
+                _options.IntervalSeconds,
+                (int)planned.TotalSeconds);
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
+            if (!await SleepAsync(plan, agent, stoppingToken).ConfigureAwait(false))
             {
                 return;
             }
 
             try
             {
-                await RunAsync(stoppingToken).ConfigureAwait(false);
+                await ObservedRunAsync(agent, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -117,11 +157,118 @@ internal sealed class AgentFaultAlerter(
                 // uitzondering laat ontsnappen stopt de host, en er is niets aan een mislukte
                 // storingsmelding dat het bekijken van een agentstatus in de weg staat. Een minuut
                 // later opnieuw.
+                //
+                // En sinds fase 6 staat die mislukking als 'failed' op de run van de agent
+                // 'storingsmelder'. De volgende ronde leest die en meldt erover — de melder meldt
+                // over de melder. Dat is de kringloop uit de klassedocumentatie; hij werkt zolang de
+                // ronde daarna nog loopt.
                 logger.LogError(
                     exception,
                     "De ronde van de storingsmelder is afgebroken. Er is niets half weggeschreven — "
                     + "elke melding is een eigen claim — en de volgende ronde leest alles opnieuw.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Meldt deze melder aan als geherbergde agent, of levert <c>null</c> als dat niet kan.
+    /// </summary>
+    /// <param name="declaration">De aankondiging.</param>
+    /// <returns>De agent, of <c>null</c> als er geen telemetrie is ingericht.</returns>
+    /// <remarks>
+    /// <c>GetOrAdd</c> en niet <c>Find</c>, en met een <c>catch</c> eromheen. Zelfde twee redenen als
+    /// bij <c>AzureCostCollector.Announce</c>: <c>Find</c> zou afhangen van de startvolgorde van
+    /// achtergronddiensten, en een uitzondering hier zou de host meenemen omdat dit buiten de lus van
+    /// een <see cref="BackgroundService"/> staat.
+    /// </remarks>
+    private ISoratusHostedAgent? Announce(HostedAgentDeclaration declaration)
+    {
+        if (hostedAgents is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return hostedAgents.GetOrAdd(declaration);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "De storingsmelder kon zich niet als agent aanmelden en publiceert dus geen runs. "
+                + "Hij kijkt gewoon door; wat er ontbreekt is de zichtbaarheid.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Draait één ronde, en legt hem vast als er telemetrie is ingericht.
+    /// </summary>
+    /// <param name="agent">De agent, of <c>null</c>.</param>
+    /// <param name="cancellationToken">Annuleringstoken.</param>
+    /// <returns>De taak van de ronde.</returns>
+    /// <remarks>
+    /// Het aantal verstuurde of opgemaakte meldingen wordt het aantal verwerkte items van de run. Een
+    /// ronde zonder storingen is dus een run met nul items en resultaat <c>ok</c> — en dat is de
+    /// juiste uitkomst: er was werk (kijken) en er was niets te melden.
+    /// </remarks>
+    private Task ObservedRunAsync(ISoratusHostedAgent? agent, CancellationToken cancellationToken)
+    {
+        if (agent is null)
+        {
+            return RunAsync(cancellationToken);
+        }
+
+        return agent.RunAsync(
+            TriggerKind.Timer,
+            async (run, token) => run.Processed(await RunAsync(token).ConfigureAwait(false)),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Wacht tot de volgende tik en meldt dat moment aan de agent.
+    /// </summary>
+    /// <param name="plan">Het plan waarop wordt gewacht.</param>
+    /// <param name="agent">De agent, of <c>null</c>.</param>
+    /// <param name="stoppingToken">Het stoptoken van de host.</param>
+    /// <returns><c>false</c> als het portaal afsluit of het plan niets meer oplevert.</returns>
+    /// <remarks>
+    /// <para>Dit was een <see cref="PeriodicTimer"/> op <c>IntervalSeconds</c> en is nu hetzelfde plan
+    /// dat wordt aangekondigd. Dat is de reden voor de wissel: de expressie in het document moet de
+    /// expressie zijn waarop werkelijk wordt gepland, en met twee bronnen — een timer hier en een cron
+    /// daar — is dat een afspraak in plaats van een eigenschap.</para>
+    ///
+    /// <para>Het gemelde moment is het moment waarop hier werkelijk wordt gewacht, en niet de cron
+    /// vanaf nu. Zie <see cref="ISoratusHostedAgent.ReportNextRun"/>: alleen zó kan een volgende run
+    /// in het verleden komen te staan als deze lus stilvalt terwijl het portaal doorklopt.</para>
+    /// </remarks>
+    private async Task<bool> SleepAsync(
+        SoratusSchedule plan,
+        ISoratusHostedAgent? agent,
+        CancellationToken stoppingToken)
+    {
+        var now = timeProvider.GetUtcNow();
+
+        if (plan.NextAfter(now) is not { } target)
+        {
+            logger.LogError(
+                "Het plan '{Plan}' levert geen volgend moment meer op; de storingsmelder stopt.",
+                plan.Expression);
+            agent?.ReportNextRun(null);
+            return false;
+        }
+
+        agent?.ReportNextRun(target);
+
+        try
+        {
+            await Task.Delay(target - now, timeProvider, stoppingToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 

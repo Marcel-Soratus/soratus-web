@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Soratus.Portal.Data;
+using Soratus.Portal.Platform;
 using Soratus.Portal.Security;
 using Soratus.Portal.Tests.Hulpmiddelen;
 
@@ -213,13 +214,20 @@ public class KlantenlijstMomentopnameTests
     private static CustomerDirectory Klantenlijst(
         string? standaardEndpoint,
         params CustomerRecord[] klanten) =>
+        Klantenlijst(standaardEndpoint, platform: null, klanten);
+
+    private static CustomerDirectory Klantenlijst(
+        string? standaardEndpoint,
+        PlatformTelemetryOptions? platform,
+        params CustomerRecord[] klanten) =>
         new(
             Options.Create(new PortalCustomerOptions { Customers = [.. klanten] }),
             Options.Create(new PortalTelemetryOptions
             {
                 AccountEndpoint = standaardEndpoint,
                 Database = "telemetry",
-            }));
+            }),
+            Options.Create(platform ?? new PlatformTelemetryOptions { AccountEndpoint = null }));
 
     private static CustomerRecord Klant(string id, string? name) => new()
     {

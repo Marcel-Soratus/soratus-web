@@ -58,6 +58,37 @@ public interface ISoratusHostedAgent
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Meldt het moment waarop deze host op de volgende run van deze agent wácht.
+    /// </summary>
+    /// <param name="moment">
+    /// Het moment, in UTC, of <c>null</c> als er niet meer op een volgende run wordt gewacht.
+    /// </param>
+    /// <remarks>
+    /// <para><strong>Dit is het moment waarop werkelijk wordt gewacht, en niet
+    /// <c>Schedule.NextAfter(nu)</c> bij elke hartslag.</strong> Dat verschil is de reden dat deze
+    /// methode bestaat, en het is gemeten aan het pad met één agent per proces: daar wordt
+    /// <c>nextRunAt</c> bij elke hartslag opnieuw uit de cron gerekend vanaf <em>nu</em>, en dus ligt
+    /// hij per constructie altijd in de toekomst. Een gemiste run is er daarmee níet aan te zien —
+    /// ook niet als de planlus is doodgevallen terwijl het proces vrolijk doorklopt.</para>
+    ///
+    /// <para>Meldt de host het moment waarop hij wacht, dan verschuift dat moment alleen als er
+    /// werkelijk een tik is geweest. Blijft de lus staan of hangt hij in een run, dan schuift de
+    /// hartslag door en de volgende run niet — en dan staat er in het portaal een volgende run in het
+    /// verleden. Dat is het enige spoor dat een stilgevallen klok-agent in een levende host
+    /// achterlaat.</para>
+    ///
+    /// <para>Wat het niet is: een status. De afgeleide status kijkt hier niet naar (een agent
+    /// publiceert nooit zijn eigen oordeel), dus een volgende run in het verleden kleurt geen rij en
+    /// stuurt geen mail. Hij is te zien, en dat is vandaag alles.</para>
+    ///
+    /// <para>Bij een agent zonder <see cref="HostedAgentDeclaration.Schedule"/> wordt een gemeld
+    /// moment <em>niet</em> gepubliceerd. Dan zou er een <c>nextRunAt</c> staan naast een
+    /// <c>triggerKind</c> die zegt dat deze dienst op een aanroep draait, en dat is dezelfde
+    /// tegenspraak die <see cref="HostedAgentDeclaration.Validate"/> weigert.</para>
+    /// </remarks>
+    void ReportNextRun(DateTimeOffset? moment);
+
+    /// <summary>
     /// Schrijft één logregel op naam van deze agent, buiten een run om.
     /// </summary>
     /// <param name="level">Info, warn of error.</param>

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Soratus.Portal.Data;
+using Soratus.Portal.Platform;
 using Soratus.Portal.Security;
 
 namespace Soratus.Portal.Tests.Hulpmiddelen;
@@ -68,10 +69,15 @@ internal static class Autorisatiebron
     /// </summary>
     /// <param name="klanten">De klanten.</param>
     /// <param name="standaardEndpoint">De standaardendpoint, of <c>null</c> voor geen opslag.</param>
+    /// <param name="platform">
+    /// De platformtelemetrie, of <c>null</c> voor "niet ingericht" — dan wijst de interne
+    /// beheerklant naar de standaardopslag, net als vóór fase 6.
+    /// </param>
     /// <returns>De klantenlijst.</returns>
     public static ICustomerDirectory Klantenlijst(
         IEnumerable<CustomerRecord> klanten,
-        string? standaardEndpoint = StandaardEndpoint)
+        string? standaardEndpoint = StandaardEndpoint,
+        PlatformTelemetryOptions? platform = null)
     {
         var opties = Options.Create(new PortalCustomerOptions { Customers = [.. klanten] });
         var telemetrie = Options.Create(new PortalTelemetryOptions
@@ -80,7 +86,10 @@ internal static class Autorisatiebron
             Database = "telemetry",
         });
 
-        return new CustomerDirectory(opties, telemetrie);
+        return new CustomerDirectory(
+            opties,
+            telemetrie,
+            Options.Create(platform ?? new PlatformTelemetryOptions { AccountEndpoint = null }));
     }
 
     /// <summary>

@@ -41,6 +41,16 @@ public sealed class SoratusAgentMetadata
     /// </param>
     /// <exception cref="ArgumentException">Als <paramref name="agentName"/> leeg is.</exception>
     /// <exception cref="InvalidOperationException">Als <paramref name="trigger"/> een timer is.</exception>
+    /// <remarks>
+    /// <para><strong>Een timer is hier een fout, en de reden is hier scherper dan bij een geherbergde
+    /// agent in het algemeen.</strong> Sinds een geherbergde agent een plan <em>mag</em> hebben — een
+    /// klok-agent in dezelfde host, zoals de beheeragents van het portaal — zegt
+    /// <see cref="HostedAgentDeclaration.Validate"/> "timer zonder plan mag niet, geef het plan mee".
+    /// Bij een endpoint is dat de verkeerde raad: er is geen parameter waarin een plan past, want een
+    /// endpoint draait niet op een klok maar op een aanroep. Vandaar dat de weigering hier staat en met
+    /// haar eigen woorden — een foutmelding die een uitweg wijst die niet bestaat kost meer dan geen
+    /// foutmelding.</para>
+    /// </remarks>
     public SoratusAgentMetadata(
         string agentName,
         string? displayType = null,
@@ -48,6 +58,16 @@ public sealed class SoratusAgentMetadata
         TriggerKind trigger = TriggerKind.Http)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
+
+        if (trigger == TriggerKind.Timer)
+        {
+            throw new InvalidOperationException(
+                $"Endpoint-agent '{agentName.Trim()}' meldt trigger '{TriggerKind.Timer}', maar een " +
+                "endpoint heeft geen schema: hij draait wanneer hij wordt aangeroepen. Kies de trigger " +
+                "die de aanroep beschrijft (http, queue, webhook, blob of manual). Een agent op een " +
+                "klok in deze host is geen endpoint; die kondigt zichzelf aan met een " +
+                $"{nameof(HostedAgentDeclaration)} met een plan erop.");
+        }
 
         Declaration = new HostedAgentDeclaration
         {

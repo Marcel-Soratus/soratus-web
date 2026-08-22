@@ -29,6 +29,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Soratus.Agents.Contracts\Soratus.Agents.Contracts.csproj" />
+    <!--
+      Het portaal lás documentvormen en schreef ze niet: de kostencollector en de storingsmelder
+      draaien hier, maar bestonden niet als agent in ons eigen overzicht. Met deze verwijzing meldt
+      het portaal zijn eigen beheeragents langs hetzelfde contract als de agents van een klant —
+      zelfde bibliotheek, zelfde documentvorm, zelfde statusregel.
+
+      Alleen de telemetriebibliotheek en niet Soratus.Agents.AspNetCore: die laatste bestaat om
+      inkomende verzoeken als run vast te leggen, en deze twee agents draaien op een klok. Zie
+      Platform/PlatformAgents.cs.
+    -->
+    <ProjectReference Include="..\Soratus.Agents.Telemetry\Soratus.Agents.Telemetry.csproj" />
   </ItemGroup>
 
   <ItemGroup>

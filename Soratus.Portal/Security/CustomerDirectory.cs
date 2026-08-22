@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
 using Soratus.Portal.Data;
+using Soratus.Portal.Platform;
 
 namespace Soratus.Portal.Security;
 
@@ -37,6 +38,7 @@ namespace Soratus.Portal.Security;
 internal sealed class CustomerDirectory : ICustomerDirectory
 {
     private readonly PortalTelemetryOptions _telemetryDefaults;
+    private readonly PlatformTelemetryOptions _platform;
     private Snapshot _snapshot;
 
     /// <summary>
@@ -44,20 +46,24 @@ internal sealed class CustomerDirectory : ICustomerDirectory
     /// </summary>
     /// <param name="customers">De sectie <c>Portal</c> met de klantenlijst.</param>
     /// <param name="telemetry">De sectie <c>Telemetry</c>, voor de standaard opslaglocatie.</param>
+    /// <param name="platform">
+    /// De sectie <c>PlatformTelemetry</c>, voor de opslaglocatie van de interne beheerklant.
+    /// </param>
     /// <remarks>
-    /// De constructorvorm is gelijk aan die van zijn voorganger, zodat de omschakeling in het
-    /// testproject één typenaam is en geen verbouwing. Dat de klantenlijst uit Cosmos komt zit
-    /// bewust niet in de constructor: deze klasse moet kunnen antwoorden voordat er ook maar iets
-    /// is gelezen.
+    /// Dat de klantenlijst uit Cosmos komt zit bewust niet in de constructor: deze klasse moet kunnen
+    /// antwoorden voordat er ook maar iets is gelezen.
     /// </remarks>
     public CustomerDirectory(
         IOptions<PortalCustomerOptions> customers,
-        IOptions<PortalTelemetryOptions> telemetry)
+        IOptions<PortalTelemetryOptions> telemetry,
+        IOptions<PlatformTelemetryOptions> platform)
     {
         ArgumentNullException.ThrowIfNull(customers);
         ArgumentNullException.ThrowIfNull(telemetry);
+        ArgumentNullException.ThrowIfNull(platform);
 
         _telemetryDefaults = telemetry.Value;
+        _platform = platform.Value;
 
         var configured = new List<CustomerRecord>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -74,10 +80,7 @@ internal sealed class CustomerDirectory : ICustomerDirectory
                 customer.Name = customer.Id;
             }
 
-            customer.Telemetry = ResolveLocation(
-                customer.TelemetryEndpoint,
-                customer.TelemetryDatabase,
-                _telemetryDefaults);
+            customer.Telemetry = ResolveLocation(customer, _telemetryDefaults, _platform);
 
             configured.Add(customer);
         }
@@ -211,10 +214,7 @@ internal sealed class CustomerDirectory : ICustomerDirectory
                 ],
             };
 
-            record.Telemetry = ResolveLocation(
-                document.TelemetryEndpoint,
-                document.TelemetryDatabase,
-                _telemetryDefaults);
+            record.Telemetry = ResolveLocation(record, _telemetryDefaults, _platform);
 
             records.Add(record);
         }
@@ -231,23 +231,74 @@ internal sealed class CustomerDirectory : ICustomerDirectory
     /// <summary>
     /// Waar de telemetrie van deze klant staat: zijn eigen endpoint, of anders de standaard.
     /// </summary>
+    /// <param name="record">De klant.</param>
+    /// <param name="defaults">De sectie <c>Telemetry</c>.</param>
+    /// <param name="platform">De sectie <c>PlatformTelemetry</c>.</param>
+    /// <returns>De locatie, of <c>null</c> als er geen endpoint bekend is.</returns>
+    /// <remarks>
+    /// <para><strong>De interne beheerklant valt terug op de platformtelemetrie en niet op de
+    /// standaard, en dat is de leeskant van fase 6.</strong> Het portaal publiceert zijn eigen
+    /// beheeragents naar een eigen database — het heeft op de klanttelemetrie met opzet alleen
+    /// leesrecht, zodat een gecompromitteerd portaal geen telemetrie van een klant kan verzinnen. Wie
+    /// die agents wil zien moet dus in die database kijken, en de interne klant ís het platform.</para>
+    ///
+    /// <para>Dat die terugval hier staat en niet als waarde op het klantdocument, is opzet: dan
+    /// bestaat de toestand "het portaal publiceert netjes in de ene database en het scherm kijkt in de
+    /// andere", en die toestand levert geen fout op maar een leeg overzicht. Eén sectie voedt beide
+    /// kanten. Zie <see cref="PlatformTelemetryOptions"/>.</para>
+    ///
+    /// <para>Een waarde die uitdrukkelijk op de klant zelf staat wint nog steeds — ook bij de interne
+    /// klant. Zodra het platform een eigen account krijgt, is dat de plek waar dat komt te staan, en
+    /// dan hoort de configuratiesectie niet stil te overrulen wat iemand heeft vastgelegd.</para>
+    ///
+    /// <para><strong>Wat dit kost, en het is zichtbaar:</strong> wat er vandaag in <c>telemetry</c>
+    /// onder klant <c>soratus</c> staat — de vijf geseede beheeragents en de echte registratie van
+    /// <c>heartbeat-demo</c> — verdwijnt hiermee van <c>/klant/soratus/agents</c>. Dat is de bedoeling
+    /// voor de eerste vijf (dat is demodata die anders door de échte registraties zou worden
+    /// overschreven: zelfde id, zelfde partitiesleutel) en het is een echt gemis voor
+    /// <c>heartbeat-demo</c>. Die agent hoort in de nieuwe database thuis — hij is van ons en niet van
+    /// een klant — en dat is één regel in zijn eigen configuratie
+    /// (<c>SORATUS_TELEMETRY__DATABASE</c>).</para>
+    /// </remarks>
     private static TelemetryLocation? ResolveLocation(
-        string? endpoint,
-        string? database,
-        PortalTelemetryOptions defaults)
+        CustomerRecord record,
+        PortalTelemetryOptions defaults,
+        PlatformTelemetryOptions platform)
     {
-        var resolvedEndpoint = Coalesce(endpoint, defaults.AccountEndpoint);
-        var resolvedDatabase = Coalesce(database, defaults.Database);
+        // IsConfigured en niet alleen IsInternal, en dat sluit de tussenstand af. De sleutel
+        // PlatformTelemetry__AccountEndpoint komt uit dezelfde uitrol die de database aanmaakt, dus
+        // zolang die er niet is bestaat de database ook niet — en dan zou de interne klant naar een
+        // database wijzen die 404 geeft en als "status onbekend" op het overzicht komen. Eén schakelaar
+        // voor de leeskant en de schrijfkant: is de platformtelemetrie ingericht, dan schrijft het
+        // portaal er zijn agents heen en leest de interne klant ze daar; is hij dat niet, dan verandert
+        // er niets ten opzichte van vóór fase 6.
+        var useplatform = record.IsInternal && platform.IsConfigured;
+        var internalEndpoint = useplatform ? platform.AccountEndpoint : null;
+        var internalDatabase = useplatform ? platform.Database : null;
+
+        var resolvedEndpoint = Coalesce(record.TelemetryEndpoint, internalEndpoint, defaults.AccountEndpoint);
+        var resolvedDatabase = Coalesce(record.TelemetryDatabase, internalDatabase, defaults.Database);
 
         return resolvedEndpoint is null || resolvedDatabase is null
             ? null
             : new TelemetryLocation(resolvedEndpoint, resolvedDatabase);
     }
 
-    private static string? Coalesce(string? preferred, string? fallback) =>
-        !string.IsNullOrWhiteSpace(preferred) ? preferred.Trim()
-        : !string.IsNullOrWhiteSpace(fallback) ? fallback.Trim()
-        : null;
+    /// <summary>De eerste waarde die er is, of <c>null</c>.</summary>
+    /// <param name="candidates">De kandidaten, in volgorde van voorkeur.</param>
+    /// <returns>De eerste niet-lege waarde, getrimd.</returns>
+    private static string? Coalesce(params string?[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate.Trim();
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// De e-mailadressen die in het token kunnen staan.

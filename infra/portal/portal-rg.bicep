@@ -119,6 +119,49 @@ param cosmosDatabaseName string = 'telemetry'
 @description('Database voor portaaleigen data: klanten, contracten, toegang.')
 param platformDatabaseName string = 'platform'
 
+// ---------------------------------------------------------------------------
+// De telemetrie van het platform zelf
+// ---------------------------------------------------------------------------
+// Nog een database, en dat is een véiligheidsgrens en geen ordening. Het portaal
+// draait de kostencollector en de storingsmelder; sinds fase 6 melden die zich als
+// agent, dus het portaal moet ergens agent-, run- en logdocumenten kunnen schrijven.
+//
+// Niet in `telemetry`. Daar staat de telemetrie van klanten en daarop heeft het
+// portaal met opzet alléén leesrecht (de Data Reader hieronder, accountbreed). Het
+// portaal is het ding waar klanten op inloggen: kan het in die database schrijven,
+// dan kan een gecompromitteerd portaal telemetrie vérzinnen — een agent die "alles
+// in orde" meldt terwijl hij stilstaat. Dat is een ergere eigenschap dan de
+// blindheid die we ervoor terugkrijgen.
+//
+// En het moet een database zijn en geen partitie: Cosmos schaalt zijn dataplane-
+// rollen per account, database of container en NOOIT per partitie. De
+// gereserveerde partitie `$portal` — waar de dagclaim van de collector en de
+// markeringen van de melder in staan — is dus geen rechtengrens. Schrijfrecht op
+// de container `agents` in `telemetry` zou schrijfrecht zijn op de registratie van
+// élke klantagent.
+//
+// Ook niet in `platform`. Daar staan klanten, contracten, uren en toegang, en die
+// verlopen niet; telemetrie verloopt wel, en een bewaartermijn is een eigenschap
+// van de container. Dezelfde reden dat `telemetry` drie containers heeft en
+// `platform` één.
+//
+// Bijkomend, en gemeten: in `telemetry` staat onder klant `soratus` al geseede
+// demodata mét een agent `storingsmelder` en een agent `kosten-collector`
+// (tools/seed/telemetry.json). Het registratiedocument heeft `agentName` als id én
+// als partitiesleutel, dus het portaal zou die twee documenten overschrijven — het
+// echte werk en de demo zouden hetzelfde document zijn.
+@description('Database voor de telemetrie van de beheeragents van het platform zelf.')
+param platformTelemetryDatabaseName string = 'platform-telemetry'
+
+@description('Naam van de schrijfrechtverlening op platform-telemetry. Leeg = uitrekenen.')
+param cosmosPlatformTelemetryWriterAssignmentName string = ''
+
+@description('''
+De klant waaronder de beheeragents van het platform in het portaal staan. Moet dezelfde slug zijn
+als de interne beheerklant in de klantenlijst, want dat is de klant op wiens pagina ze verschijnen.
+''')
+param platformTelemetryCustomerId string = 'soratus'
+
 @description('Entra-tenant van het abonnement.')
 param tenantId string = subscription().tenantId
 
@@ -482,6 +525,96 @@ resource cosmosPlatformWriter 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssi
 }
 
 // ---------------------------------------------------------------------------
+// Cosmos DB — de platform-telemetriedatabase: de beheeragents van Soratus
+//
+// Dezelfde drie containers als `telemetry` en met dezelfde bewaartermijnen, want
+// het is hetzelfde contract: de telemetriebibliotheek schrijft naar de namen
+// `agents`, `runs` en `logs` met partitiesleutelpad `/pk`, en die namen staan als
+// constante in de code (CosmosContainerNames). Een database met andere namen levert
+// geen fout op maar een leeg scherm.
+// ---------------------------------------------------------------------------
+
+resource platformTelemetry 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-11-15' = {
+  parent: cosmos
+  name: platformTelemetryDatabaseName
+  properties: {
+    resource: {
+      id: platformTelemetryDatabaseName
+    }
+  }
+}
+
+resource platformTelemetryContainers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-11-15' = [
+  for c in containers: {
+    parent: platformTelemetry
+    name: c.name
+    properties: {
+      // Zelfde union() en zelfde valkuil als bij de telemetriecontainers: `defaultTtl`
+      // moet ONTBREKEN als er geen verval is en niet null zijn. Een expliciete null
+      // levert bij het uitrollen "One of the specified inputs is invalid" op de
+      // container `agents`, en `what-if` ziet dat verschil niet — daar zijn "null" en
+      // "afwezig" hetzelfde. Een groene what-if is hier dus geen bewijs.
+      resource: union(
+        {
+          id: c.name
+          partitionKey: {
+            paths: ['/pk']
+            kind: 'Hash'
+          }
+          conflictResolutionPolicy: {
+            mode: 'LastWriterWins'
+            conflictResolutionPath: '/_ts'
+          }
+          indexingPolicy: {
+            indexingMode: 'consistent'
+            automatic: true
+            includedPaths: [
+              { path: '/*' }
+            ]
+            excludedPaths: [
+              { path: '/"_etag"/?' }
+            ]
+          }
+        },
+        c.ttl == null ? {} : { defaultTtl: c.ttl }
+      )
+    }
+  }
+]
+
+// Schrijfrecht, en alleen op déze database. Dit is de hele grens tussen "het portaal
+// mag zijn eigen agents publiceren" en "het portaal mag de telemetrie van een klant
+// aanraken", en het is één regel — de scope hieronder.
+//
+// De accountbrede Data Reader blijft staan en wordt hier niet vervangen: dat is wat
+// het portaal élke klanttelemetrie laat lézen. Cosmos telt dataplane-rechten bij
+// elkaar op, dus na deze verlening kan het portaal overal lezen en op precies twee
+// databases schrijven: `platform` en `platform-telemetry`.
+//
+// Er bestaat geen ingebouwde rol die alleen schrijft; Data Contributor omvat lezen,
+// en op deze scope is dat precies wat nodig is.
+resource cosmosPlatformTelemetryWriter 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
+  parent: cosmos
+  name: empty(cosmosPlatformTelemetryWriterAssignmentName)
+    ? guid(cosmos.id, platformTelemetryDatabaseName, portalIdentityPrincipalId, cosmosDataContributorRoleId)
+    : cosmosPlatformTelemetryWriterAssignmentName
+  properties: {
+    roleDefinitionId: resourceId(
+      'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions',
+      cosmosAccountName,
+      cosmosDataContributorRoleId
+    )
+    principalId: portalIdentityPrincipalId
+    // Een dáta-plane pad en geen ARM-resource-id: '/dbs/{db}' en niet
+    // '/sqlDatabases/{db}'. Met de ARM-vorm faalt de uitrol op "Expected path segment
+    // [dbs] at position [0] but found [sqlDatabases]" — en what-if ziet dat niet, want
+    // die valideert de vorm van deze string niet. Zelfde val als bij de verlening op
+    // `platform` hierboven.
+    scope: '${cosmos.id}/dbs/${platformTelemetryDatabaseName}'
+  }
+}
+
+// ---------------------------------------------------------------------------
 // App Service
 // ---------------------------------------------------------------------------
 
@@ -572,6 +705,36 @@ resource portalApp 'Microsoft.Web/sites@2024-04-01' = {
         {
           name: 'PortalMail__PortalBaseUri'
           value: 'https://${portalHostName}'
+        }
+        {
+          // Waar het portaal de telemetrie van zijn eigen beheeragents heen schrijft, en
+          // waar de interne beheerklant ze vandaan leest. Eén sectie voor beide kanten:
+          // met twee configuraties bestaat de toestand "het portaal publiceert netjes in
+          // de ene database en het scherm kijkt in de andere", en die levert geen fout op
+          // maar een leeg overzicht.
+          //
+          // Deze drie sleutels horen bij elkaar en horen bij déze uitrol: zolang
+          // PlatformTelemetry__AccountEndpoint niet is gezet, publiceert het portaal zijn
+          // eigen agents niet én blijft de interne klant naar `telemetry` kijken. Dat is
+          // opzet — de sleutel komt uit dezelfde uitrol die de database aanmaakt, dus er
+          // is geen tussenstand waarin de interne klant naar een database wijst die nog
+          // niet bestaat.
+          //
+          // Een waarde en geen lege string. Een lege waarde op een sleutel is niet
+          // hetzelfde als een afwezige sleutel; dat heeft dit portaal al eens platgelegd.
+          // Hier zou leeg overigens onschadelijk zijn (er staat geen validatie op deze
+          // drie die een lege string afkeurt en de binding is IsConfigured-gestuurd),
+          // maar de regel geldt: wat leeg mag zijn hoort te ontbreken.
+          name: 'PlatformTelemetry__AccountEndpoint'
+          value: cosmos.properties.documentEndpoint
+        }
+        {
+          name: 'PlatformTelemetry__Database'
+          value: platformTelemetryDatabaseName
+        }
+        {
+          name: 'PlatformTelemetry__CustomerId'
+          value: platformTelemetryCustomerId
         }
       ], replyToSetting, alertRecipientSettings)
     }
@@ -720,3 +883,6 @@ output keyVaultUri string = keyVault.properties.vaultUri
 
 @description('Database met de portaaleigen data. Hoort in de configuratiesectie Platform.')
 output platformDatabaseName string = platform.name
+
+@description('Database met de telemetrie van de beheeragents. Hoort in de sectie PlatformTelemetry.')
+output platformTelemetryDatabaseName string = platformTelemetry.name
