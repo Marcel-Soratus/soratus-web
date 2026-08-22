@@ -1,0 +1,409 @@
+@page "/klant/{Slug}/support"
+@attribute [Authorize]
+@using Soratus.Portal.Support
+
+@* Support (§3.8): de berichtendraad tussen klant en Soratus, met de naad naar de AI-eerstelijn
+   erachter.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   TWEE ROLLEN, TWEE VORMEN, EN HET VERSCHIL IS EEN TYPE
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   §3.8 legt één rolverschil vast: in de operatorrol antwoordt een mens en springt de agent er niet
+   tussen. Dat is hier een typeverschil en geen filter:
+
+     Scopes.ResolveWriteAsync  → CustomerWriteScope  → OperatorSupportView → <OperatorSupport />
+     Scopes.ResolveAsync       → CustomerScope       → CustomerSupportView → <CustomerSupport />
+
+   ISupportViews heeft twee overloads met dezelfde naam en een andere scope, en er bestaat geen
+   aanroep waarmee je met een klantscope het operatormodel krijgt. Het gaat verder dan de weergave:
+
+     • OperatorSupportView heeft geen SupportFirstLineState, geen uitweg naar een mens en geen
+       vraagformulier. Er is niets te verbergen, want er is niets.
+     • SupportDesk — de enige plek die de eerstelijn aanroept — heeft geen methode die een
+       CustomerWriteScope neemt. Een operatorbericht kán de eerstelijn dus niet wakker maken; die
+       aanroep is niet te schrijven.
+     • CustomerSupportView heeft geen escalatieredenen en geen onbruikbare berichten.
+
+   Dezelfde vorm als bij CustomerLogLine (§12), CustomerRunRow (§14), CustomerAgentsView (§9), de
+   contractmarge (§2) en het urenscherm (fase 3) — voor de zesde keer, en om dezelfde reden: wat er
+   niet op het type staat kan niet lekken, ook niet als iemand er over een half jaar een tooltip bij
+   zet.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DRIE FORMULIEREN, EN GEEN ERVAN DRAAGT EEN AFZENDER
+   ────────────────────────────────────────────────────────────────────────────────────────────
+     vraag     — de klant stelt een vraag. Loopt langs SupportDesk: eerst vastleggen, dan de
+                 eerstelijn.
+     mens      — de uitweg uit §3.8 ("Toch een mens van Soratus spreken"). Loopt langs de opslag en
+                 níet langs SupportDesk, dus er komt per definitie geen AI-antwoord op.
+     antwoord  — de operator antwoordt. Loopt langs de opslag; de eerstelijn komt er niet aan te pas.
+
+   Geen van de drie gebonden formuliertypen heeft een naamveld. De naam van de klant komt uit de
+   aanmelding en wordt hier toegevoegd; de naam van de operator komt uit zijn scope. Een zelfgemaakte
+   POST kan dus niet bepalen wie de afzender is — en een bericht op naam van iemand die het niet
+   schreef is in een gesprek erger dan een verkeerd getal.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   STATIC SSR, GEEN EILAND, EN NA EEN GELUKTE POST EEN REDIRECT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Dezelfde afweging als op het urenscherm. Er is geen dirty-stand (elk bericht is nieuw), er
+   verdwijnt niets uit een lijst, en het viewmodel gaat niet over een serialisatiegrens — dus staat er
+   geen berichttekst in de paginabron van een eiland.
+
+   POST → redirect → GET, naar de draad zonder ?voor=. Zonder die redirect stuurt een verversing
+   hetzelfde formulier opnieuw, en dat levert een tweede bericht op met een nieuwe sleutel. De
+   afgeleide sleutel per milliseconde vangt een dubbelklik en niet een tweede klik na drie seconden;
+   dat gat staat ook in het rapport van fase 3 en het is hier hetzelfde gat.
+
+   Terug naar de nieuwste berichten en niet naar het deel waar de schrijver stond: hij heeft net
+   onderaan iets toegevoegd, en dat is wat hij wil zien.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   404 EN GEEN 403
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Geen recht, of een klant die niet bestaat: hetzelfde antwoord. Zie ICustomerScopeResolver — een
+   403 zou bevestigen dat de klant achter die URL bestaat. *@
+
+@inject ICustomerScopeResolver Scopes
+@inject ISupportViews Views
+@inject ISupportStore Store
+@inject SupportDesk Desk
+@inject NavigationManager Navigation
+
+@* Binnen de rolcontrole en niet erboven — een PageTitle rendert in de HeadOutlet en niet in de
+   markup, dus het vangnet op verboden woorden ziet hem niet. Zie PaginatitelTests. *@
+@if (_operatorView is not null || _customerView is not null)
+{
+    <PageTitle>Support · @_title · Agent Portal</PageTitle>
+}
+
+@if (_operatorView is { } operatorView)
+{
+    <div class="toolbar">
+        <a class="btn btn--small" href="/overzicht"><span class="mono" aria-hidden="true">←</span>Alle klanten</a>
+    </div>
+
+    <div class="page-head">
+        <h1 class="page-title">@operatorView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(operatorView.GeneratedAt)">
+            support · bijgewerkt @TimeFormat.Clock(operatorView.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@operatorView.CustomerId" />
+
+    <div class="stack">
+        <OperatorSupport View="operatorView" />
+
+        <FormCard Title="Antwoorden"
+                  Mode="FieldMode.Edit"
+                  Model="Reply"
+                  FormName="@ReplyFormName"
+                  State="_replyState"
+                  Error="@_replyError"
+                  FieldErrorCount="@(_replyFieldError is null ? 0 : 1)"
+                  OnSave="ReplyAsync"
+                  SaveLabel="Versturen"
+                  SavingLabel="Versturen…"
+                  Footnote="Dit komt als bericht van Soratus in het portaal van de klant te staan, op jouw naam. Het is niet te wijzigen en niet te verwijderen: een draad is een verslag.">
+            <ChildContent>
+                <FormField Label="Antwoord"
+                           Kind="FieldKind.Multiline"
+                           Rows="5"
+                           Name="@ReplyField"
+                           Value="@Reply.Text"
+                           Required="true"
+                           Error="@_replyFieldError"
+                           Hint="@ReplyHint"
+                           maxlength="@SupportLimits.MaximumLength" />
+            </ChildContent>
+        </FormCard>
+    </div>
+}
+else if (_customerView is { } customerView)
+{
+    <div class="page-head">
+        <h1 class="page-title">@customerView.DisplayName</h1>
+        <span class="page-meta" title="@TimeFormat.Absolute(customerView.GeneratedAt)">
+            support · bijgewerkt @TimeFormat.Clock(customerView.GeneratedAt)
+        </span>
+    </div>
+
+    <CustomerNav Slug="@customerView.CustomerId" />
+
+    <div class="stack">
+        <CustomerSupport View="customerView" />
+
+        <FormCard Title="Stel je vraag"
+                  Mode="FieldMode.Edit"
+                  Model="Question"
+                  FormName="@AskFormName"
+                  State="_askState"
+                  Error="@_askError"
+                  FieldErrorCount="@(_askFieldError is null ? 0 : 1)"
+                  OnSave="AskAsync"
+                  SaveLabel="Versturen"
+                  SavingLabel="Versturen…"
+                  Footnote="Je bericht blijft in deze draad staan en is door Soratus te lezen.">
+            <ChildContent>
+                <FormField Label="Bericht"
+                           Kind="FieldKind.Multiline"
+                           Rows="4"
+                           Name="@AskField"
+                           Value="@Question.Text"
+                           Required="true"
+                           Error="@_askFieldError"
+                           Hint="Vragen over de status van je agents, je uren tegen de bundel of een factuur kunnen direct worden beantwoord met de gegevens uit dit portaal."
+                           maxlength="@SupportLimits.MaximumLength" />
+            </ChildContent>
+        </FormCard>
+
+        @* De uitweg uit §3.8, en het is een echte handeling en geen link naar een mailadres. Hij
+           loopt langs de opslag en niet langs SupportDesk, dus er komt geen AI-antwoord op — een
+           klant die om een mens vraagt hoort geen agent te krijgen die hem uitlegt dat hij een agent
+           is. Een EditForm en geen <a>: dit schrijft iets, en een GET die schrijft is de vorm die
+           §29.9 van de fase-0-afwijkingen afwijst. *@
+        <EditForm Model="Escape" FormName="@EscapeFormName" OnValidSubmit="EscapeAsync" id="@EscapeFormName">
+            <p class="meta notice">
+                <button type="submit" class="btn btn--small">@SupportText.HumanEscape</button>
+                <span>@EscapeHint</span>
+            </p>
+        </EditForm>
+    </div>
+}
+
+@code {
+    /// <summary>De naam van het vraagformulier van de klant.</summary>
+    /// <remarks>
+    /// Drie formulieren op deze pagina, dus drie namen. Ze staan als constante en niet als letterlijke
+    /// tekst op twee plekken: het <c>FormName</c> van de kaart en het voorvoegsel van het
+    /// <c>name</c>-attribuut horen bij elkaar, en een verschrijving daartussen laat een formulier stil
+    /// niets doen.
+    /// </remarks>
+    private const string AskFormName = "support-vraag";
+
+    private const string ReplyFormName = "support-antwoord";
+
+    /// <summary>
+    /// De naam van het formulier achter de uitweg naar een mens.
+    /// </summary>
+    /// <remarks>
+    /// Een eigen naam en niet die van het vraagformulier. Zou hij dezelfde naam hebben, dan bindt
+    /// Blazor bij een POST het verkeerde model en zou de knop de inhoud van het tekstveld meesturen —
+    /// en dan is de uitweg geen vaste tekst meer.
+    /// </remarks>
+    private const string EscapeFormName = "support-mens";
+
+    private CustomerScope? _read;
+    private CustomerWriteScope? _write;
+
+    private CustomerSupportView? _customerView;
+    private OperatorSupportView? _operatorView;
+
+    private string _title = "Support";
+    private string _actor = string.Empty;
+
+    private FormSaveState _askState = FormSaveState.Idle;
+    private string? _askError;
+    private string? _askFieldError;
+
+    private FormSaveState _replyState = FormSaveState.Idle;
+    private string? _replyError;
+    private string? _replyFieldError;
+
+    /// <summary>De klantslug uit de route.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    /// <summary>
+    /// Het bericht waarvóór het oudere deel van de draad begint, of leeg voor het recentste deel.
+    /// </summary>
+    /// <remarks>
+    /// Een grens en geen werkwoord. Zie <see cref="SupportText.OlderPath"/>: deze parameter kiest een
+    /// deel van een lijst en verandert niets — hij plaatst geen bericht en wekt de eerstelijn niet.
+    /// </remarks>
+    [SupplyParameterFromQuery(Name = SupportText.OlderQuery)]
+    public string? Voor { get; set; }
+
+    /// <summary>Het vraagformulier zoals de POST het oplevert.</summary>
+    /// <remarks>
+    /// Nullable en zonder beginwaarde (BL0008): het model wordt bij een POST volledig vervangen, en een
+    /// beginwaarde hier kan door <c>null</c> worden overschreven zodra er niets te binden viel. Gebruik
+    /// daarom <see cref="Question"/> in de markup.
+    /// </remarks>
+    [SupplyParameterFromForm(FormName = AskFormName)]
+    public SupportQuestionForm? Vraag { get; set; }
+
+    /// <summary>Het antwoordformulier zoals de POST het oplevert.</summary>
+    [SupplyParameterFromForm(FormName = ReplyFormName)]
+    public SupportReplyForm? Antwoord { get; set; }
+
+    /// <summary>
+    /// Het formulier achter de uitweg naar een mens.
+    /// </summary>
+    /// <remarks>
+    /// Een leeg model, want er valt niets in te vullen: de tekst staat vast in
+    /// <see cref="SupportText.HumanRequest"/>. Het bestaat alleen omdat <c>EditForm</c> een model
+    /// vraagt en omdat een <c>POST</c> met een antiforgery-token de juiste vorm is voor een handeling.
+    /// </remarks>
+    [SupplyParameterFromForm(FormName = EscapeFormName)]
+    public SupportReplyForm? Mens { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private SupportQuestionForm Question => Vraag ??= new SupportQuestionForm();
+
+    private SupportReplyForm Reply => Antwoord ??= new SupportReplyForm();
+
+    private SupportReplyForm Escape => Mens ??= new SupportReplyForm();
+
+    private string ReplyHint =>
+        "De klant leest deze tekst letterlijk terug. Zet er geen interne aanduidingen, paden of "
+        + "klassenamen in — er is aan onze kant niets dat dat tegenhoudt.";
+
+    private string EscapeHint =>
+        _customerView?.FirstLine == SupportFirstLineState.Available
+            ? "Zet een bericht in de draad dat je een mens wilt spreken. De eerstelijn antwoordt hier "
+              + "niet op."
+            : "Zet een bericht in de draad dat je een mens wilt spreken.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationState is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        var user = (await AuthenticationState).User;
+
+        // Het schrijfrecht eerst. Een operator krijgt ook een gewone klantscope, en dan zou hij de
+        // klantvorm van zijn eigen scherm zien — met een vraagformulier dat een bericht op zijn naam
+        // als klant zou wegschrijven. ResolveWriteAsync en niet ResolveOperatorAsync: dat laatste
+        // vraagt een ingerichte telemetrie-opslag, en een klant in onboarding heeft juist vragen.
+        if (await Scopes.ResolveWriteAsync(user, Slug) is { } write)
+        {
+            _write = write;
+            _actor = write.Actor;
+            _title = write.DisplayName;
+            await LoadOperatorAsync();
+            return;
+        }
+
+        if (await Scopes.ResolveAsync(user, Slug) is { } read)
+        {
+            _read = read;
+
+            // De naam uit de aanmelding, en niet uit het formulier. Zie SupportQuestionForm: dat type
+            // heeft geen naamveld, dus dit is de enige plek waar hij vandaan kan komen.
+            _actor = user.Identity?.Name ?? string.Empty;
+            await LoadCustomerAsync();
+            _title = _customerView!.DisplayName;
+            return;
+        }
+
+        Navigation.NotFound();
+    }
+
+    private async Task LoadCustomerAsync() =>
+        _customerView = await Views.BuildThreadAsync(_read!, Query(), Desk.FirstLine());
+
+    private async Task LoadOperatorAsync() =>
+        _operatorView = await Views.BuildThreadAsync(_write!, Query());
+
+    private SupportThreadQuery Query() => SupportThreadQuery.Before(Voor);
+
+    // ── Schrijven ───────────────────────────────────────────────────────────────────────────────
+
+    private async Task AskAsync()
+    {
+        _askError = null;
+        _askFieldError = Question.Error();
+
+        if (_askFieldError is not null)
+        {
+            _askState = FormSaveState.Failed;
+            return;
+        }
+
+        _askState = FormSaveState.Saving;
+
+        var result = await Desk.AskAsync(_read!, Question.ToQuestion(_actor));
+
+        if (result.IsSaved)
+        {
+            Done();
+            return;
+        }
+
+        _askError = result.Message;
+        _askState = FormSaveState.Failed;
+
+        // De draad opnieuw, want er kan intussen iets bij zijn gekomen; het formulier blijft staan met
+        // wat er is ingetypt.
+        await LoadCustomerAsync();
+    }
+
+    private async Task EscapeAsync()
+    {
+        var question = new SupportQuestion { Author = _actor, Text = SupportText.HumanRequest };
+
+        // Rechtstreeks naar de opslag en niet langs SupportDesk. Dat is de hele betekenis van deze
+        // knop: er komt geen antwoord van de eerstelijn op.
+        var result = await Store.PostQuestionAsync(_read!, question);
+
+        if (result.IsSaved)
+        {
+            Done();
+            return;
+        }
+
+        _askError = result.Message;
+        _askState = FormSaveState.Failed;
+
+        await LoadCustomerAsync();
+    }
+
+    private async Task ReplyAsync()
+    {
+        _replyError = null;
+        _replyFieldError = Reply.Error();
+
+        if (_replyFieldError is not null)
+        {
+            _replyState = FormSaveState.Failed;
+            return;
+        }
+
+        _replyState = FormSaveState.Saving;
+
+        var result = await Store.PostReplyAsync(_write!, Reply.ToReply());
+
+        if (result.IsSaved)
+        {
+            Done();
+            return;
+        }
+
+        _replyError = result.Message;
+        _replyState = FormSaveState.Failed;
+
+        await LoadOperatorAsync();
+    }
+
+    /// <summary>
+    /// Sluit een gelukte schrijfactie af: terug naar de nieuwste berichten, met een redirect.
+    /// </summary>
+    /// <remarks>
+    /// POST → redirect → GET. Zonder deze stap stuurt een verversing hetzelfde formulier opnieuw, en
+    /// dat levert een tweede bericht op met een nieuwe sleutel. Zonder <c>?voor=</c>, want de schrijver
+    /// heeft net onderaan iets toegevoegd en dat is wat hij wil zien.
+    /// </remarks>
+    private void Done() =>
+        Navigation.NavigateTo(SupportText.Path(_write?.CustomerId ?? _read!.CustomerId));
+
+    private static string AskField => $"{nameof(Vraag)}.{nameof(SupportQuestionForm.Text)}";
+
+    private static string ReplyField => $"{nameof(Antwoord)}.{nameof(SupportReplyForm.Text)}";
+}

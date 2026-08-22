@@ -155,6 +155,7 @@ public class PaginatitelTests : Portaalrendertest
             "Soratus.Portal.Components.Pages.Klant.Contract",
             "Soratus.Portal.Components.Pages.Klant.Facturatie",
             "Soratus.Portal.Components.Pages.Klant.Sprint",
+            "Soratus.Portal.Components.Pages.Klant.Support",
             "Soratus.Portal.Components.Pages.Klant.Uren",
         };
 
@@ -242,6 +243,12 @@ public class PaginatitelTests : Portaalrendertest
                 // de titel staat is de projectnaam of een woord uit de koppeling, en dát wordt door
                 // de theorie hierboven gemeten en niet door deze lijst.
                 "Soratus.Portal.Components.Pages.Klant.Sprint",
+
+                // Fase 5. Het supportscherm rendert voor een klant inhoud — zijn eigen berichtendraad,
+                // want §2 geeft hem "Support: bericht sturen, AI-eerstelijn" — en zet dus een titel
+                // ("Support · Acme Logistiek · Agent Portal"). Wat er niet in staat is een woord uit de
+                // operatorkant; dat wordt door de theorie hierboven gemeten en niet door deze lijst.
+                "Soratus.Portal.Components.Pages.Klant.Support",
 
                 // Fase 3. Het urenscherm rendert voor een klant inhoud — zijn verbruik tegen de
                 // bundel — en zet dus een titel ("Uren · Acme Logistiek · Agent Portal"). Wat er

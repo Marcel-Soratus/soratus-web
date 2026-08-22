@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Soratus.Portal.Data;
 using Soratus.Portal.Security;
+using Soratus.Portal.Support;
 using Soratus.Portal.Tests.Hulpmiddelen;
 using Soratus.Portal.Views;
 
@@ -211,6 +212,24 @@ public abstract class Portaalrendertest : BunitContext
         // schrijft niets — DevOps is leidend en het portaal schrijft nooit terug (§3.4). De fixture
         // projecteert over dezelfde Opslag, zodat een test een sprintstand daar neerzet.
         Services.AddSingleton(VasteSprintweergaven.Bouw(Opslag, lijst));
+
+        // Het supportscherm vraagt deze drie. Ze staan hier en niet per test, om dezelfde reden als de
+        // regels erboven: elke pagina valt onder het zichtbaarheidsvangnet en dat rendert ze allemaal,
+        // en een pagina die op een ontbrekende dienst omvalt toont geen verboden woorden en laat dat
+        // vangnet dus groen staan om de verkeerde reden.
+        //
+        // De weergavelaag is de échte projectie op Opslag (SupportProjection), net als bij de uren en de
+        // facturatie: de hele opgave van dit scherm is dat het klantpad minder oplevert dan het
+        // operatorpad — geen escalatieredenen, geen berichten die de klant niet ziet — en een fixture
+        // die de viewmodellen zelf vult laat die scheiding groen staan zonder hem te meten.
+        //
+        // SupportDesk is een concrete klasse en geen interface: hij is het schrijfpad van de klantkant en
+        // de enige plek die de eerstelijn aanroept. Hij krijgt hier géén eerstelijn mee, en dat is de
+        // productiestand — ISupportFirstLine staat met opzet niet in Program.cs. Het scherm zegt dan dat
+        // een mens antwoordt.
+        Services.AddSingleton(VasteSupportweergaven.Weergaven(Opslag, lijst));
+        Services.AddSingleton<ISupportStore>(Opslag);
+        Services.AddSingleton(VasteSupportweergaven.Balie(Opslag, eerstelijn: null, lijst));
 
         // Het urenscherm leest de klok zelf om te bepalen welke maand "deze maand" is. Dezelfde
         // stilstaande klok als de weergavelaag, anders wijst de standaardweergave naar een andere

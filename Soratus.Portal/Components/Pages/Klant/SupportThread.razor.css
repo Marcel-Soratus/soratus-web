@@ -1,0 +1,103 @@
+/* De berichtenbubbels uit §8 ("Berichten"): 1px rand, klant --brand-fill, mens Soratus wit,
+   AI --surface-subtle met het merkteken en de bronregel boven een gestippelde scheiding.
+
+   Alle kleuren, radii, typografie en ruimtematen zijn tokens uit §8. Er is hier geen kleur
+   verzonnen en geen statuskleur gebruikt: een bubbel heeft geen status. */
+
+.support-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-card);
+}
+
+.support-thread__older {
+  align-self: center;
+}
+
+.support-bubble {
+  max-width: 62ch;
+  padding: var(--pad-card-y) var(--pad-card-x);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+/* De klant staat rechts en Soratus links. Dat is de gewone leesrichting van een gesprek en het is
+   de enige plek waar de kant iets betekent: wie het zei. De kleur zegt hetzelfde, want kant alleen
+   is bij een smal venster geen onderscheid meer. */
+.support-bubble--customer {
+  align-self: flex-end;
+  border-color: var(--brand-fill-line);
+  background: var(--brand-fill);
+}
+
+.support-bubble--soratus {
+  align-self: flex-start;
+}
+
+.support-bubble--ai {
+  align-self: flex-start;
+  background: var(--surface-subtle);
+}
+
+.support-bubble__text {
+  /* De tekst van een bericht mag regelovergangen hebben en die horen zichtbaar te blijven. Met
+     pre-wrap blijft het tekst; met <br /> ingevoegd zou het opmaak worden, en dan is het opnieuw
+     een vraag wat er wordt geëscaped. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--ink);
+}
+
+.support-bubble__badge {
+  margin-bottom: 8px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-colhead);
+  letter-spacing: var(--tracking-colhead);
+  text-transform: uppercase;
+  color: var(--navy);
+}
+
+/* De gestippelde scheiding uit §8. Hij staat bóven de bronregel en niet eronder: de bron hoort bij
+   het antwoord en niet bij de metaregel eronder. */
+.support-bubble__ground {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-field);
+  font-size: var(--text-meta);
+  color: var(--ink-dim);
+}
+
+.support-bubble__ground-label {
+  margin-right: 6px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-colhead);
+  letter-spacing: var(--tracking-colhead);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.support-bubble__ground a {
+  color: var(--blue);
+}
+
+.support-bubble__ground a:hover {
+  color: var(--navy);
+}
+
+.support-bubble__meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-mono-meta);
+  color: var(--ink-mute);
+}
+
+@media (max-width: 767px) {
+  .support-bubble {
+    max-width: none;
+  }
+}

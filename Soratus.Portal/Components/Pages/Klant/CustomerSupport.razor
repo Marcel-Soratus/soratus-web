@@ -1,0 +1,63 @@
+@using Soratus.Portal.Support
+
+@* De supportdraad zoals de klant hem ziet (§3.8).
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   ÉÉN PARAMETER, EN DAT IS DE ROLGRENS
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Dit component neemt een CustomerSupportView en verder niets. Dat type heeft geen escalatieredenen,
+   geen onbruikbare berichten en geen naam van een model — het heeft die velden niet, dus dit bestand
+   kan ze niet renderen, ook niet als iemand er over een half jaar een tooltip bij zet.
+
+   Twee componenten en geen twee takken in Support.razor, om de reden die bovenaan CustomerHours.razor
+   staat: een tak deelt zijn scope met de andere tak, en dan is het operatormodel in de klantmarkup
+   één typefout ver weg.
+
+   Er staat in dit bestand geen enkele rolvoorwaarde.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DE KLANTCONTEXT STAAT ER NIET ALS PANEEL
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Letterlijk §3.8: "De klantcontext wordt niet als paneel getoond — dat is simpelweg alles wat we
+   van de klant weten." Er staat hier dus geen agentlijst, geen contractkaart, geen urensaldo naast
+   de draad. Die staan op de vier andere schermen, en de bronregel onder een AI-antwoord wijst er
+   met een link naartoe. Eén aanwijzing naar het gegeven waar het antwoord op rust is iets anders
+   dan een zijbalk met alles. *@
+
+<div class="stack">
+    <p class="meta notice">@FirstLineNotice</p>
+
+    <SupportThread Bubbles="View.Bubbles"
+                   SlaNotice="@View.SlaNotice"
+                   EmptyNotice="@View.EmptyNotice"
+                   OlderPath="@View.OlderPath"
+                   Now="View.GeneratedAt" />
+</div>
+
+@code {
+    /// <summary>De weergave. Het klanttype, en er is geen ander.</summary>
+    [Parameter]
+    [EditorRequired]
+    public CustomerSupportView View { get; set; } = default!;
+
+    /// <summary>
+    /// Wat de klant hoort te weten voordat hij iets typt: komt er direct antwoord, of komt er een
+    /// mens.
+    /// </summary>
+    /// <remarks>
+    /// <para>Dit staat er en het is geen ruis. De ontwerpregels van de spec vragen om eerlijke
+    /// systeemeigenschappen benoemen — het voorbeeld dat er staat is "historische logs lopen ~1 min
+    /// achter". Hier is de eigenschap: er kan een eerstelijn zijn en die antwoordt alleen als hij een
+    /// bron heeft, en anders komt er een mens. Een scherm dat suggereert dat er altijd direct antwoord
+    /// komt, is een belofte die het niet kan houden.</para>
+    ///
+    /// <para>De twee teksten hangen aan een enum met twee waarden en niet aan een <c>bool</c>, en de
+    /// veilige waarde staat vooraan. Zie <see cref="SupportFirstLineState"/>.</para>
+    /// </remarks>
+    private string FirstLineNotice =>
+        View.FirstLine == SupportFirstLineState.Available
+            ? "Je vraag wordt eerst gelezen door de eerstelijn van Soratus. Die antwoordt alleen "
+              + "als het antwoord op je eigen gegevens in dit portaal staat, en zet de vraag "
+              + "anders door naar een mens. " + View.SlaNotice
+            : "Je vraag gaat naar een mens van Soratus. " + View.SlaNotice;
+}

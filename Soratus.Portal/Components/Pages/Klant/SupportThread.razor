@@ -1,0 +1,156 @@
+@using Soratus.Portal.Support
+
+@* De berichtendraad (§3.8), voor beide rollen dezelfde.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   WAAROM ÉÉN COMPONENT VOOR BEIDE ROLLEN
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Dezelfde afweging als bij RunsTable (§14 van de fase-0-afwijkingen): daar staat één tabel omdat
+   het enige verschil in één tooltip zat, en twee tabellen zouden een tweede kopie van dezelfde
+   kolomsporen betekenen — precies wat §6 verbiedt.
+
+   Hier is de bubbel voor beide rollen letterlijk hetzelfde. Een klant hóórt te zien wat de
+   eerstelijn hem antwoordde, en een operator hoort dat óók te zien: anders kan hij niet nakijken
+   wat er namens Soratus is gezegd, en dat is de eis dat een mens de eerstelijn kan overnemen.
+
+   Het rolverschil zit dus niet hier maar in wat eromheen staat, en dat is een typeverschil:
+   CustomerSupportView heeft de eerstelijnstoestand en de uitweg naar een mens, OperatorSupportView
+   heeft de escalatieredenen en de onbruikbare berichten. Geen van beide typen heeft wat het andere
+   heeft. Er staat in dit bestand geen enkele rolvoorwaarde.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   DE DRIE BUBBELVORMEN, EN WAAROM ER GEEN @if OP EEN BRON STAAT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   De switch hieronder gaat over het týpe en niet over een veld. SupportAnswerBubble kan niet
+   bestaan zonder GroundLabel en GroundPath — de constructor weigert het — dus de bronregel staat
+   er altijd, en niet omdat iemand eraan heeft gedacht. En SupportHandoffBubble heeft geen enkel
+   gegevensveld, dus er is geen bron om te tonen en ook niets om te beweren.
+
+   Zou er één bubbeltype zijn met een nullable bron, dan stond hier @if (bubble.Ground is not null)
+   — en dan is de eis van §3.8 een regel die iemand kan vergeten in plaats van een eigenschap.
+
+   Het merkteken "AI · eerstelijn" staat op precies twee plekken en beide zitten in dit bestand,
+   binnen de twee AI-takken. Er is geen tak waarin het merkteken zonder bronregel staat behalve de
+   escalatie, en die heeft niets om een bron van te zijn.
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   ONTSNAPPEN VAN TEKST
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   De tekst gaat als gewone @-expressie de HTML in, dus Blazor escapet hem. Er staat geen
+   MarkupString in dit bestand en die hoort er ook nooit in te komen: de tekst komt van een klant.
+   Er is een broncodetest op deze map die daarop controleert.
+
+   Regelovergangen blijven zichtbaar via white-space: pre-wrap in de CSS en niet door <br /> in te
+   voegen. Dat laatste zou tekst en opmaak door elkaar halen, en dan is het weer een vraag wat er
+   wordt geëscaped. *@
+
+<div class="support-thread" role="log" aria-label="Berichten">
+    @if (OlderPath is not null)
+    {
+        <p class="support-thread__older">
+            <a class="btn btn--small" href="@OlderPath">Oudere berichten</a>
+        </p>
+    }
+
+    @if (Bubbles.Count == 0)
+    {
+        <EmptyState Title="Nog geen berichten" Text="@EmptyNotice" Glyph="○" />
+    }
+
+    @foreach (var bubble in Bubbles)
+    {
+        @switch (bubble)
+        {
+            case SupportSaidBubble said:
+                <article class="@BubbleClass(said)">
+                    <p class="support-bubble__text">@said.Text</p>
+                    <p class="support-bubble__meta">
+                        @if (!string.IsNullOrWhiteSpace(said.Who))
+                        {
+                            <span>@said.Who</span>
+                        }
+                        <time datetime="@TimeFormat.Iso(said.At)" title="@TimeFormat.Absolute(said.At)">
+                            @TimeFormat.Relative(said.At, Now)
+                        </time>
+                    </p>
+                </article>
+                break;
+
+            case SupportAnswerBubble answer:
+                <article class="support-bubble support-bubble--ai">
+                    <p class="support-bubble__badge">@SupportText.FirstLineBadge</p>
+                    <p class="support-bubble__text">@answer.Text</p>
+                    <p class="support-bubble__ground">
+                        <span class="support-bubble__ground-label">@SupportText.GroundIntro</span>
+                        <a href="@answer.GroundPath">@answer.GroundLabel</a>
+                    </p>
+                    <p class="support-bubble__meta">
+                        <time datetime="@TimeFormat.Iso(answer.At)" title="@TimeFormat.Absolute(answer.At)">
+                            @TimeFormat.Relative(answer.At, Now)
+                        </time>
+                    </p>
+                </article>
+                break;
+
+            case SupportHandoffBubble handoff:
+                <article class="support-bubble support-bubble--ai">
+                    <p class="support-bubble__badge">@SupportText.FirstLineBadge</p>
+                    <p class="support-bubble__text">@handoff.Text</p>
+                    <p class="support-bubble__ground">
+                        <span class="support-bubble__ground-label">Doorgezet</span>
+                        <span>@SlaNotice</span>
+                    </p>
+                    <p class="support-bubble__meta">
+                        <time datetime="@TimeFormat.Iso(handoff.At)" title="@TimeFormat.Absolute(handoff.At)">
+                            @TimeFormat.Relative(handoff.At, Now)
+                        </time>
+                    </p>
+                </article>
+                break;
+        }
+    }
+</div>
+
+@code {
+    /// <summary>De bubbels, oudste eerst.</summary>
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<SupportBubble> Bubbles { get; set; } = [];
+
+    /// <summary>
+    /// Wat er onder een escalatie staat: naar wie de vraag gaat en binnen welke termijn.
+    /// </summary>
+    /// <remarks>
+    /// Uit het contract, via <c>SupportText.SlaNotice</c>. Meegegeven en niet hier opgehaald, zodat
+    /// deze component niets leest en beide weergaven dezelfde tekst gebruiken.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public string SlaNotice { get; set; } = string.Empty;
+
+    /// <summary>De melding als de draad leeg is.</summary>
+    [Parameter]
+    public string? EmptyNotice { get; set; }
+
+    /// <summary>Het pad naar het oudere deel van de draad, of <c>null</c>.</summary>
+    [Parameter]
+    public string? OlderPath { get; set; }
+
+    /// <summary>
+    /// Het moment waartegen de relatieve tijden worden gerekend.
+    /// </summary>
+    /// <remarks>
+    /// Meegegeven en niet uit een <c>TimeProvider</c> gehaald, om dezelfde reden als bij de andere
+    /// tabellen van dit portaal: alle tijden op één scherm horen tegen hetzelfde moment te worden
+    /// gerekend, anders staat er onderaan "1 min geleden" bij een bericht dat ouder is dan een
+    /// bericht dat bovenaan "nu" zegt.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public DateTimeOffset Now { get; set; }
+
+    private static string BubbleClass(SupportSaidBubble said) =>
+        said.FromCustomer
+            ? "support-bubble support-bubble--customer"
+            : "support-bubble support-bubble--soratus";
+}

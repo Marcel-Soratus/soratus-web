@@ -1,0 +1,107 @@
+@using Soratus.Portal.Support
+
+@* De supportdraad zoals de operator hem ziet (§3.8: in de operatorrol antwoordt een mens).
+
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   ÉÉN PARAMETER, EN WAT ER OP DAT TYPE NIET STAAT
+   ────────────────────────────────────────────────────────────────────────────────────────────
+   Dit component neemt een OperatorSupportView. Dat type heeft géén eerstelijnstoestand, géén uitweg
+   naar een mens en géén vraagformulier — want in deze rol antwoordt een mens en springt de agent er
+   niet tussen. Dat is hier dus geen @if maar een ontbrekend veld op het type: er is niets te
+   verbergen, want er is niets.
+
+   Wat het type wél heeft en het klanttype niet: de escalatieredenen en de berichten die de klant
+   niet ziet. Dat is de spiegel die elke "de klant ziet dit niet" hoort te hebben — anders is een
+   scherm dat voor iedereen niets rendert ook groen.
+
+   Er staat in dit bestand geen enkele rolvoorwaarde. *@
+
+<div class="stack">
+    <SupportThread Bubbles="View.Bubbles"
+                   SlaNotice="@View.SlaNotice"
+                   EmptyNotice="@View.EmptyNotice"
+                   OlderPath="@View.OlderPath"
+                   Now="View.GeneratedAt" />
+
+    @* Alleen als er iets is geëscaleerd. Leeg is de gewone toestand, en dan hoort er geen sectie te
+       staan die zegt dat er niets is — dezelfde keuze als bij de afgewezen urenregels. *@
+    @if (View.Handoffs.Count > 0)
+    {
+        <DataCard Grid="HandoffColumns" Title="Wat de eerstelijn niet wist">
+            <HeaderContent>
+                <span>@Rows(View.Handoffs.Count)</span>
+            </HeaderContent>
+            <ChildContent>
+                <DataRowHeader />
+
+                @foreach (var handoff in View.Handoffs)
+                {
+                    <DataRow>
+                        <DataCell Class="mono-meta" title="@TimeFormat.Absolute(handoff.At)">
+                            <time datetime="@TimeFormat.Iso(handoff.At)">
+                                @TimeFormat.Relative(handoff.At, View.GeneratedAt)
+                            </time>
+                        </DataCell>
+                        <DataCell Label="Reden">@SupportText.EscalationLabel(handoff.Reason)</DataCell>
+                    </DataRow>
+                }
+            </ChildContent>
+        </DataCard>
+
+        <p class="meta notice">
+            De klant heeft bij elk van deze berichten dezelfde zin gelezen: dat de eerstelijn het
+            niet zeker wist en dat de vraag is doorgezet. De reden hierboven staat niet in zijn
+            portaal — zie SupportEscalation.
+        </p>
+    }
+
+    @* Bijna altijd leeg, en de sectie hoort er tóch te zijn. Zonder hem verdwijnt een bericht dat de
+       klant niet krijgt zonder dat iemand het merkt, en dat is erger dan een bericht dat er vreemd
+       uitziet. De tékst van zo'n bericht staat er niet: de reden dat het wordt weggelaten is juist
+       dat we niet weten wie het schreef, en dan hoort het niet met onze stem op een scherm te komen.
+       De sleutel is genoeg om het in de opslag te vinden. *@
+    @if (View.Unusable.Count > 0)
+    {
+        <DataCard Grid="UnusableColumns" Title="Niet in het portaal van de klant">
+            <HeaderContent>
+                <span>@Rows(View.Unusable.Count)</span>
+            </HeaderContent>
+            <ChildContent>
+                <DataRowHeader />
+
+                @foreach (var message in View.Unusable)
+                {
+                    <DataRow>
+                        <DataCell Class="mono-meta" title="@TimeFormat.Absolute(message.At)">
+                            <time datetime="@TimeFormat.Iso(message.At)">
+                                @TimeFormat.Relative(message.At, View.GeneratedAt)
+                            </time>
+                        </DataCell>
+                        <DataCell Class="mono-meta" Truncate="true" Label="Sleutel" title="@message.MessageId">
+                            @message.MessageId
+                        </DataCell>
+                        <DataCell Truncate="true" Label="Waarom" title="@message.Why">@message.Why</DataCell>
+                    </DataRow>
+                }
+            </ChildContent>
+        </DataCard>
+    }
+</div>
+
+@code {
+    /// <summary>De weergave. Het operatortype, en er is geen ander.</summary>
+    [Parameter]
+    [EditorRequired]
+    public OperatorSupportView View { get; set; } = default!;
+
+    private static readonly RowGrid HandoffColumns = new(
+        new GridColumn("Wanneer", "132px", Labelled: false),
+        new GridColumn("Reden", "minmax(0, 1fr)"));
+
+    private static readonly RowGrid UnusableColumns = new(
+        new GridColumn("Wanneer", "132px", Labelled: false),
+        new GridColumn("Sleutel", "minmax(0, 1fr)"),
+        new GridColumn("Waarom", "minmax(0, 1.2fr)"));
+
+    private static string Rows(int count) => count == 1 ? "1 regel" : $"{count} regels";
+}
