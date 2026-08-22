@@ -185,7 +185,7 @@ internal sealed class AzureCostCollector(
     /// <see cref="ExecuteAsync"/>, buiten de lus, en een <c>BackgroundService</c> die werpt stopt de
     /// hele applicatie. Lukt het aanmelden niet, dan meet de collector onverstoord door.</para>
     /// </remarks>
-    private ISoratusHostedAgent? Announce(HostedAgentDeclaration declaration)
+    internal ISoratusHostedAgent? Announce(HostedAgentDeclaration declaration)
     {
         if (hostedAgents is null)
         {
@@ -217,7 +217,7 @@ internal sealed class AzureCostCollector(
     /// vastgelegde maanden het aantal verwerkte items — dat is wat deze agent per run "verwerkt", en
     /// het is het getal dat op het runtabblad staat.
     /// </remarks>
-    private Task ObservedRunAsync(ISoratusHostedAgent? agent, CancellationToken cancellationToken)
+    internal Task ObservedRunAsync(ISoratusHostedAgent? agent, CancellationToken cancellationToken)
     {
         if (agent is null)
         {
@@ -598,19 +598,10 @@ internal sealed class AzureCostCollector(
     {
         var now = timeProvider.GetUtcNow();
 
-        if (plan.NextAfter(now) is not { } target)
+        if (MeldVolgendeRun(plan, agent) is not { } target)
         {
-            // Bij '0 h * * *' bestaat dit geval niet. Het staat er omdat het plan uit configuratie
-            // komt en een expressie zonder volgend moment stil zou betekenen dat er nooit meer
-            // gemeten wordt.
-            logger.LogError(
-                "Het plan '{Plan}' levert geen volgend moment meer op; de kostencollector stopt.",
-                plan.Expression);
-            agent?.ReportNextRun(null);
             return false;
         }
-
-        agent?.ReportNextRun(target);
 
         try
         {
@@ -621,5 +612,40 @@ internal sealed class AzureCostCollector(
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Rekent het volgende draaimoment uit en meldt het aan de agent.
+    /// </summary>
+    /// <param name="plan">Het plan.</param>
+    /// <param name="agent">De agent, of <c>null</c>.</param>
+    /// <returns>Het moment waarop gewacht gaat worden, of <c>null</c> als het plan is uitgeput.</returns>
+    /// <remarks>
+    /// <para><c>internal</c> en met een uitkomst, en dat is dezelfde afweging als bij
+    /// <see cref="RunAsync"/>: een test kan zo meten wát er wordt gemeld zonder de lus te draaien.
+    /// Dat is hier meer dan gemak. De vorige versie van die test wachtte met een tijdslimiet tot de
+    /// lus zich meldde, en die limiet is een gok over de snelheid van de machine — gemeten viel hij
+    /// om zodra er een tweede testronde naast liep. Een grens die van de belasting afhangt is geen
+    /// meting.</para>
+    ///
+    /// <para>De uitkomst is precies de waarde waarop <see cref="SleepAsync"/> daarna wacht, dus er is
+    /// geen tweede berekening tussen wat er wordt gemeld en waarop er wordt gewacht.</para>
+    /// </remarks>
+    internal DateTimeOffset? MeldVolgendeRun(SoratusSchedule plan, ISoratusHostedAgent? agent)
+    {
+        if (plan.NextAfter(timeProvider.GetUtcNow()) is not { } target)
+        {
+            // Bij '0 h * * *' bestaat dit geval niet. Het staat er omdat het plan uit configuratie
+            // komt en een expressie zonder volgend moment stil zou betekenen dat er nooit meer
+            // gemeten wordt.
+            logger.LogError(
+                "Het plan '{Plan}' levert geen volgend moment meer op; de kostencollector stopt.",
+                plan.Expression);
+            agent?.ReportNextRun(null);
+            return null;
+        }
+
+        agent?.ReportNextRun(target);
+        return target;
     }
 }

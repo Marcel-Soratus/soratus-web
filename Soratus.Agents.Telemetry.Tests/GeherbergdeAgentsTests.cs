@@ -35,13 +35,29 @@ public sealed class GeherbergdeAgentsTests
                 .Order(StringComparer.Ordinal));
 
         // Zonder werk is de levensfase 'wacht op werk'; bij het afsluiten wordt dat 'netjes
-        // gestopt'. Deze host is inmiddels gestopt, dus per agent hoort het eerste document het
-        // eerste te zeggen en het laatste het tweede.
+        // gestopt'. Deze host is inmiddels gestopt, dus per agent hoort er precies één document van
+        // het tweede soort te staan.
+        //
+        // ── Hier stond `agent.Last().Lifecycle`, en dat was wankel. ──────────────────────────────
+        // Gemeten: in een volledige testrun vanuit de wortel kwam er 'wacht op werk' uit waar
+        // 'netjes gestopt' hoorde te staan; los gedraaid was hij groen. De oorzaak is niet dat de
+        // leegloop nog niet klaar was — die is dat wél, want TelemetryWriter.StopAsync wacht de
+        // pompen af — maar dat de afsluitregistratie *buiten de buffer om* wordt geschreven
+        // (WriteRegistrationDirectAsync) terwijl er nog hartslagen in het kanaal kunnen staan. De
+        // registratiedienst stopt vóór de schrijver, dus die directe schrijfactie kan vóór een
+        // eerder ingelegde hartslag in de opslag landen. Wie de leegloop incompleet zou wanen, zou
+        // het omgekeerde zien: dan ontbreken juist de hartslagen en is 'netjes gestopt' wél de
+        // laatste.
+        //
+        // De volgorde tussen die twee paden is dus geen belofte van dit ontwerp, en een assertie
+        // erop meet de planner. Wat er wél vastligt is het aantal: WriteFinalAsync staat achter een
+        // Interlocked.Exchange, dus precies één per agent. Dat is de invariant en die is niet van
+        // een tijdslimiet afhankelijk.
         foreach (IGrouping<string, AgentRegistration> agent in
             sink.Registrations.GroupBy(static registratie => registratie.AgentName, StringComparer.Ordinal))
         {
             Assert.Equal(AgentLifecycle.IdleWaiting, agent.First().Lifecycle);
-            Assert.Equal(AgentLifecycle.StoppedCleanly, agent.Last().Lifecycle);
+            Assert.Single(agent, static registratie => registratie.Lifecycle == AgentLifecycle.StoppedCleanly);
         }
 
         foreach (AgentRegistration registratie in sink.Registrations)

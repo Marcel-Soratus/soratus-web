@@ -4751,6 +4751,59 @@ hebben dan hij had. **Een mutatiemeting die meer rood oplevert dan de mutatie ka
 meting om te herhalen en niet om op te schrijven** — en de vorm die het verraadt is dat de extra rode
 tests niets met de gemuteerde regel te maken hebben.
 
+### 44.13 De vierde manier waarop een meting kan liegen: "groen als hij alleen staat"
+
+De drie eerdere vormen in dit document gaan over een test die **groen blijft mét de fout**. Deze is de
+spiegel: een test die **rood gaat zónder fout**, en alleen onder belasting. Twee gevallen, en ze zijn
+allebei van mij.
+
+**Geval 1 — een assertie op een volgorde die het ontwerp niet belooft.**
+`GeherbergdeAgentsTests` eiste dat het láátste registratiedocument van een agent `StoppedCleanly` zegt.
+Dat viel om in een volledige run vanuit de wortel en was los groen. De oorzaak is niet dat de leegloop
+nog niet klaar was — die is dat wél, `TelemetryWriter.StopAsync` wacht de pompen af — maar dat de
+afsluitregistratie **buiten de buffer om** wordt geschreven (`WriteRegistrationDirectAsync`) terwijl er
+nog hartslagen in het kanaal kunnen staan. De registratiedienst stopt vóór de schrijver, dus die directe
+schrijfactie kan vóór een eerder ingelegde hartslag landen. Onder belasting loopt de pomp achter en
+gebeurt dat vaker.
+
+Let op de richting van het bewijs, want die maakt de diagnose hard: *als* de leegloop onvolledig was,
+zou deze test juist **groen** zijn — dan ontbreken de hartslagen en is `StoppedCleanly` wél de laatste.
+Rood betekent dus dat er ná de directe schrijfactie nog iets is bijgekomen, en dat is volgorde en geen
+onvolledigheid.
+
+De reparatie is de invariant in plaats van het gevolg: er is **precies één** document met
+`StoppedCleanly` per agent, want `WriteFinalAsync` staat achter een `Interlocked.Exchange`. Dat is
+volgorde-onafhankelijk en niet van een klok afhankelijk. Dezelfde reparatie is toegepast op drie tests
+van dit punt zelf, die met `Last(…)` het afsluitdocument zochten en dus dezelfde wankelheid hadden —
+gevonden bij het opruimen en niet door een falen.
+
+**Geval 2 — een tijdslimiet als correctheidsgrens.** `BeheeragentsTests` startte de achtergronddienst en
+wachtte met een grens van twee seconden tot de lus zich meldde. Dat hield het niet toen er een
+mutatieronde van een andere sessie naast liep: één van de twee tests viel om in één van de vier volledige
+runs. Twee seconden is honderden malen het echte pad, en dat is precies het misleidende ervan.
+
+**Waarom een ruimere wachttijd geen reparatie is**, en dit is de kern van deze paragraaf: een grens die
+groot genoeg is voor déze machine onder déze belasting is een gok over elke andere machine en elke andere
+belasting. Hij faalt bovendien in de verkeerde richting — hij maakt de test *langzamer* in het geval dat
+hij zou moeten falen (een weggehaalde aanroep hangt dan tot de grens), dus de prijs van veiligheid is
+precies de traagheid die de volgende sessie weer omlaag brengt. Een wachttijd verplaatst het probleem
+naar de tragere machine en verandert de aard ervan niet.
+
+Wat er in de plaats is gekomen: de twee stappen die iets betekenen — aanmelden en de volgende run melden
+— zijn `internal` en worden rechtstreeks aangeroepen. Geen thread, geen klok, geen grens. Dat is dezelfde
+vorm die dit project al voor `RunAsync` gebruikt ("internal en met een uitkomst, zodat een test één run
+kan doen zonder tot 04:00 te wachten"), en de testdubbels zijn van hun `TaskCompletionSource`-vlaggen
+ontdaan zodat niemand de oude vorm terugzet.
+
+**Wat dat kost, eerlijk:** er is geen test meer die meet dát `ExecuteAsync` deze twee stappen aanroept.
+Dat is een bewuste ruil — de vorige poging om dat te meten was juist de wankele — en het gat is twee
+regels in dezelfde klasse. Gemeld en niet gedicht.
+
+**En de regel die eruit volgt:** een test die op de lus van een `BackgroundService` wacht, meet de
+planner mee. Wie zo'n test schrijft, heeft twee eerlijke opties: de stap onder de lus rechtstreeks
+aanroepen, of de dienst starten en **stoppen** en dán meten — `StopAsync` wacht de `ExecuteTask` af en is
+daarmee een echte samenkomst zonder klok. Een tijdslimiet is de derde optie en die is er geen.
+
 ### 44.12 Wat er níet is gemeten, en dat hoort erbij
 
 **Er is niets naar Cosmos geschreven en er is niets in Azure gewijzigd.** De nieuwe database bestaat niet;

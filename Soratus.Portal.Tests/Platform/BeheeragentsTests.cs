@@ -20,9 +20,13 @@ namespace Soratus.Portal.Tests.Platform;
 /// is het een eigenschap. De tests kijken daarom naar beide kanten van dezelfde tik: de aankondiging
 /// die de agent krijgt, en de wachttijd die de klok gevraagd wordt.</para>
 ///
-/// <para>De klok gaat met opzet nooit af (<c>Snelleklok(..., meteenAf: false)</c>) waar het over de
-/// aankondiging gaat. Een klok die meteen afgaat laat de lus rondtollen tussen starten en stoppen, en
-/// dan meet een test die naar de eerste wachttijd kijkt zijn eigen ruis.</para>
+/// <para><strong>Geen van deze tests draait de lus van een achtergronddienst, en geen enkele heeft een
+/// tijdslimiet.</strong> Dat is een reparatie op een wankele test van mijzelf: de vorige versie startte
+/// de dienst en wachtte met een grens van twee seconden tot hij zich meldde, en die grens hield het niet
+/// in een volledige run naast de mutatieronde van een andere sessie. Een grens die van de belasting van
+/// de machine afhangt, meet de belasting. De twee stappen die hier iets betekenen — aanmelden en de
+/// volgende run melden — zijn daarom <c>internal</c> en worden rechtstreeks aangeroepen, precies zoals
+/// <c>RunAsync</c> dat in dit project al doet.</para>
 /// </remarks>
 public sealed class BeheeragentsTests
 {
@@ -36,11 +40,11 @@ public sealed class BeheeragentsTests
     // ── De kostencollector ──────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task DeCollectorKondigtZichAanMetHetPlanWaaropHijWacht()
+    public void DeCollectorKondigtZichAanMetHetPlanWaaropHijWacht()
     {
-        var (collector, host, klok, _) = Collector();
+        var (collector, host, _, _) = Collector();
 
-        var agent = await Gemeld(collector, host, PlatformAgentNames.Costs);
+        var agent = Meld(collector, host, PlatformAgentNames.Costs);
 
         // §4: kosten-collector, Cost Management, dagelijks 04:00. Precies de naam en het type waarmee
         // hij ook in de seed-data staat, want dat is de vorm die het scherm al kent.
@@ -54,24 +58,22 @@ public sealed class BeheeragentsTests
         var verwacht = new DateTimeOffset(2026, 8, 22, 4, 0, 0, TimeSpan.Zero);
 
         Assert.Equal(verwacht, agent.GemeldeVolgendeRuns[0]);
-        Assert.Equal(verwacht - Middag, klok.Wachttijden[0]);
     }
 
     [Fact]
-    public async Task EenAnderDraaimomentSchuiftHetPlanEnDeWachttijdSamenOp()
+    public void EenAnderDraaimomentSchuiftHetPlanEnDeWachttijdSamenOp()
     {
         // De mutatie waar deze test op let: een plan uit één bron en een wachttijd uit een andere. Met
         // een afwijkend uur valt dat door de mand; met het standaarduur zou beide 04:00 zijn geweest.
-        var (collector, host, klok, _) = Collector(uur: 7);
+        var (collector, host, _, _) = Collector(uur: 7);
 
-        var agent = await Gemeld(collector, host, PlatformAgentNames.Costs);
+        var agent = Meld(collector, host, PlatformAgentNames.Costs, uur: 7);
 
         // Zeven uur UTC is op deze middag pas morgen: negentien uur wachten en niet zeven.
         var verwacht = new DateTimeOffset(2026, 8, 22, 7, 0, 0, TimeSpan.Zero);
 
         Assert.Equal("0 7 * * *", agent.Declaration.Schedule!.Expression);
         Assert.Equal(verwacht, agent.GemeldeVolgendeRuns[0]);
-        Assert.Equal(verwacht - Middag, klok.Wachttijden[0]);
 
         // De toelichting op de trigger schuift mee. Een cron-expressie is voor een operator geen tekst
         // die je op een scherm wil lezen; deze regel is dat wel, en hij hoort dus niet uit de pas te
@@ -82,10 +84,14 @@ public sealed class BeheeragentsTests
     [Fact]
     public async Task EenTikVanDeKlokIsEenRunMetDeGemetenMaandenErin()
     {
+        // meteenAf: de collector wacht binnen één run PauseSeconds tussen twee maanden, en die
+        // wachttijd moet aflopen. Dit is de klok van de run en niet van het plan.
         var (collector, host, _, opslag) = Collector(meteenAf: true, client: Metingen());
         opslag.Klant("mbv", ScopeMbv);
 
-        var agent = await Gedraaid(collector, host, PlatformAgentNames.Costs);
+        // Rechtstreeks op de naad en niet via de lus: één tik, zonder klok en zonder tijdslimiet.
+        var agent = Meld(collector, host, PlatformAgentNames.Costs);
+        await collector.ObservedRunAsync(agent, CancellationToken.None);
 
         var run = agent.Runs[0];
 
@@ -124,14 +130,13 @@ public sealed class BeheeragentsTests
     // ── De storingsmelder ───────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task DeMelderKondigtZichAanMetHetPlanWaaropHijWacht()
+    public void DeMelderKondigtZichAanMetHetPlanWaaropHijWacht()
     {
         var bank = new Storingsmelderbank();
         var host = new Vasteagenthost();
-        var klok = new Snelleklok(Middag, meteenAf: false);
-        var melder = Melder(bank, host, klok);
+        var melder = Melder(bank, host, new Snelleklok(Middag));
 
-        var agent = await Gemeld(melder, host, PlatformAgentNames.Alerts);
+        var agent = Meld(melder, host, PlatformAgentNames.Alerts);
 
         // §4: storingsmelder, Monitoring, elke minuut.
         Assert.Equal(PlatformAgentNames.Alerts, agent.Declaration.AgentName);
@@ -142,7 +147,6 @@ public sealed class BeheeragentsTests
         var verwacht = Middag.AddMinutes(1);
 
         Assert.Equal(verwacht, agent.GemeldeVolgendeRuns[0]);
-        Assert.Equal(TimeSpan.FromMinutes(1), klok.Wachttijden[0]);
     }
 
     [Fact]
@@ -155,9 +159,13 @@ public sealed class BeheeragentsTests
         bank.Bron.Leesfout = new InvalidOperationException("de klantopslag antwoordt niet");
 
         var host = new Vasteagenthost();
-        var melder = Melder(bank, host, new Snelleklok(Middag, meteenAf: true));
+        var melder = Melder(bank, host, new Snelleklok(Middag));
 
-        var agent = await Gedraaid(melder, host, PlatformAgentNames.Alerts);
+        // Rechtstreeks op de naad: de uitzondering hoort door te komen én de run mislukt te maken.
+        var agent = Meld(melder, host, PlatformAgentNames.Alerts);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => melder.ObservedRunAsync(agent, CancellationToken.None));
 
         var run = agent.Runs[0];
 
@@ -210,63 +218,63 @@ public sealed class BeheeragentsTests
 
     // ── Hulpmiddelen ────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Hoe lang een test op de lus van een achtergronddienst wacht.</summary>
-    /// <remarks>
-    /// Twee seconden, en dat is ruim: het echte pad is in microseconden klaar. Deze grens bestaat
-    /// alleen om een mutatie die de melding weghaalt rood te laten worden in plaats van te laten
-    /// hangen.
-    /// </remarks>
-    private static readonly TimeSpan Wachtgrens = TimeSpan.FromSeconds(2);
-
-    /// <summary>Wacht tot de agent een volgende run heeft gemeld.</summary>
-    private static Task<Vasteagent> Gemeld(BackgroundService dienst, Vasteagenthost host, string agentName) =>
-        GestartTot(dienst, host, agentName, agent => agent.EersteMelding);
-
-    /// <summary>Wacht tot de agent één run heeft afgerond.</summary>
-    private static Task<Vasteagent> Gedraaid(BackgroundService dienst, Vasteagenthost host, string agentName) =>
-        GestartTot(dienst, host, agentName, agent => agent.EersteRun);
-
     /// <summary>
-    /// Start de dienst, wacht tot er iets is gebeurd, en stopt hem altijd weer.
+    /// Meldt de agent aan en laat hem zijn volgende run melden, zonder de lus en zonder klok.
     /// </summary>
-    /// <param name="dienst">De achtergronddienst.</param>
+    /// <param name="collector">De kostencollector.</param>
     /// <param name="host">De opvangende agent-host.</param>
-    /// <param name="agentName">De agent die de dienst hoort aan te kondigen.</param>
-    /// <param name="waarop">Waarop deze test wacht.</param>
+    /// <param name="agentName">De agent die hij hoort aan te kondigen.</param>
+    /// <param name="uur">Het draaimoment in UTC, gelijk aan dat van de meegegeven collector.</param>
     /// <returns>De agent.</returns>
     /// <remarks>
-    /// <para><strong>Eerst wachten op de aankondiging en dán opzoeken</strong>, en dat is geen
-    /// omslachtigheid maar een gemeten eigenschap: het lijf van <c>ExecuteAsync</c> van een
-    /// <see cref="BackgroundService"/> is niet gelopen als <c>StartAsync</c> terugkomt. Direct na
-    /// <c>StartAsync</c> geteld: nul aankondigingen; een fractie later één. Dezelfde vorm die deze
-    /// bibliotheek al drie keer heeft opgeleverd.</para>
+    /// <para><strong>Hier stond een tijdslimiet, en die was wankel — dat is gemeten en het was mijn
+    /// eigen fout.</strong> De vorige versie startte de achtergronddienst en wachtte met een grens van
+    /// twee seconden tot de lus zich meldde. Twee seconden is ruim als de machine vrij is; met een
+    /// tweede testronde ernaast is het dat niet, en in een volledige run naast een mutatieronde van een
+    /// andere sessie viel hij om. <strong>Een grens die van de belasting afhangt meet de belasting en
+    /// niet het gedrag.</strong></para>
     ///
-    /// <para><strong>En het stoppen staat in een <c>finally</c>, en dat is met een mutatie
-    /// gevonden.</strong> Zonder dat blijft er bij een mislukte test een dienst met een geparkeerde
-    /// lus achter, en dan vielen in dezelfde run achttien tests van het urenendpoint om met een
-    /// <c>401</c> — een failliet dat niets met de mutatie te maken had en de meting onleesbaar maakte.
-    /// Eén rode test hoort er precies één te zijn.</para>
+    /// <para>De reparatie is niet een ruimere grens maar géén grens: de twee stappen die worden gemeten
+    /// zijn <c>internal</c> gemaakt en worden hier rechtstreeks aangeroepen. Dat is precies de vorm die
+    /// dit project al gebruikt voor <c>RunAsync</c> — "internal en met een uitkomst, zodat een test één
+    /// run kan doen zonder tot 04:00 te wachten". Geen thread, geen klok, geen tijdslimiet, dus geen
+    /// tragere machine die iets anders meet.</para>
+    ///
+    /// <para>Wat er daarmee niet meer wordt gemeten: dát <c>ExecuteAsync</c> deze twee stappen
+    /// aanroept. Dat is bewust — de vorige poging om dat te meten was juist de wankele — en het is de
+    /// aanroep van twee <c>internal</c> methoden op twee regels in dezelfde klasse. Gemeld als gat.</para>
     /// </remarks>
-    private static async Task<Vasteagent> GestartTot(
-        BackgroundService dienst,
+    private static Vasteagent Meld(
+        AzureCostCollector collector,
         Vasteagenthost host,
         string agentName,
-        Func<Vasteagent, Task> waarop)
+        int uur = 4)
     {
-        await dienst.StartAsync(CancellationToken.None);
+        var declaratie = PlatformAgents.CostsDeclaration(new AzureCostOptions { RunHourUtc = uur });
+        var agent = Assert.IsType<Vasteagent>(collector.Announce(declaratie));
 
-        try
-        {
-            await host.EersteAankondiging.WaitAsync(Wachtgrens);
+        collector.MeldVolgendeRun(declaratie.Schedule!, agent);
 
-            var agent = Assert.IsType<Vasteagent>(host.Find(agentName));
-            await waarop(agent).WaitAsync(Wachtgrens);
-            return agent;
-        }
-        finally
-        {
-            await dienst.StopAsync(CancellationToken.None);
-        }
+        Assert.Equal(agentName, agent.Declaration.AgentName);
+        Assert.Same(agent, host.Find(agentName));
+        return agent;
+    }
+
+    /// <summary>Als hierboven, voor de storingsmelder.</summary>
+    /// <param name="melder">De storingsmelder.</param>
+    /// <param name="host">De opvangende agent-host.</param>
+    /// <param name="agentName">De agent die hij hoort aan te kondigen.</param>
+    /// <returns>De agent.</returns>
+    private static Vasteagent Meld(AgentFaultAlerter melder, Vasteagenthost host, string agentName)
+    {
+        var declaratie = PlatformAgents.AlertsDeclaration(new AgentAlertOptions());
+        var agent = Assert.IsType<Vasteagent>(melder.Announce(declaratie));
+
+        melder.MeldVolgendeRun(declaratie.Schedule!, agent);
+
+        Assert.Equal(agentName, agent.Declaration.AgentName);
+        Assert.Same(agent, host.Find(agentName));
+        return agent;
     }
 
     /// <summary>

@@ -21,27 +21,8 @@ internal sealed class Vasteagenthost : ISoratusHostedAgents
 {
     private readonly Dictionary<string, Vasteagent> _agents = new(StringComparer.Ordinal);
 
-    private readonly TaskCompletionSource _aangekondigd =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
-
     /// <summary>De aankondigingen, in de volgorde waarin ze langskwamen.</summary>
     public List<HostedAgentDeclaration> Aankondigingen { get; } = [];
-
-    /// <summary>
-    /// Wordt voltooid zodra er voor het eerst een agent is aangekondigd.
-    /// </summary>
-    /// <remarks>
-    /// <para><strong>Dit bestaat door een meting en niet door voorzichtigheid.</strong> Het lijf van
-    /// <c>ExecuteAsync</c> van een <c>BackgroundService</c> is niet gelopen op het moment dat
-    /// <c>StartAsync</c> terugkomt: geteld direct na <c>StartAsync</c> nul aankondigingen, en een
-    /// fractie later één. Dat is dezelfde eigenschap die deze bibliotheek al drie keer heeft
-    /// opgeleverd, nu in de lus van het portaal.</para>
-    ///
-    /// <para>Wat er wél op <c>StartAsync</c> mag rusten, rust dat ook: de <em>registratie</em> van
-    /// beide agents komt van de aankondigingsbron die bij het opstarten is geregistreerd, en niet van
-    /// deze lus. Wat hier op zich laat wachten is alleen het moment van de volgende run.</para>
-    /// </remarks>
-    public Task EersteAankondiging => _aangekondigd.Task;
 
     /// <inheritdoc />
     public IReadOnlyList<ISoratusHostedAgent> All => [.. _agents.Values];
@@ -61,7 +42,6 @@ internal sealed class Vasteagenthost : ISoratusHostedAgents
         declaration.Validate();
 
         Aankondigingen.Add(declaration);
-        _aangekondigd.TrySetResult();
 
         if (!_agents.TryGetValue(declaration.AgentName, out var agent))
         {
@@ -77,12 +57,6 @@ internal sealed class Vasteagenthost : ISoratusHostedAgents
 /// <param name="declaration">De aankondiging waaruit hij is ontstaan.</param>
 internal sealed class Vasteagent(HostedAgentDeclaration declaration) : ISoratusHostedAgent
 {
-    private readonly TaskCompletionSource _gemeld =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    private readonly TaskCompletionSource _gedraaid =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
-
     /// <summary>De aankondiging.</summary>
     public HostedAgentDeclaration Declaration => declaration;
 
@@ -91,16 +65,6 @@ internal sealed class Vasteagent(HostedAgentDeclaration declaration) : ISoratusH
 
     /// <summary>De runs die zijn geopend, met hun uitkomst.</summary>
     public List<Vasterun> Runs { get; } = [];
-
-    /// <summary>Wordt voltooid zodra er voor het eerst een volgende run is gemeld.</summary>
-    public Task EersteMelding => _gemeld.Task;
-
-    /// <summary>Wordt voltooid zodra de eerste run is afgerond, geslaagd of niet.</summary>
-    /// <remarks>
-    /// Bestaat zodat een test de lus van een achtergronddienst kan afwachten in plaats van hem te
-    /// pollen. Een test die polt is een test die op een trage machine anders meet dan op een snelle.
-    /// </remarks>
-    public Task EersteRun => _gedraaid.Task;
 
     /// <inheritdoc />
     public AgentIdentity Identity => new()
@@ -124,7 +88,6 @@ internal sealed class Vasteagent(HostedAgentDeclaration declaration) : ISoratusH
     public void ReportNextRun(DateTimeOffset? moment)
     {
         GemeldeVolgendeRuns.Add(moment);
-        _gemeld.TrySetResult();
     }
 
     /// <inheritdoc />
@@ -157,12 +120,10 @@ internal sealed class Vasteagent(HostedAgentDeclaration declaration) : ISoratusH
             // te zien.
             run.Fail(exception);
             run.Afgerond = true;
-            _gedraaid.TrySetResult();
             throw;
         }
 
         run.Afgerond = true;
-        _gedraaid.TrySetResult();
     }
 
     /// <inheritdoc />

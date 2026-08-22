@@ -181,7 +181,7 @@ internal sealed class AgentFaultAlerter(
     /// achtergronddiensten, en een uitzondering hier zou de host meenemen omdat dit buiten de lus van
     /// een <see cref="BackgroundService"/> staat.
     /// </remarks>
-    private ISoratusHostedAgent? Announce(HostedAgentDeclaration declaration)
+    internal ISoratusHostedAgent? Announce(HostedAgentDeclaration declaration)
     {
         if (hostedAgents is null)
         {
@@ -213,7 +213,7 @@ internal sealed class AgentFaultAlerter(
     /// ronde zonder storingen is dus een run met nul items en resultaat <c>ok</c> — en dat is de
     /// juiste uitkomst: er was werk (kijken) en er was niets te melden.
     /// </remarks>
-    private Task ObservedRunAsync(ISoratusHostedAgent? agent, CancellationToken cancellationToken)
+    internal Task ObservedRunAsync(ISoratusHostedAgent? agent, CancellationToken cancellationToken)
     {
         if (agent is null)
         {
@@ -250,16 +250,10 @@ internal sealed class AgentFaultAlerter(
     {
         var now = timeProvider.GetUtcNow();
 
-        if (plan.NextAfter(now) is not { } target)
+        if (MeldVolgendeRun(plan, agent) is not { } target)
         {
-            logger.LogError(
-                "Het plan '{Plan}' levert geen volgend moment meer op; de storingsmelder stopt.",
-                plan.Expression);
-            agent?.ReportNextRun(null);
             return false;
         }
-
-        agent?.ReportNextRun(target);
 
         try
         {
@@ -270,6 +264,33 @@ internal sealed class AgentFaultAlerter(
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Rekent de volgende tik uit en meldt hem aan de agent.
+    /// </summary>
+    /// <param name="plan">Het plan.</param>
+    /// <param name="agent">De agent, of <c>null</c>.</param>
+    /// <returns>Het moment waarop gewacht gaat worden, of <c>null</c> als het plan is uitgeput.</returns>
+    /// <remarks>
+    /// <c>internal</c> en met een uitkomst, dezelfde afweging en dezelfde reden als bij
+    /// <c>AzureCostCollector.MeldVolgendeRun</c>: zo kan een test meten wát er wordt gemeld zonder de
+    /// lus te draaien en zonder tijdslimiet. Een testgrens die van de belasting van de machine afhangt,
+    /// meet de belasting en niet het gedrag.
+    /// </remarks>
+    internal DateTimeOffset? MeldVolgendeRun(SoratusSchedule plan, ISoratusHostedAgent? agent)
+    {
+        if (plan.NextAfter(timeProvider.GetUtcNow()) is not { } target)
+        {
+            logger.LogError(
+                "Het plan '{Plan}' levert geen volgend moment meer op; de storingsmelder stopt.",
+                plan.Expression);
+            agent?.ReportNextRun(null);
+            return null;
+        }
+
+        agent?.ReportNextRun(target);
+        return target;
     }
 
     /// <summary>

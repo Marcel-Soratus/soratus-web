@@ -50,7 +50,13 @@ public sealed class GeherbergdeKlokagentTests
             });
         });
 
-        AgentRegistration registratie = sink.Registrations.Last(r => r.AgentName == Collector);
+        // Op de aanwezigheid van een document en niet op de láátste, en dat is dezelfde reparatie als
+        // in GeherbergdeAgentsTests: de afsluitregistratie gaat buiten de buffer om, dus welk document
+        // als laatste in de opslag landt hangt van de planner af. Het gemelde moment staat op elk
+        // document dat ná de melding is opgebouwd, en dát er zo'n document is, is de invariant.
+        AgentRegistration registratie = Assert.Single(
+            sink.Registrations,
+            r => r.AgentName == Collector && r.NextRunAt == volgende && r.Lifecycle == AgentLifecycle.StoppedCleanly);
 
         Assert.Equal("0 4 * * *", registratie.Schedule);
         Assert.Equal(TriggerKind.Timer, registratie.TriggerKind);
@@ -78,7 +84,11 @@ public sealed class GeherbergdeKlokagentTests
             return Task.CompletedTask;
         });
 
-        AgentRegistration registratie = sink.Registrations.Last(r => r.AgentName == Collector);
+        // Het afsluitdocument, op naam en op levensfase opgezocht en niet op positie. Zie de opmerking
+        // hierboven: de laatste rij in de opslag is geen bewijs.
+        AgentRegistration registratie = Assert.Single(
+            sink.Registrations,
+            r => r.AgentName == Collector && r.Lifecycle == AgentLifecycle.StoppedCleanly);
 
         Assert.Equal(gemist, registratie.NextRunAt);
         Assert.True(registratie.NextRunAt < registratie.LastHeartbeatAt);
@@ -95,10 +105,14 @@ public sealed class GeherbergdeKlokagentTests
             return Task.CompletedTask;
         });
 
-        AgentRegistration registratie = sink.Registrations.Last(r => r.AgentName == Collector);
+        // Over álle documenten van deze agent en niet over de laatste: dat is hier zowel
+        // volgorde-onafhankelijk als sterker. "Geen enkel document draagt een volgende run" is precies
+        // wat er beweerd wordt.
+        var vanDeCollector = sink.Registrations.Where(r => r.AgentName == Collector).ToArray();
 
-        Assert.Equal("0 4 * * *", registratie.Schedule);
-        Assert.Null(registratie.NextRunAt);
+        Assert.NotEmpty(vanDeCollector);
+        Assert.All(vanDeCollector, r => Assert.Equal("0 4 * * *", r.Schedule));
+        Assert.All(vanDeCollector, r => Assert.Null(r.NextRunAt));
     }
 
     [Fact]
