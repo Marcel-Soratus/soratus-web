@@ -423,10 +423,15 @@ met opzet niet, dus een melder die elke minuut draait mailt zestig keer per uur 
 storing. Die ontdubbeling hoort in de melder en niet in de rekenregel, want het scherm gebruikt
 die regel ook.
 
-## Vier manieren waarop een meting loog
+## Zeven manieren waarop een meting loog
 
-Alle vier gebeurd, alle vier kostten werk. Ze staan hier omdat ze niets met de code te maken
+Alle zeven gebeurd, alle zeven kostten werk. Ze staan hier omdat ze niets met de code te maken
 hebben en dus in geen enkele test te vangen zijn.
+
+Er zit een verschil tussen de eerste vier en de laatste drie dat het onthouden waard is. De eerste
+vier zijn **te zien in de uitvoer** als je weet waar je kijkt. De laatste drie zijn ontstaan doordat
+er meer dan één sessie in dezelfde working tree werkte, en die zijn van buiten niet van een echt
+defect te onderscheiden.
 
 - **`dotnet test --no-build` ná het bouwen van één project meet tegen een oude assembly.** Dat
   heeft een correcte wijziging gekost: de reparatie werd teruggedraaid omdat de testrun hem niet
@@ -453,6 +458,28 @@ hebben en dus in geen enkele test te vangen zijn.
   uit een ánder project, dus een resultaat zonder meting. Een script dat muteert hoort te controleren
   of de compileerfout ín het gemuteerde bestand staat. Zie punt 45 van
   `fase-0-afwijkingen.md`.
+- **Een test kan groen zijn als hij alleen staat en rood onder de belasting van een volledige run.**
+  Dit is de spiegel van de drie vormen hierboven: die blijven groen mét de fout, deze gaat rood
+  zónder fout. Het is gebeurd op een assertie die de *volgorde* van twee schrijfpaden aannam terwijl
+  alleen het *aantal* vastligt — één pad gaat buiten de buffer om, en onder belasting loopt de pomp
+  achter. Los gedraaid drie keer groen, in de volledige run rood.
+
+  Twee dingen die eruit volgen. **De richting van het falen is de diagnose**: was de leegloop
+  onvolledig geweest, dan zou juist de andere kant ontbreken en was de test groen — dus rood betekent
+  volgorde en geen onvolledigheid. En **een ruimere tijdslimiet is geen reparatie**: die faalt in de
+  verkeerde richting en is een gok over elke andere machine. Wie op de lus van een
+  `BackgroundService` wil meten heeft twee eerlijke opties: de stap eronder rechtstreeks aanroepen
+  (maak hem `internal`), of starten en **stoppen** en dán meten — `StopAsync` wacht de `ExecuteTask`
+  af en is een echte samenkomst zonder klok. Zie punt 44.13.
+- **Twee builds die overlappen meten niets.** Twee keer gemeld als een onverklaard
+  waarschuwingsprobleem — eerst 36, later 90 — en beide keren liep er een tweede build op dezelfde
+  `obj/`. Het reproduceerde nooit. Er was niets aan de hand met de boom.
+- **Een `--no-incremental` vanuit de wortel is niet alleen een meting maar ook een schrijfactie in
+  de uitvoermap van een andere sessie.** Dat is één keer misgegaan: de clean liep tegen een hangende
+  testrun aan, verwijderde wat hij kon verwijderen uit `bin/` van het testproject en kon de
+  vergrendelde bestanden niet terugzetten. Die map was daarna kapot en een run erop gaf "hostpolicy.dll
+  not found" — een melding die niets met de code te maken heeft. Herstellen gaat met een échte build,
+  eventueel naar een eigen uitvoerpad (`-p:BaseOutputPath=…`), en nooit met `--no-build`.
 
 ## Eén valkuil om te onthouden
 

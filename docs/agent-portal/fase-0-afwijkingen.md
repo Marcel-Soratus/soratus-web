@@ -3338,512 +3338,456 @@ valse metingen in de stand van zaken: een groen signaal over de verkeerde verzam
 
 ---
 
-## 46. De supportdraad staat bij de klant, en het antwoord van de eerstelijn is een verwijzing en geen tekst
+## 44. Het platform meldt zichzelf: een geherbergde agent mag een klok hebben, en zijn volgende run is een mededeling en geen herberekening
 
-**Spec:** §3.8 en de acceptatie-eis van fase 5 — *de agent beantwoordt statusvragen, urenvragen en
-factuurvragen zonder te verzinnen, en escaleert als hij het niet zeker weet.*
+**Spec:** §4 (de beheeragents van Soratus als interne klant) en §7 fase 6, "het platform meldt zichzelf".
+Punt 38 bouwde de kostencollector in het portaal, punt 43 de storingsmelder, en 43.13 meldde wat er
+toen niet gebeurde: *"De storingsmelder publiceert zelf geen telemetrie … het gevolg vandaag: de melder
+staat niet in het portaal, dus dat hij stil is gevallen is alleen in het log te zien."* Dit punt sluit
+dat gat voor beide.
 
-De code staat in `Soratus.Portal/Support/`, met vier razorbestanden onder
-`Components/Pages/Klant/` (`Support.razor`, `CustomerSupport.razor`, `OperatorSupport.razor`,
-`SupportThread.razor` + `.razor.css`) en de tests in `Soratus.Portal.Tests/Support/`. De
-berichtendraad is gebouwd; de AI-eerstelijnsagent is **een naad zonder implementatie**, en dat is de
-kern van dit punt.
+Gemeten vóór dit werk: `Soratus.Portal` verwees alleen naar `Soratus.Agents.Contracts`. Het portaal
+*las* documentvormen en schreef ze niet. Het gevolg is scherper dan het klinkt: **de storingsmelder kon
+niet melden dat de storingsmelder stuk was**, en dat de collector vannacht niet had gedraaid stond
+alleen in een logregel.
 
-### 46.1 Waarom de naad leeg blijft, en wat er dan wél is opgeleverd
+### 44.1 De ontwerpvraag, en waarom geen van de twee bestaande vormen paste
 
-De moeilijke eis van fase 5 is niet "laat een model antwoorden" maar "laat het niets verzinnen". Dat
-is geen implementatievraag maar een ontwerpvraag, en hij is niet op te lossen met een betere
-instructie aan een model: een agent die vrij over de gegevens mag praten, kan een getal noemen dat
-hij niet heeft gekregen. Een verzonnen factuurbedrag is erger dan geen antwoord, want het klinkt
-hetzelfde als een echt antwoord en de klant kan het verschil niet zien.
+De integratie van punt 42 is gebouwd voor agents die draaien **wanneer ze worden aangeroepen**: een run
+begint bij een inkomend verzoek. De collector en de melder draaien op een **klok**, en dan is de grens
+van een run een tik van die timer. Drie vormen waren kandidaat.
 
-Wat er daarom is opgeleverd is de **vorm waarin een antwoord moet passen**. Dezelfde zet als bij
-`IMonthlyStatementFigures` in §29, met één verschil: daar was de naad een bedragenbron en zat de
-grens in het retourtype; hier zit de grens aan beide kanten.
+**`AddSoratusAgent<TAgent>` — één agent per proces met een cron. Valt af, en dat is te meten en niet te
+beredeneren.** Die vorm zet één `AgentIdentity`, één `AgentSchedule` en één `AgentLifecycleState` als
+singleton neer en leest één `SORATUS_AGENT__SCHEDULE`; een tweede aanroep komt langs
+`if (services.Any(d => d.ServiceType == typeof(AgentIdentity))) return builder;` en doet dus **niets**.
+Het portaal is één proces met twee agents en straks meer (§4 noemt er vijf), dus de tweede zou stil
+verdwijnen — en twee verschillende schema's zijn in één configuratiesleutel niet uit te drukken.
+Daarnaast verschuift de betekenis: dan is het *portaal* de agent, terwijl het de host is waarin agents
+wonen. Er is bovendien een harde blokkade: `AddSoratusAgent` en `AddSoratusHostedAgents` werpen op
+elkaar, met opzet (punt 42).
 
-### 46.2 De vorm: `SupportAnswer` heeft geen tekstveld
+**`AddSoratusHostedAgents` — meerdere agents in één host. Past op alles behalve het plan.** Het
+*runbegrip* past wél: `ISoratusHostedAgent.RunAsync(trigger, body, ct)` neemt elk lijf aan, niet alleen
+een verzoek. Dat de aanroepkant van punt 42 in `Soratus.Agents.AspNetCore` staat is een *bron* van
+agents en geen eigenschap van de laag — de documentatie van `IHostedAgentSource` zegt het zelf: een
+wachtrijhost heeft exact dezelfde vorm. Een tik van een timer is gewoon een derde soort aanroeper.
 
-`ISupportFirstLine.AnswerAsync(SupportEnquiry) → Task<SupportAnswer?>`. Twee typen, en beide zijn zo
-smal gemaakt dat de fout niet uit te drukken is.
+Wat die vorm **niet** kon uitdrukken is het plan. `HostedAgentDeclaration.Validate()` weigerde
+`TriggerKind.Timer` categorisch, en `HostedAgentsRegistrationService.BuildRegistration` zette
+`Schedule = null` en `NextRunAt = null` met de reden erbij: bij een dienst op aanvraag is er geen
+volgende run om te voorspellen.
 
-**De ingang.** `SupportEnquiry` draagt precies twee dingen: de vraag van de klant, en `Grounds` — de
-verzameling grondslagen waarop een antwoord mag rusten. Er staat géén klantslug op, geen scope, geen
-verbinding met de opslag, geen contract, geen adres. De eerstelijn krijgt dus geen sleutel waarmee
-hij iets kán opvragen; hij krijgt de gegevens die hij mag gebruiken en verder niets.
+**En een plan is hier geen versiering.** Dat is het hele punt van deze opdracht. Zonder gepubliceerd
+plan is "laatste run 26 uur geleden" niet te beoordelen: er staat nergens hoe vaak deze agent hoort te
+draaien. Het plan is de maat waaraan stilte wordt afgelezen. De derde weg — de agents met een oneerlijke
+trigger aankondigen (`manual` betekent "alleen met de hand gestart") of met `timer` zonder cron — valt
+af om de reden die punt 42 al opschreef: dan staat er in het portaal een agent op schema zonder schema,
+en het scherm rendert dat als `op trigger · timer` met een lege volgende run. Een tegenspraak die de
+lezer moet oplossen in plaats van de bouwer.
 
-**De uitgang.** `SupportAnswer` is factory-only — geen constructor, geen publieke setter, twee
-fabrieksmethoden — dezelfde constructie als `HoursQuery` (§3.6) en om dezelfde reden: zo bestaat de
-toestand "geen van beide gevuld" niet.
+**Besluit: de aankondiging van een geherbergde agent mag een plan dragen, en `TriggerKind.Timer` is
+toegestaan precies dan.** Beide kanten werpen: een timer zonder plan én een plan zonder timer. Dat
+tweede is de spiegel die er eerst niet was — een plan bij een dienst die op een aanroep draait levert
+een "volgende run" op waar niets gebeurt.
 
-| | |
+### 44.2 `Soratus.Agents.Contracts` is niet aangeraakt, en dat is een bevinding en geen voorzorg
+
+**Er is geen contractwijziging nodig geweest.** `AgentRegistration.Schedule`, `AgentRegistration.NextRunAt`
+en `TriggerKind.Timer` bestonden al en betekenen al precies dit; wat ontbrak zat in de *bibliotheek*, in
+de vorm van een weigering die voor de ene soort geherbergde agent juist was en voor de andere niet. Er is
+geen veld bijgekomen, geen enumwaarde, en de contractversie blijft 1 — een document van deze twee agents
+is voor het portaal niet te onderscheiden van dat van een klantagent met een schema, en dat is precies de
+bedoeling: ze staan in hetzelfde overzicht met dezelfde statusregel.
+
+**De twee gaten die punt 42 meldde, zijn hier niet nodig, en dat is het aardige van dit geval.** Gat 1
+was "er is geen verwachting van aanroep": bij een agent op aanvraag valt stilte niet te beoordelen. Bij
+een klok-agent *is* die verwachting er — dat is de cron — dus wat daar een contractuitbreiding zou
+vragen, is hier een bestaand veld. Gat 2 (`RunResult` mist "de aanroeper haakte af") gaat over een
+gebruiker die zijn tabblad sluit en bestaat bij een timer niet.
+
+### 44.3 De correctie op punt 42 die het meten opleverde: `nextRunAt` was géén detector van een gemiste run
+
+Punt 42 schreef: *"bij een agent met een schema zegt hij dat wél, want daar is een gemiste run zichtbaar
+doordat `nextRunAt` in het verleden ligt."* **Dat is onwaar zoals het gebouwd was**, en het is het soort
+bewering dat redelijk klinkt en niet is nagerekend.
+
+`AgentRegistrationService.BuildRegistration` zet `NextRunAt = schedule.GetNextOccurrence(DateTimeOffset.UtcNow)`
+— bij *elke* hartslag opnieuw uitgerekend vanaf **nu**. Die waarde ligt dus per constructie in de
+toekomst. Een planlus die is doodgevallen terwijl het proces vrolijk doorklopt, levert daarmee een
+`nextRunAt` op die er volstrekt gezond uitziet. De enige manier waarop dat veld in het verleden komt te
+liggen, is als de hártslag ook stopt — en dan is `Degraded` het signaal en niet de volgende run.
+
+Daarom is de volgende run bij een geherbergde klok-agent **een mededeling van de host**:
+`ISoratusHostedAgent.ReportNextRun(moment)`. De lus meldt het moment waarop hij wérkelijk wacht, vlak
+voordat hij gaat wachten. Schuift dat moment niet meer op terwijl de hartslag doorloopt, dan staat er in
+het portaal een volgende run in het verleden — en dat is het enige spoor dat een stilgevallen klok-agent
+in een levend proces achterlaat.
+
+Dat de bibliotheek dat *niet zelf uitrekent* is dus geen luiheid maar de hele eigenschap. Er staat een
+test op die de invariant vastpint en niet zijn gevolg: hij meldt een moment uit **2020** en eist dat het
+document dat toont. Met de mutatie die het veld weer uit de cron berekent — de fout die vandaag in het
+pad met één agent staat — vallen 3 van de 103 tests om, waaronder die ene.
+
+Bij een agent zonder plan wordt een gemeld moment **niet** gepubliceerd. Anders staat er een `nextRunAt`
+naast een `triggerKind` die zegt dat deze dienst op een aanroep draait, en dat is dezelfde tegenspraak
+die `Validate()` weigert, nu via een omweg.
+
+### 44.4 De klok blijft van de host, en dat is de belangrijkste keuze van dit punt
+
+De bibliotheek *kan* de klok overnemen — dat doet ze bij `IScheduledAgent`. Hier niet, en de reden is de
+afhankelijkheidsrichting: dan zou de kostencollector niet meer meten zodra de telemetrie niet is
+ingericht. Telemetrie mag het werk nooit omleggen, en **werk dat zonder telemetrie helemaal niet meer
+gebeurt is de scherpste vorm daarvan**. Een cron met een typefout zou dan de storingsmelder uitzetten.
+
+De collector en de melder houden dus hun eigen `BackgroundService` en hun eigen lus; wat de bibliotheek
+erbij doet is de run vastleggen en het plan publiceren. `ISoratusHostedAgents` is een **optionele**
+afhankelijkheid (een constructorparameter met standaardwaarde `null`): staat hij niet in de container,
+dan meet de collector precies hetzelfde en legt hij niets vast. Er staat een test op dat beide diensten
+uit de container van het échte portaal te bouwen zijn terwijl die dienst er niet in staat — want zou
+`ActivatorUtilities` daar de standaardwaarde níet voor gebruiken, dan start het portaal in productie
+niet.
+
+**Wat dat kost, en hoe dat is opgelost.** Als de host plant en de bibliotheek publiceert, kan de
+gepubliceerde cron uit de pas gaan lopen met de lus — precies wat `AgentRegistration.Schedule` verbiedt
+("de expressie waarmee daadwerkelijk wordt gepland, niet een losse beschrijving"). De reparatie zit in
+het **type**: `HostedAgentDeclaration.Schedule` is geen `string` maar een `SoratusSchedule`, en de lus
+wacht op precies het object dat hij aankondigt. Eén expressie, één evaluatie, geen tweede berekening om
+uit de pas te lopen. Vandaar dat `SoratusSchedule` publiek is; het parseren en uitrekenen van een cron
+staat nu op één plek, en `AgentSchedule` (het pad met één agent) is er een aanroeper van geworden in
+plaats van een tweede implementatie.
+
+### 44.5 Waar de telemetrie van het platform heen gaat: een eigen database, en dat is een veiligheidsgrens
+
+De interne beheerklant `soratus` heeft geen eigen telemetrie-endpoint en wees naar het standaardaccount
+`cosmos-soratus-prod`, database `telemetry`. **Daar mag het portaal met opzet niet schrijven**
+(`infra/portal/portal-rg.bicep`: een Cosmos Data Reader accountbreed, en schrijfrecht alléén op
+`platform`). Die grens is niet weggenomen en mocht niet worden weggenomen: het portaal is het ding waar
+klanten op inloggen, en een gecompromitteerd portaal dat in de telemetriedatabase kan schrijven kan
+telemetrie **verzinnen** — een agent die "alles in orde" meldt terwijl hij stilstaat. Dat is een ergere
+eigenschap dan de blindheid die dit punt komt wegnemen.
+
+**Cosmos-dataplane-rollen zijn per account, database of container te scopen en nooit per partitie.** De
+gereserveerde partitie `$portal` — waar de dagclaim van punt 38 en de markeringen van punt 43.5 in staan
+— is dus geen rechtengrens. Vandaar: een **eigen database** `platform-telemetry` op hetzelfde account,
+met de drie containers uit het contract (`agents` zonder verval, `runs` 400 dagen, `logs` 30 dagen — in
+Bicep letterlijk dezelfde `containers`-variabele als `telemetry`, want het is hetzelfde contract), en
+één dataplane-verlening van Data Contributor met `scope: '${cosmos.id}/dbs/platform-telemetry'`. Na die
+verlening kan het portaal overal lezen en op precies twee databases schrijven: `platform` en
+`platform-telemetry`. Zelfde argument als waarom de urenregels in `customers` bleven en waarom de
+MBV-telemetrie een eigen account kreeg: de grens ligt waar de rol hem kan leggen.
+
+**Er is een tweede, gemeten reden die het besluit alleen al zou dragen.** In `telemetry` staat onder
+klant `soratus` geseede demodata mét een agent `storingsmelder` en een agent `kosten-collector`
+(`tools/seed/telemetry.json`). Het registratiedocument heeft `agentName` als id **en** als
+partitiesleutel. Het portaal zou die twee documenten dus hebben overschreven: het echte werk en de demo
+zouden hetzelfde document zijn.
+
+**Eén sectie voedt beide kanten, en dat is geen ordelijkheid.** `PlatformTelemetry` zegt waar het
+portaal zijn eigen agents heen schrijft (via de sleutels die `Soratus.Agents.Telemetry` zélf leest) en
+waar de interne beheerklant ze vandaan leest (`CustomerDirectory`). Waren dat twee configuraties, dan
+bestaat de toestand "het portaal publiceert netjes in de ene database en het scherm kijkt in de andere",
+en die levert **geen fout op maar een leeg overzicht** — de klasse storing die zich voordoet als
+werkende functionaliteit.
+
+**En er is geen tussenstand.** De terugval van de interne klant hangt aan `IsConfigured` en niet aan
+`IsInternal` alleen: zolang `PlatformTelemetry__AccountEndpoint` niet is gezet, blijft die klant naar
+`telemetry` kijken. Die app-setting komt uit dezelfde uitrol die de database aanmaakt, dus de code kan
+vóór de infrastructuur worden uitgerold zonder dat de interne klant naar een database wijst die nog niet
+bestaat. Een uitdrukkelijke waarde op het klantdocument wint nog steeds — dat is de plek waar straks een
+eigen account komt te staan, en een configuratiesectie hoort niet stil te overrulen wat iemand heeft
+vastgelegd.
+
+**Wat het kost, en het is zichtbaar:** wat er vandaag in `telemetry` onder `soratus` staat verdwijnt van
+`/klant/soratus/agents`. Voor de vijf geseede beheeragents is dat de bedoeling. Voor de échte registratie
+van `heartbeat-demo` is het een gemis: die agent hoort in de nieuwe database thuis — hij is van ons en
+niet van een klant — en dat is één regel in zijn eigen configuratie (`SORATUS_TELEMETRY__DATABASE`).
+Gemeld en niet gedaan: dat is een andere lane.
+
+### 44.6 Hoe telemetrie het portaal niet kan omleggen, ook niet bij het opstarten
+
+Dit is waar de val zat. De bibliotheek belooft dat telemetrie een agent nooit omlegt, en dat klopt voor
+het *schrijven*: `TelemetryWriter` schrijft met een niet-blokkerende `TryWrite` in een begrensd kanaal en
+`WithRetryAsync` vangt élke uitzondering af — er komt niets uit die pompen. Maar bij het **opstarten**
+geldt die belofte niet: `AddSoratusHostedAgents` **werpt** bij een ontbrekende endpoint, een verkeerde
+URL of een gezette `SORATUS_AGENT__SCHEDULE`. Voor een agent is dat het juiste gedrag — daar is de
+telemetrie de hele opdracht en een agent die niets meldt bestaat niet. Hier is het andersom, en een
+uitzondering in de opstartcode is de hardste manier om `/` te raken: dan start de app niet, geeft
+`/healthz` geen 200, en rolt de pijplijn terug om iets dat het portaal had kunnen overleven.
+
+`PlatformAgents.AddSoratusPlatformAgents` werpt daarom niet, voor geen enkele configuratie. Wat er
+gebeurt is een uitkomst met een niveau en een reden, die ná `Build()` als één regel wordt gelogd —
+`app.Logger` bestaat op het moment van aansluiten nog niet. Dat het een uitkomst is en geen stilte is het
+punt: een leeg beheeroverzicht is anders niet van een kapotte inrichting te onderscheiden.
+
+**Dat een mislukte aansluiting geen halve registratie achterlaat, is gemeten en geen aanname over
+andermans code.** `AddSoratusHostedAgents` doet al zijn controles — de twee contractasserties, de
+schemasleutel, de identiteit en de opties — vóór de eerste `AddSingleton`. Er staat een test op die de
+container voor en na telt bij een mislukte aansluiting; de halve toestand is wat een `try` om een reeks
+registraties gevaarlijk zou maken.
+
+En de lus zelf: `Announce` staat buiten de `try` van `ExecuteAsync`, dus een uitzondering daaruit zou de
+host meenemen. Hij vangt daarom af en levert `null`, waarna de dienst onverstoord doorwerkt zonder
+zichtbaarheid. Om dezelfde reden **klemt** `PlatformAgentPlans` zijn invoer in plaats van te valideren:
+op `PortalCosts` en `PortalAlerts` staan `Range`-annotaties zónder `ValidateOnStart`, dus de eerste keer
+dat zo'n annotatie wordt gelezen is binnen een achtergronddienst — en dat is exact de fout die het
+portaal op 21 augustus heeft platgelegd. Er staat een test op dat `-1`, `0`, `99` en `int.MaxValue` alle
+vier een geldig plan opleveren.
+
+**`GetOrAdd` en niet `Find`, en dat is de derde plek waar de startvolgorde bijt.** `Find` zou afhangen
+van de vraag of de registratiedienst zijn eerste ronde al heeft gedraaid. `GetOrAdd` maakt de agent aan
+als hij er nog niet is en levert dezelfde als de aankondigingsbron dezelfde waarden heeft — vandaar dat
+`SoratusSchedule` waardegelijkheid heeft en niet die van een referentie. Zonder die gelijkheid leest de
+registry twee keer dezelfde aankondiging als een *conflict* en waarschuwt hij over een verschil dat er
+niet is.
+
+**En de registratie hangt niet aan de lus.** Beide agents staan ook als `IHostedAgentSource` in de
+container, dus `HostedAgentsRegistrationService` publiceert ze in zijn eigen `StartAsync` — vóór de
+eerste tik en onafhankelijk van de planlus. Een net uitgerold portaal toont dus meteen twee agents, met
+een lege volgende run tot de lus die een fractie later meldt.
+
+### 44.7 Wat er zichtbaar wordt, en wat een operator eruit mag concluderen
+
+Op `/klant/soratus/agents` staan `kosten-collector` (type Cost Management, plan `0 4 * * *`) en
+`storingsmelder` (type Monitoring, plan `* * * * *`) — de namen en typen van §4, en dezelfde als in de
+seed. Per agent: een registratie met een hartslag van het portaalproces, een plan, een volgende run, en
+**één run per tik van de klok**. Het aantal verwerkte items is voor de collector het aantal vastgelegde
+maanden en voor de melder het aantal verstuurde meldingen; een ronde zonder storingen is dus een run met
+nul items en resultaat `ok`, en dat is de juiste uitkomst — er was werk (kijken) en er was niets te
+melden.
+
+**Bijkomend, en het is meer dan het lijkt:** een gewone `ILogger`-aanroep binnen een lopende run belandt
+automatisch op naam van de juiste agent, met de runId erbij. Alle `warn`- en `error`-regels die punt 38
+en punt 43 in de hostlog zetten — `api.retry`, een onleesbaar antwoord, een onbruikbare ontvanger, een
+ronde die omvalt — staan daarmee op het logtabblad van de agent in het portaal. Dat was de plek waar ze
+hoorden en niet konden komen.
+
+**Wat een run mislukt maakt.** Alleen een uitzondering die uit de ronde ontsnapt; dan doet de bibliotheek
+de rest en staat de agent op `Failed`. Een `429` is géén mislukte run (punt 38, regel 1 — anders zou de
+collector permanent amber staan) en een klant zonder scope ook niet. Een onleesbaar antwoord is dat
+evenmin: dat is één maand van één klant, en één slechte maand hoort de hele collector niet rood te
+maken. Het staat als `error` op het logtabblad.
+
+**Wat een operator uit een grijze `Idle`-stip op deze twee mag concluderen** — en dit is dezelfde
+beperking als in punt 42, met één verschil:
+
+- het portaalproces leeft en heeft in de laatste twee minuten iets weggeschreven;
+- er liep op dat moment geen tik;
+- de laatst afgeronde tik is niet mislukt.
+
+Wat er **wél** bijkomt tegenover punt 42: er staat een plan naast, en een laatste run. "Laatste run 26
+uur geleden" bij een plan van `0 4 * * *` is dus te beoordelen, en "volgende run in het verleden" is een
+feit dat op het scherm staat.
+
+**Wat een operator er niet uit mag concluderen: dat de status het voor hem uitrekent.** Dat doet hij
+niet, en dat is de eerlijke helft van dit punt — zie 44.8.
+
+### 44.8 Wat er werkelijk gebeurt als een collector stilvalt, in drie gevallen
+
+Dit is het hele punt van de opdracht, dus het staat hier uitgesplitst in plaats van samengevat.
+
+**Geval 1 — het proces ligt stil (uitrol, crash, App Service laadt uit).** De hartslag van beide agents
+stopt tegelijk; na `AgentStatusThresholds.Degraded` (twee minuten) staan ze op `Degraded`, na tien
+minuten is er meldplicht. Eén proces betekent één `startedAt` en dus één groep (punt 43.5), dus daar
+hoort één mail over te gaan. **Maar de melder die dat zou doen is precies wat stilligt.** Op één instantie
+is dat een harde beperking: *dat de storingsmelder stuk is, is niet met de storingsmelder te melden.* Wat
+er wél is veranderd: de toestand staat nu in de opslag in plaats van alleen in een logregel, dus elk
+scherm dat die database kan lezen ziet hem — en op meer dan één instantie mailt de andere instantie wél.
+
+**Geval 2 — de ronde valt om terwijl het proces leeft.** De run staat op `failed`, de agent op `Failed`,
+en `ShouldAlert` meldt bij `Failed` meteen. De vólgende ronde leest die mislukking en mailt erover: **de
+melder meldt over de melder, en dat werkt** — zolang de ronde daarna nog loopt en het mailen zelf heel
+is. De ontdubbeling houdt het binnen de perken: één markering per agent, dus geen zestig mails per uur
+over dezelfde mislukte ronde. Dit is de kringloop die 43.13 aankondigde, nu bestaand en beschreven in
+plaats van stil. Voor de collector geldt hetzelfde: een kostenrun die omvalt was een logregel en is nu
+een `Failed` met een mail erachter.
+
+**Geval 3 — de planlus valt stil terwijl het proces leeft.** De hartslag komt van de host en blijft dus
+komen; de levensfase is `IdleWaiting`; de status blijft `Idle`, rang 1. **Er gaat geen mail en er kleurt
+geen rij.** Wat er wél gebeurt: de volgende run schuift niet meer op en komt daarmee in het verleden te
+liggen, naast een laatste run die veroudert en een plan dat zegt hoe vaak het had moeten gebeuren. Het is
+**te zien** en het wordt niet **gemeld**.
+
+Dat laatste is een besluit en geen omissie. Er over mailen zou vragen dat `AgentStatusCalculator` een
+zesde regel krijgt ("een plan is verstreken zonder run"), en dat is de statusregel die scherm en melder
+delen — de ene plek waar een wijziging twee schermen tegelijk verandert, en dus een besluit voor de
+eigenaar van het contract en niet voor deze sessie. **Gemeld als openstaand punt**, met de aantekening
+dat de gegevens er nu voor het eerst zijn: vóór dit punt bestond er geen `nextRunAt` van het platform om
+op te letten. Wat de goedkope tussenstap zou zijn: het scherm laten zien dát een volgende run in het
+verleden ligt (nu staat er alleen een tijdstip), want dat verandert de statusregel niet.
+
+En hoe waarschijnlijk geval 3 is, eerlijk: klein. Beide lussen vangen élke uitzondering af en gaan
+verder, dus er is geen pad waarlangs de lus zichzelf beëindigt behalve het afsluiten van de host. Wat het
+geval wél dekt is een tik die blijft hángen — een aanroep aan Cost Management die niet terugkomt, een
+query die niet afrondt — en dat is precies het geval waarin de gegevens de enige aanwijzing zijn.
+
+### 44.9 Kleinere besluiten, met de reden
+
+**Geen derde rij "het portaal".** Zijn hartslag zou per constructie gelijk zijn aan die van de twee, dus
+die rij voegt een regel toe zonder een feit toe te voegen. Zelfde afweging als bij de webhost van punt
+42. De hostidentiteit bestaat wel — hij levert klant, versie, omgeving en `startedAt` — en wordt niet
+gepubliceerd.
+
+**Alleen `Soratus.Agents.Telemetry` als projectreferentie, niet `Soratus.Agents.AspNetCore`.** Die tweede
+bestaat om inkomende verzoeken als run vast te leggen, en deze twee agents draaien op een klok. Het
+portaal is een webapplicatie, dus de `FrameworkReference` van punt 42 speelt hier geen rol — maar de
+referentie erbij zetten zou een aanroeplaag binnenhalen die niets doet.
+
+**Het plan van de melder is een cron, en een cron kent geen halve minuten.** `PortalAlerts:IntervalSeconds`
+staat op zestig (§4: "elke minuut") en dat is exact `* * * * *`. Een gevraagd interval dat geen heel
+aantal minuten is, kan een cron niet uitdrukken — dat is een gat in het contract (`Schedule` is getypeerd
+als cron-expressie) en geen keuze van deze code. Van de twee mogelijke antwoorden — een plan publiceren
+dat niet klopt, of afronden op wat een cron kán zeggen en op dat afgeronde plan draaien — is het tweede
+het eerlijke: dan is wat er op het scherm staat wat er werkelijk gebeurt. Negentig seconden wordt dus
+twee minuten, en de melder logt bij het opstarten dát hij afrondt. Sub-minuutintervallen worden één
+minuut. **Punt van twijfel, en het derde contractgat dat hier is opgeschreven.**
+
+**De `PeriodicTimer` van de melder is vervangen door hetzelfde plan.** Niet uit netheid: met een timer
+hier en een cron-expressie daar is "het document zegt waarop wordt gepland" een afspraak in plaats van
+een eigenschap.
+
+**De markeringen en de dagclaim blijven in `platform`.** Ze staan in de gereserveerde partitie `$portal`
+van `customers` en verhuizen niet mee: het is Soratus-eigen boekhouding over onze eigen meldingen, geen
+telemetrie, en er hangt geen bewaartermijn aan.
+
+### 44.10 De mutatieronde
+
+**Twintig mutaties: negentien werden meteen rood, één maakte niets rood.** De ronde liep in twee vensters
+en is aangekondigd; wat hieronder staat is buiten elk venster van een andere sessie gemeten.
+
+Op de bibliotheek (van de 103 tests in `Soratus.Agents.Telemetry.Tests`):
+
+| Mutatie | Rood |
 |---|---|
-| `SupportAnswer.GroundedIn(ground)` | een antwoord, dat op precies één aangewezen grondslag rust |
-| `SupportAnswer.Escalate(reason)` | geen antwoord; de vraag gaat naar een mens |
-
-**Er is nergens een tekstveld.** Dat is het hele ontwerp in één regel. De eerstelijn mag niet praten,
-hij mag *wijzen*. De zin die de klant leest wordt door `SupportText` samengesteld uit
-`SupportGround.Fact` — een tekst die het portaal zelf heeft opgemaakt uit zijn eigen klantweergaven,
-met dezelfde opmaakfuncties (`HourText`, `BillingText`, `StatusVisuals`, `TimeFormat`) als het scherm
-waarnaar de bronregel verwijst. Een verzonnen bedrag heeft geen veld om in te reizen. Er staat een
-reflectietest op dat `SupportAnswer` geen enkele `string`-eigenschap heeft.
-
-En **"ik weet het niet" is de andere helft van het type en geen zin die het model kiest.** Een model
-dat niets weet kan niet in de verleiding komen om toch iets te zeggen, want de vorm waarin "toch iets
-zeggen" past bestaat niet.
-
-### 46.3 Waarom een grondslag buiten het portaal niet te máken is
-
-`SupportGround` is een `public sealed record` met een **`internal` constructor**. Buiten
-`Soratus.Portal` bestaat er dus geen manier om er een te maken, en omdat het type `sealed` is, is de
-kopieconstructor die `with` nodig heeft privé — er valt ook geen gewijzigde variant van te maken. Een
-implementatie van `ISupportFirstLine` kan alleen een grondslag teruggeven die zij van het portaal
-heeft gekregen.
-
-Dat dekt niet alles: zij zou er een kunnen bewaren uit een *vorige* aanroep, van een andere klant.
-Daarom is er een tweede slot, en dat is een gewone waardevergelijking:
-`CosmosSupportStore.Accept(enquiry, answer)` neemt een antwoord alleen aan als de grondslag erin ook
-in `enquiry.Grounds` van dít verzoek staat. Zo niet, dan wordt het geen antwoord maar een escalatie.
-
-Waardegelijkheid en niet referentiegelijkheid, met opzet: bij een naad over een procesgrens komt er
-nooit dezelfde instantie terug, dus een `ReferenceEquals` zou elke echte implementatie afwijzen. Er
-staat een test op die keuze, want een mutatie naar `ReferenceEquals` maakt niets anders rood.
-
-**En de grondslagen komen uit de klantviewmodellen, niet uit de documenten.** `SupportGrounds` heeft
-drie fabrieken en die nemen `CustomerAgentsView`, `CustomerHoursView` en `CustomerBillingView` — de
-types waar de rolgrens al in zit. Een grondslag kan daardoor geen omgevingsdetail, geen
-fiatteringsstroom, geen dienstuitsplitsing en geen beheeropslag dragen: de bron die hij leest heeft
-die velden niet. Zou hier uit `HourEntryDocument` of `MonthlyCharge` worden gelezen, dan was die
-eigenschap weg en moest er een woordenlijstcontrole voor in de plaats komen. Er staat een test op de
-signatuur van die drie fabrieken.
-
-**Eén grondslag per antwoord, en dat is een besluit met een prijs.** De eerste opzet liet er meerdere
-toe (`GroundedIn(ground, params more)`) en die is afgewezen toen bleek wat hij oplevert: de bubbel
-draagt één bronregel, dus een tekst die uit drie feiten is opgebouwd zou onder één bron staan die
-maar een derde ervan dekt. Dan is de bronregel geen bron meer maar een suggestie — precies de fout
-die het merkteken van §3.8 moet uitsluiten. De prijs blijkt geen prijs: §3.8 noemt de antwoorden zelf,
-en het zijn er vier — agentstatus met uitleg en runs, uren tegen bundel, laatste factuur met
-betaalstatus, open sprintitems — en elk daarvan is één gegeven.
-
-### 46.4 De bubbel: het merkteken en de bron zijn hetzelfde type
-
-`SupportBubble` is een abstracte record met een `private protected` constructor en precies drie
-vormen:
-
-| Vorm | Wat er in mag |
-|---|---|
-| `SupportSaidBubble` | vrije tekst van een mens, met een naam. Geen merkteken, geen bron |
-| `SupportAnswerBubble` | het merkteken **én** `GroundLabel` en `GroundPath`, beide niet-nullable en in de constructor op leegheid gecontroleerd |
-| `SupportHandoffBubble` | het merkteken en géén enkel gegeven: geen bedrag, geen urenstand, geen bron, geen reden |
-
-Daarmee is *"elke AI-bubbel toont de bron waarop het antwoord is gebaseerd"* geen afspraak die iemand
-in de markup kan vergeten. Er bestaat geen instantie van het antwoordtype zonder bronregel, dus er
-staat in `SupportThread.razor` geen `@if (bubble.Ground is not null)`; de `switch` gaat over het
-**type**. Zou er één bubbeltype zijn met een nullable bron, dan was de eis een regel in plaats van een
-eigenschap.
-
-**Is de escalatiebubbel dan een uitzondering op die eis?** Nee, en dat is het interessante deel. De
-eis gaat over *antwoorden*: een bubbel die iets beweert draagt een bron, en een bubbel zonder bron kan
-niets beweren. Die twee zijn niet in elkaar te veranderen. De tussentoestand waar de eis van fase 5
-over gaat — een antwoord dat klinkt als een antwoord en op niets rust — heeft geen type.
-
-Het merkteken zelf staat als constante (`SupportText.FirstLineBadge`) en komt op precies één plek in
-de markup voor: in de twee AI-takken van `SupportThread.razor`. Er staat een broncodetest op dat de
-letterlijke tekst nergens in de markup voorkomt en dat de constante nergens anders wordt gebruikt —
-het geval dat dat dekt is iemand die het merkteken in een kaartkop of een tooltip zet, waar geen
-bronregel naast staat.
-
-### 46.5 Waar de draad staat, en waarom daar
-
-Container `customers`, partitiesleutel de klantslug, `kind: "supportMessage"`. Dezelfde plek als de
-urenregels, en de afweging is opnieuw gemaakt en niet gekopieerd. De drie argumenten van
-`HourEntryDocument` gaan hier alle drie op, en er komt één bij:
-
-1. **Bewaartermijn.** `infra/portal/portal-rg.bicep` geeft precies één reden om containers te
-   splitsen: verschillende bewaartermijnen. Een supportbericht verloopt niet — "wat hebben jullie mij
-   in maart geantwoord" is een vraag die in september komt, net als bij een factuurdiscussie. Geen
-   TTL, dus geen eigen container.
-2. **Partitiesleutel.** Een draad wordt altijd van één klant gelezen en nooit over klanten heen. De
-   klantslug is dus precies de goede sleutel en er bestaat geen query die erbuiten hoeft.
-3. **Eén partitie is één lezing.** De escalatie moet de SLA noemen, en die staat op
-   `ContractDocument.Sla` — in dezelfde partitie. Het scherm leest de draad en de SLA dus zonder
-   fan-out, en er hoeft nergens een tweede kopie van de SLA te staan.
-4. **En het argument dat bij uren de prijs was, valt hier de goede kant op.** Zolang dit document in
-   `customers` staat, kan geen tweede identiteit schrijfrecht op de draad krijgen zonder óók
-   schrijfrecht op de `AccessDocument`'s — de autorisatiebron van het portaal. Bij uren was dat een
-   prijs (de MCP-server en `devops-sync` moeten daardoor via het portaal schrijven). Hier is het
-   precies wat we willen: **de AI-eerstelijnsagent hoort niet bij Cosmos te kunnen.** Hij hoort een
-   antwoord terug te geven aan het portaal, en het portaal hoort te beslissen of daar een bericht van
-   wordt.
-
-**De documentsleutel sorteert chronologisch, en daarin wijkt hij bewust af van
-`PortalDocumentIds.HourEntry`.** Daar staat met zoveel woorden dat de sleutel géén ordening mag
-suggereren, omdat er nooit op gesorteerd wordt. Bij een berichtendraad is de ordening juist het hele
-ding: een draad ís een volgorde. `CosmosSupportStore` sorteert daarom met `ORDER BY c.id DESC` — geen
-tie-break nodig, want de sleutel is uniek — en bladert met `c.id < @before`. Dat is de enige plek in
-dit portaal waar wél in de query wordt gesorteerd; de indexeringspolitiek van de container staat op
-`/*`, dus het vraagt geen uitrol. Dat is nagekeken in de Bicep en niet aangenomen — het is precies
-het bezwaar dat `CosmosPortalHoursStore` tegen een `ORDER BY` maakt.
-
-De sleutel doet daarnaast wat hij bij uren ook doet: een tweede verzending van hetzelfde formulier
-binnen dezelfde milliseconde krijgt dezelfde sleutel en loopt op een `409`. Het portaal is static SSR,
-dus er is geen JavaScript dat de knop uitzet.
-
-**Er is geen bladervorm die "alles" zegt.** `SupportThreadQuery` heeft twee vormen — `Newest()` en
-`Before(id)` — en geen derde, dezelfde constructie als `HoursQuery`. Waarom er hier wél een tweede
-vorm is: bij uren is de grens een maand of een jaar en die kiest de gebruiker zelf; bij een draad
-bestaat zo'n natuurlijke grens niet, en zonder `Before` zou een lange draad zijn oudste berichten stil
-onbereikbaar maken. Bij een gesprek over een factuur is dat precies het deel waar de vraag over gaat.
-
-**Er is geen methode die een bestaand bericht wijzigt of verwijdert.** Geen `ReplaceItemAsync`, geen
-`Upsert`, geen `Delete` in `CosmosSupportStore`. Een draad is een verslag; "dit hebben jullie mij
-geantwoord" is een vraag die maanden later komt, en een antwoord dat achteraf te wijzigen is maakt van
-dat verslag een bewering zonder bron. Dezelfde regel als bij een gefiatteerde urenregel, waar een
-correctie ertegenover komt in plaats van dat de eerste verdwijnt.
-
-### 46.6 Het rolverschil is een typeverschil, op vier plekken
-
-§3.8 legt één rolverschil vast: *in de operatorrol antwoordt een mens en springt de agent er niet
-tussen.* Dat is hier geen filter en er staat geen `@if` op een rol in de markup — er staat een
-broncodetest op dat `IsInRole`, `AuthorizeView`, `isOperator` en `PortalRoles` in geen van de drie
-weergavecomponenten voorkomen.
-
-1. **De weergavetypen.** `ISupportViews` heeft twee overloads met dezelfde naam en een andere scope;
-   een `CustomerScope` levert `CustomerSupportView`, een `CustomerWriteScope` levert
-   `OperatorSupportView`. `CustomerSupportView` heeft geen escalatieredenen en geen onbruikbare
-   berichten. `OperatorSupportView` heeft géén `SupportFirstLineState`, géén uitweg naar een mens en
-   géén vraagformulier — er is niets te verbergen, want er is niets.
-2. **De code die bestaat.** `SupportDesk` — de enige plek die de eerstelijn aanroept — heeft geen
-   methode die een `CustomerWriteScope` neemt. Een operatorbericht kán de eerstelijn dus niet wakker
-   maken; die aanroep is niet te schrijven. De operator schrijft rechtstreeks met
-   `ISupportStore.PostReplyAsync`.
-3. **De componenten.** `CustomerSupport.razor` en `OperatorSupport.razor` nemen elk precies één
-   parameter, van hun eigen roltype. Er staat een reflectietest op dat het één parameter is —
-   dezelfde controle als bij `MonthlyStatementCard` (§29.9).
-4. **De afzender is nergens een parameter.** `PostQuestionAsync` schrijft altijd
-   `SupportAuthor.Customer`, `PostReplyAsync` altijd `Soratus` met de naam uit de scope, en
-   `RecordFirstLineAsync` is de enige die `FirstLine` kan zetten. Er bestaat dus geen aanroep waarmee
-   een klant een bericht van Soratus in zijn draad zet, geen aanroep waarmee een operator zich als de
-   eerstelijn voordoet, en geen aanroep waarmee de eerstelijn vrije tekst plaatst. Dezelfde vorm als
-   het ontbrekende statusveld op `HourBooking`.
-
-**Wat de twee rollen wél delen is de bubbel, en dat is geen inconsistentie.** Dezelfde afweging als
-bij de runtabel (§14): daar staat één tabel omdat het enige verschil in één tooltip zat. Hier is de
-bubbel voor beide rollen letterlijk hetzelfde — een klant hóórt te zien wat de eerstelijn hem
-antwoordde, en een operator hoort dat óók te zien, anders kan hij niet nakijken wat er namens Soratus
-is gezegd. Dat is de eis dat een mens de eerstelijn kan overnemen.
-
-**En elke "de klant ziet dit niet" heeft een spiegel.** De klantprojectie laat twee soorten berichten
-weg: één met een niet toe te wijzen afzender, en een antwoord van de eerstelijn waarvan de bron niet
-meer te bepalen is. Zonder spiegel zou dat weglaten stil zijn — en een bericht dat verdwijnt zonder
-dat iemand het merkt is erger dan een bericht dat er vreemd uitziet. Ze staan daarom op
-`OperatorSupportView.Unusable`, met de documentsleutel en de reden. **De tékst staat er niet**: de
-reden dat het wordt weggelaten is juist dat we niet weten wie het schreef, en dan hoort het niet met
-onze stem op een scherm te komen. De sleutel is genoeg om het in de opslag te vinden.
-
-### 46.7 De uitweg naar een mens, en de SLA
-
-§3.8 vraagt *"Toch een mens van Soratus spreken"*. Dat is een echte handeling geworden en geen link
-naar een mailadres: een `POST` die een gewoon klantbericht in de draad zet met een vaste tekst. Het
-pad loopt langs `ISupportStore.PostQuestionAsync` en **niet** langs `SupportDesk`, dus er komt per
-definitie geen antwoord van de eerstelijn op — een klant die om een mens vraagt hoort geen agent te
-krijgen die hem uitlegt dat hij een agent is. Er staat een test op dat dit pad geen enkele AI-bubbel
-oplevert, en de tegenhanger ernaast dat een gewone vraag wél aan de eerstelijn wordt voorgelegd.
-
-Een `POST` en geen `GET`, om de reden die §29.9 uitlegt: een `GET` wordt aangeroepen door een
-prefetch, een linkchecker, een spamfilter dat elke URL in een bericht opent en een tabblad dat na een
-herstart zijn adressen opnieuw bezoekt. De enige queryparameter op dit scherm is `?voor=` en die
-kiest een deel van een lijst; er staat een test op dat een `GET` op dit scherm niets schrijft en de
-eerstelijn niet wekt.
-
-**De reactietermijn komt uit het contract en wordt niet omgerekend.** §3.8 zegt "escaleren gebeurt
-naar het team binnen de SLA", en het contract heeft daar één veld voor: `ContractDocument.Sla`, één
-regel tekst (`Reactie 4 werkuren · herstel 1 werkdag`). Die tekst gaat door, via
-`MessageTruncation.Cut` omdat het vrije tekst uit onze eigen administratie is. Is er geen contract of
-geen SLA, dan staat dát er en niet "binnen 24 uur" — punt 15 in woorden: een afspraak die ontbreekt is
-geen afspraak met een standaardwaarde.
-
-De SLA staat **niet** in de tekst van het bericht maar als aparte regel op de weergave. Dat is een
-afweging tegen §29.6, waar de bedragen wél op de bevestiging worden bewaard: een bedrag is een meting
-die verandert, een SLA is een contractterm. Stond hij in elke berichttekst, dan lag er in elk bericht
-een kopie van een contractafspraak en was "welke SLA gold er" op twee plekken te beantwoorden.
-
-### 46.8 Wat er in een bericht kan sluipen dat er niet in hoort — nu in twee richtingen
-
-Punt 13 (`msg`), punt 14 (`errorType`), de omschrijving van een urenregel en §29.4 gaan alle vier over
-tekst die wíj schrijven en die een klant leest. Een supportdraad heeft **beide** richtingen in
-hetzelfde veld, en dat is nieuw.
-
-**Van ons naar de klant.** Hier wordt met opzet *niet* op de eerste regelovergang geknipt.
-`MessageTruncation.Cut` hoort bij een veld dat één zin moet zijn; een antwoord aan een klant is proza
-met alinea's, en die knip zou de tweede alinea van een operator stil weggooien. Er wordt daarom
-`MessageTruncation.Shorten` gebruikt: dezelfde bibliotheek, dezelfde grafeemveilige knip, maar de vorm
-die regelovergangen juist bewaart. De opmerkingen bij die twee functies zeggen met zoveel woorden dat
-ze niet "consistent" gemaakt moeten worden; dit is het geval waarvoor dat geldt.
-
-**Van de klant naar ons.** Twee dingen zijn mechanisch te sluiten en dat gebeurt.
-
-*Onzichtbare breedteloze tekens* (U+200B, U+FEFF). Ze doen in proza niets en ze doen iets in een
-controle: een woordgrens is met een breedteloze ruimte erin te verbergen, en dit portaal heeft
-controles die op woordgrenzen zoeken (`KlantVangnetTests`). Een teken dat niets toevoegt en een
-controle kan omzeilen hoort er niet te staan.
-
-*Tekens die de leesrichting omkeren* (U+061C, U+200E/200F, U+202A–202E, U+2066–2069) — de klasse waar
-"Trojan Source" over gaat, en in een berichtendraad is die concreet. **De omkering loopt door tot het
-einde van het tekstblok.** Een klant die een right-to-left override in zijn bericht zet, beïnvloedt
-dus niet alleen hoe zijn eigen tekst wordt gerenderd maar ook hoe de regels eronder eruitzien — onze
-regels, op ons scherm. En een pad, een bestandsnaam of een adres kan er anders uitzien dan hij is
-(`‮txt.exe` leest als `exe.txt`). Dat is geen vals-positief-risico en geen netheid: het is de enige
-plek in deze map die werkelijk over veiligheid gaat.
-
-ZWJ (U+200D) en ZWNJ (U+200C) staan er **niet** bij, en dat is een keuze: die houden een samengestelde
-emoji één teken, en ze weghalen haalt een gezinsemoji uiteen in drie losse mensen. Ze zijn onzichtbaar
-maar niet misleidend.
-
-Daarbij: `\r\n` en losse `\r` worden `\n`, een tab wordt een spatie (niet weggehaald — dan plakken twee
-woorden aan elkaar), meer dan één lege regel achter elkaar wordt één, en de lengtegrens wordt
-*geweigerd* en niet stil afgekapt. Dat laatste is dezelfde keuze en dezelfde reden als bij
-`HourLimits.ValidateNote`: hier zit een mens aan het toetsenbord, en wat eraf valt kan de vraag zelf
-zijn.
-
-**Het schonen staat op twee plekken**, bij het schrijven en in de projectie naar de bubbel. Punt 13
-zegt dat een knip op twee van de drie plekken geen knip is; de tweede dekt hier wat de eerste niet
-kan — een document dat langs een ander pad in de container terecht is gekomen, en de identiteit van
-het portaal heeft schrijfrecht op de hele container `customers`. Dat de tweede plek werkt is door de
-mutatieronde gevonden en niet aangenomen; zie §46.10.
-
-**Wat er níet gesloten is, en dat is het eerlijkste deel.** Een operator kan een stacktrace, een pad,
-een interne codenaam of de naam van een ándere klant in zijn antwoord typen. Daar is aan deze kant
-niets tegen te doen, en een inhoudsheuristiek ("ziet dit uit als een stacktrace") is in dit project al
-twee keer afgewezen. Wat er in de plaats staat is een ontwerpregel: **niets in dit portaal vult het
-antwoordveld met machinetekst.** Geen knop die een logregel invoegt, geen voorvulling uit een run,
-geen foutmelding die in het formulier belandt. Dat is het verschil met punt 13 en 14, waar de tekst
-dóór een machine was geschreven en geen mens hem had gelezen voordat de klant hem zag. Er staat een
-broncodetest op dat deze map nergens `StackTrace`, `Exception.Message`, `exception.Message`,
-`ex.Message` of `ErrorCode` in een berichttekst zet — met één uitzondering die genoemd staat:
-`SupportDesk` logt de uitzondering van de naad mét stacktrace, en dat hoort, want dat gaat naar de
-operator.
-
-En de derde richting die er niet is: **geen mailpad raakt de draad.** Dat is §29.4 punt 3 in deze map
-— de urenspecificatie staat niet in de mail omdat een mail de enige plek is waar vrije tekst buiten
-het bereik van een operator komt. Een supportbericht is precies zulke tekst. Er staat een
-broncodetest op `Mail/` dat daar niets van de supportkant in voorkomt, zodat wie er ooit een
-mailmelding bij een nieuw bericht wil, hier langskomt en de reden leest.
-
-### 46.9 De afwezige naad is een eigen toestand op het scherm, en geen plaatshouder
-
-`ISupportFirstLine` staat **niet** in `Program.cs`. `SupportDesk` haalt hem met `GetService` op en niet
-met `GetRequiredService`. Dat is het besluit uit §29 letterlijk toegepast: daar is een plaatshouder
-achter de naad afgewezen omdat hij "niets gemeten" antwoordt, en dat niet te onderscheiden is van een
-echte "niets gemeten". Hier zou een plaatshouder altijd escaleren, en dat is niet te onderscheiden van
-een eerstelijn die het niet weet — een storing die zich voordoet als werkende functionaliteit.
-
-De afwezigheid is daarom een **eersteklas toestand**: `SupportFirstLineState`, met `NotConfigured` als
-eerste enumwaarde. Een klant leest dan dat een mens antwoordt, en dat is waar. Zonder eerstelijn komt
-er ook géén escalatiebubbel — een bericht met het merkteken van een agent die niet bestaat zou een
-agent suggereren die er is.
-
-**De volgorde in `SupportDesk.AskAsync` is het ontwerp: eerst de vraag vastleggen, dan de eerstelijn.**
-Dezelfde regel als §29.1 (de claim gaat vóór de mail) en om dezelfde reden — de duurste fout bepaalt de
-ordening. Hier is de duurste fout een vraag die verdwijnt: valt de eerstelijn om, duurt hij te lang of
-gooit hij een uitzondering, dan staat de vraag er nog en ziet een mens hem. De andere volgorde
-verliest bij dezelfde storing de vraag zelf, en dan wacht een klant op een antwoord dat niemand heeft
-gezien.
-
-Alles wordt daar opgevangen (`catch (Exception) when (not OperationCanceledException)`), en dat is hier
-verdedigbaar: achter die naad hangt code die wij niet hebben geschreven, en de vraag staat al in de
-draad. Doorgooien zou een 500 opleveren op een pagina waar de handeling van de klant is geslaagd — dan
-denkt hij dat zijn vraag niet is aangekomen en stuurt hij hem opnieuw. `OperationCanceledException`
-gaat wél door; anders dan bij de mail (§29.3) valt daar niets weg door niets te doen.
-
-**Er staat geen modelnaam in deze map en die hoort er ook niet in te komen**: dat is een
-configuratiewaarde. De marketingsite heeft daar een eigen afspraak over in `handoff/CLAUDE.md` — daar
-staat één model vast en het wisselen ervan vraagt overleg — en die afspraak geldt voor die site en niet
-voor dit portaal. Wat hier vastligt is vormvrij: welk model er ook onder deze naad hangt, hij kan geen
-getal terugsturen. Om dezelfde reden staat er geen modelnaam en geen versie op een bericht; wie welk
-model heeft gedraaid hoort in de logregel, bij de operator.
-
-### 46.10 De mutatieronde: achtentwintig mutaties, waarvan zes bewust stil en twee echte gaten
-
-Per mutatie: productiecode breken, alleen de supporttests draaien, terugzetten, en verifiëren dat de
-terugzetting byte-voor-byte gelijk is aan het origineel. Het script staat in
-`tools/mutatie-support.py`.
-
-| | Mutatie | Rood |
-|---|---|---|
-| M1 | `Accept` neemt elke grondslag aan | 3 |
-| M2 | `Accept` toetst alleen de soort en niet de maand | 2 |
-| M3 | `Accept` vergelijkt op instantie in plaats van op waarde | 1 |
-| M4 | `SupportText.Answer` verzint een zin in plaats van het feit te nemen | 1 |
-| M5 | de vraag wordt pas ná de eerstelijn vastgelegd | 1 |
-| M6 | de uitzondering van de naad wordt niet opgevangen | 1 |
-| M7 | zonder eerstelijn komt er tóch een escalatiebubbel | 2 |
-| M8 | `SupportAuthor.Customer` wordt de standaardwaarde | 1 |
-| M9 | de projectie zet de grondslag vóór de escalatie | 2 |
-| M10 | een antwoord zonder bron valt terug op een escalatiebubbel | 1 |
-| M11 | een bericht met onbekende afzender komt tóch op het klantscherm | 1 |
-| M12 | `Cut` in plaats van `Shorten` | 4 |
-| M13 | de bidi-tekens blijven staan | 1 |
-| M14 | de documentsleutel draagt geen datum meer | 1 |
-| M15 | de constructor van `SupportGround` wordt publiek | 1 |
-| M16 | het klanttype krijgt de escalatieredenen erbij | 1 |
-| M17 | de AI-bubbel verliest zijn bronregel, het merkteken blijft | 1 |
-| M18 | de `PageTitle` staat buiten de rolcontrole | 1 |
-| M19 | de uitweg naar een mens loopt langs de balie | 1 |
-| M20 | de rolvolgorde omgedraaid: de operator krijgt de klantweergave | 5 |
-| M21 | het schonen slaat de projectie over | **0 → 1** |
-| M22 | de draad wordt nieuwste-eerst gelezen (`Reverse` eruit) | **0 → 1** |
-
-**Twee echte gaten, en ze zijn gedicht.**
-
-*M21.* Het schonen staat op twee plekken en de tweede had geen test: elke test zette een bericht neer
-dat al schoon was, dus een mutatie die de projectie oversloeg maakte niets rood. Dat is punt 13 in
-zijn eigen woorden — een knip op twee van de drie plekken is geen knip — en de test die het nu dekt
-zet een bericht met een RTL-override en vier `\r\n` achter elkaar rechtstreeks in de opslag.
-
-*M22.* De gedragstest op de ordening draait op `Vasteportaalopslag`, en die heeft zijn eigen kopie van
-die ordening; `page.Reverse()` uit `CosmosSupportStore` halen maakte niets rood. De echte opslag is
-zonder Cosmos niet te oefenen. Wat er nu staat is een broncodecontrole op de drie helften van die
-ordening (`ORDER BY c.id DESC`, `c.id < @before`, `page.Reverse()`). **Dat is zwakker dan gedrag en het
-staat hier als zodanig:** het dekt de mutatie — iemand die er een weghaalt — en niet een fout die erin
-blijft zitten.
-
-**Zes mutaties die met opzet niets rood maakten.** Ze staan in het script als `S1`–`S6` zodat ze niet
-opnieuw als vondst worden gemeld.
-
-- **S1** — de Nederlandse zin van de escalatie anders formuleren. Copy is geen invariant; wat wél een
-  invariant is, is dat de zin voor alle vier de redenen dezelfde is, en dát wordt gemeten.
-- **S2** — de grens op het aantal aangeboden grondslagen van 60 naar 5. Een afkapping valt de goede
-  kant op: een grondslag die niet is aangeboden kan niet worden gekozen, en dan volgt een escalatie.
-- **S3** — de paginagrootte van 50 naar 7. De bladertest gebruikt de constante symbolisch, met opzet:
-  de waarde is een afstemming en geen invariant.
-- **S4** — de berichtgrens van 4000 naar 400. Zelfde reden, en er staat bij `SupportLimits` expliciet
-  dat dit getal een hygiënegrens is en niet gemeten. Punt 13 heeft definitief gemaakt dat een
-  lengtegrens hier geen verdediging is.
-- **S5** — de klantbubbel van kant wisselen. Opmaak, geen bevoegdheid; er staat geen test op de CSS.
-- **S6** — het `maxlength`-attribuut van het invoerveld halen. De grens ligt aan de schrijfkant en
-  `SupportBody.Validate` weigert het alsnog; het attribuut is een gemak en geen slot.
-
-**En één ding over de mutatieronde zelf, dat een halve ronde van een andere sessie heeft gekost.** M5
-raakt drie plekken in hetzelfde bestand en moet dus in één keer worden toegepast. De eerste opzet deed
-hem in stukken; toen compileerde de tussenstand niet en las de meting als *groen*, want het script
-keek alleen naar `error CS` in de testuitvoer en die kwam er niet uit. Dat is dezelfde klasse fout als
-§36: een groen signaal over de verkeerde verzameling.
-
-Dat het er achtentwintig zijn en niet negenentwintig komt uit diezelfde fout: M5 stond een tijd als
-twee mutaties in de lijst, en twee helften van één wijziging tellen als één mutatie. Het aantal in een
-eerdere versie van dit punt was dus één te hoog.
-
-**Het meetinstrument is naar aanleiding hiervan samengevoegd.** Drie sessies hadden elk hun eigen
-kopie van de meetlaag, en alle drie hadden ze er een andere fout in. Er staat nu één
-`tools/mutatie.py` met de meetlaag en zonder mutatielijst; de lijsten blijven per lane in eigen
-bestanden, want die zijn lane-specifiek en verouderen zodra de code schuift. De drie meetvallen die
-erin zijn gerepareerd staan bovenaan dat bestand: "compileert niet" gelezen als een resultaat terwijl
-een ándere lane de boom had gebroken, "compileert niet" gelezen als groen, en een testnaam die tot de
-eerste witruimte werd gelezen zodat een theorie een lege lijst opleverde. Een mutatie is daar nu
-één ondeelbare wijziging over één of meer plekken, zodat het geval van M5 niet meer uit te drukken is;
-`tools/mutatie-support-m5.py` is daarmee vervallen.
-
-### 46.11 Wat er níet gemeten is
-
-- **`CosmosSupportStore` is niet tegen Cosmos gemeten.** Anders dan bij de urenopslag (§43 en het slot
-  van dit document) is er geen verificatie op `cosmos-soratus-prod` gedaan; de opdracht sloot
-  schrijfacties in Azure uit. Wat daarmee aanname is: dat `ORDER BY c.id DESC` binnen één
-  partitiesleutel inderdaad geen composite index vraagt (de politiek staat op `/*`, dus er is geen
-  reden om iets anders te verwachten), en de RU-kosten van de bladerquery. De eerste echte draad op een
-  klantpartitie is het moment om dat te meten.
-- **Dat de `POST` een `POST` met een antiforgery-token is**, volgt uit de vorm (`FormCard` met een
-  `FormName`, dezelfde vorm als de drie formulieren op het urenscherm) en niet uit een meting. bUnit
-  rendert een `EditForm` als `<form blazor:onsubmit="1">`; dat is de renderer van bUnit en niet die van
-  static SSR. Dezelfde beperking die §29.9 benoemt.
-- **De agentgrondslagen komen in de tests uit `VastePortaalweergaven` en niet uit de echte
-  agentprojectie.** `Vastetelemetriestore.GetAgentsAsync` weigert met een `NotSupportedException` en
-  zegt er zelf bij dat hij alleen het agentdetail bedient; die uitzondering viel in het catch-blok van
-  `SupportDesk` en leverde een escalatie op, dus elke test over een aangenomen antwoord stond rood om
-  een reden die niets met het onderwerp te maken had. Dát de fabriek een klantviewmodel neemt — en dus
-  geen omgevingsdetail kan dragen — staat wel vast, met een reflectietest op de signatuur.
-- **Er is geen enkele echte AI-aanroep gedaan** en er staat geen sleutel in code of configuratie. De
-  naad is geoefend met twee dubbels: één die teruggeeft wat een test opdraagt, en één die een
-  uitzondering gooit met een pad en een HTTP-status erin — juist om te meten dat die tekst nergens in
-  de draad belandt.
-
-### 46.12 Punten van twijfel
-
-1. **`PostQuestionAsync` neemt een `CustomerScope`, en dat is de eerste schrijfactie in dit portaal die
-   op een leesrecht rust.** §2 geeft de klant bij Support wél iets ("bericht sturen: ✓") en het is de
-   enige regel in de rolmatrix waar een klant iets mag veranderen. Waarom een leesrecht genoeg bewijs
-   is: het enige dat die methode kan wegschrijven is een bericht van de klant zelf, in zijn eigen
-   partitie, met de afzender vast. **Wat het openlaat:** een operator krijgt van `ResolveAsync` óók een
-   `CustomerScope` — dat is de rol — dus de aanroep is door een operator te doen, en dan staat er een
-   bericht in de draad met de afzender "klant" en zijn naam eronder. Het scherm doet dat niet (de
-   operatortak heeft geen vraagformulier, en dat is een typeverschil), maar de aanroep is te schrijven.
-   Een eigen scope-type zou een tweede plek zijn waar bepaald wordt wie bij welke klant mag, en dat is
-   de duurdere fout; vandaar deze keuze en deze melding.
-2. **Een klant zonder ingerichte telemetrie-opslag heeft geen supportscherm.** `CustomerScope` bestaat
-   alleen voor een klant met opslag, en dat is precies de klant in onboarding — degene die vragen
-   heeft. Dit is niet nieuw: het urenscherm en het facturatiescherm van de klant hebben dezelfde
-   grens. Het is wél wrijvender bij support dan bij uren, en het hoort in één keer opgelost te worden
-   voor alle drie en niet hier apart.
-3. **`SupportDocumentKeys` staat in `Support/` en hoort bij `PortalDocumentKinds`.** Zelfde
-   werkomstandigheid en zelfde melding als bij `StatementDocumentKeys` in §29: drie sessies in
-   `Data/` is een gegarandeerde botsing. De tussentijd is veilig doordat er een test is die alle
-   `kind`-waarden op dubbelen toetst.
-4. **`SupportGroundKind` heeft geen waarde voor een sprintitem**, terwijl §3.8 open sprintitems als
-   antwoordbron noemt. Die kant wordt door een andere sessie aangelegd en er is vandaag geen weergave
-   om een grondslag uit te bouwen; een enumwaarde die bestaat en nooit wordt gevuld is punt 11. Hij
-   komt erbij als er iets is om hem mee te vullen, en dan hoort er in dezelfde wijziging een fabriek
-   bij te staan.
-5. **De naad krijgt geen gesprek, alleen de ene vraag.** Dat maakt de eerstelijn dommer: hij ziet niet
-   dat de klant hetzelfde drie berichten eerder al vroeg. Bewust zo gelaten — de draad bevat vrije
-   tekst van een operator, en dat is precies de soort tekst waarvan punt 13 en 14 zeggen dat er interne
-   dingen in kunnen staan. Wie de historie erbij wil, moet eerst bedenken wat een oude operatorregel in
-   een prompt doet.
-6. **Een gekaapte of slecht werkende eerstelijn kan de *verkeerde* grondslag kiezen**: op een vraag
-   over juli de bubbel van juni. Dat is een fout die een klant kan zien — de bronregel noemt de maand
-   en verwijst naar het scherm — en dat is het verschil met een verzonnen getal, dat er hetzelfde
-   uitziet als een echt getal. Kleiner, en niet nul.
-7. **De internalsgrens is de vertrouwensgrens.** Een implementatie van `ISupportFirstLine` die in
-   `Soratus.Portal` zelf zou komen, kan wél een grondslag maken en er een verzonnen feit in zetten.
-   Dat is precies de reden dat de naad buiten deze assembly hoort te worden geïmplementeerd, en het
-   hoort in de wijziging te staan die hem toevoegt.
-8. **Twee escapefouten in mijn eigen testbestanden hebben een build tweemaal rood gezet en een
-   mutatieronde van een andere sessie gekost.** De oorzaak is het waard om op te schrijven: de tekens
-   die deze tests toetsen zijn juist tekens die je in een editor niet ziet, en een script dat ze
-   verwerkt kan een escape-reeks in een lítteraal teken veranderen zonder dat het opvalt. Ze staan nu
-   overal als `\uXXXX`, met die reden erbij in `SupportBody` en in de tests. Een bron waarin het
-   verschil tussen "het teken" en "de escape" onzichtbaar is, is niet te reviewen.
-
-### 46.13 Wat er in `Program.cs` bij moet
-
-Twee regels, en de eerstelijn staat er met opzet niet bij.
-
-```csharp
-// ── Support (§3.8) ────────────────────────────────────────────────────────────────────────────
-// De draad staat in de container customers, naast klant, contract, urenregels en de
-// verzendbevestigingen. Scoped, net als IPortalHoursStore en IStatementStore en om dezelfde reden:
-// geen hosted service heeft hem nodig, en dan is scoped de standaard.
-builder.Services.AddScoped<ISupportStore, CosmosSupportStore>();
-builder.Services.AddScoped<ISupportViews, SupportProjection>();
-
-// Het schrijfpad van de klantkant. Concrete klasse en geen interface: er is één schrijfpad en het
-// heeft geen tweede implementatie, en een interface met één implementatie die nergens wordt
-// vervangen is een laag zonder werk.
-builder.Services.AddScoped<SupportDesk>();
-
-// En hier staat met opzet GEEN registratie van ISupportFirstLine.
-//
-// Dat is §29 van de fase-0-afwijkingen toegepast: daar is een plaatshouder achter een naad afgewezen
-// omdat hij "niets gemeten" antwoordt en dat niet te onderscheiden is van een echte "niets gemeten".
-// Hier zou een plaatshouder altijd escaleren, en dat is niet te onderscheiden van een eerstelijn die
-// het niet weet — een storing die zich voordoet als werkende functionaliteit.
-//
-// SupportDesk haalt de naad daarom met GetService op en niet met GetRequiredService, en de
-// afwezigheid is een eigen toestand met een eigen tekst op het scherm (SupportFirstLineState). Een
-// klant leest dan dat een mens antwoordt, en dat is waar. Wie hier een implementatie neerzet, hoort
-// die buiten Soratus.Portal te laten leven: binnen deze assembly is een SupportGround te construeren
-// en dan is het slot op een verzonnen bron weg. Zie punt 46.
-```
+| `NextRunAt` wordt niet gepubliceerd | 2 |
+| **`NextRunAt` weer uit de cron gerekend vanaf nu** — de fout die vandaag in het pad met één agent staat | **3** |
+| `Schedule` wordt niet gepubliceerd | 2 |
+| de controle "geen plan, dus geen volgende run" valt weg | 1 |
+| timer zonder plan mag | 1 |
+| plangelijkheid op referentie in plaats van op waarde | 1 |
+| geen `ToUniversalTime` op het volgende moment | 1 |
+| het volgende moment vervalt op het pad met één agent | 1 |
+| de cron wordt niet meer gepubliceerd op dat pad | 1 |
+| een onleesbare cron wordt stil genegeerd op dat pad | 1 |
+
+Op het portaal (van de tests in `Soratus.Portal.Tests`): de collector meldt zich nooit aan (3 rood), de
+volgende run wordt niet gemeld (2), het gemelde moment is niet het gewachte moment (2), het plan wordt
+niet uit één bron gehaald (compileerfout, dus gemeten met een afwijkend draaiuur: 2), de aankondigingen
+verdwijnen uit de container (4), de vlag `Enabled` wordt genegeerd (1), de terugval van de interne klant
+valt weg (2), `IsConfigured` wordt genegeerd (1), het plan geldt voor élke klant (2).
+
+**De mutatie die niets rood maakte**, en die hier hoort te staan: de tekst van de opstartregels van de
+collector en de melder. Er staat geen test op logteksten. Dat is dezelfde bewuste afweging als bij punt
+41 en 43.10 — de regel leeft in het gedrag en niet in een logregel — maar met een scherpe kant die de
+andere gevallen niet hadden: de melding "hij publiceert zich wel/niet als agent" is voor een operator de
+enige plek waar staat óf de zichtbaarheid aan is. Dat de *uitkomst* wordt gemeten en de *tekst* niet, is
+hier dus krapper dan elders. Genoteerd, niet gerepareerd.
+
+### 44.11 Twee metingen die logen, en de tweede was van mij
+
+**De eerste is de bekende vorm, voor de vierde keer.** Direct na `StartAsync` van een
+`BackgroundService` geteld hoeveel agents er waren aangekondigd: **nul**. Een fractie later: één. Het
+lijf van `ExecuteAsync` is dus niet gelopen als `StartAsync` terugkomt, ook niet op .NET 10 en ook niet
+als er vóór de eerste `await` code staat. Mijn eerste testversie leunde daarop en was daarmee een test
+die van de planner afhing. Wat er nu op `StartAsync` mag rusten, rust dat ook — de *registratie* van
+beide agents komt van de aankondigingsbron en niet van de lus — en wat er op zich laat wachten is alleen
+het moment van de volgende run. De test wacht daarop met een `TaskCompletionSource` in plaats van te
+pollen.
+
+**De tweede heeft mij anderhalf uur gekost en het is mijn eigen fout.** Mijn eerste versie van de
+opstarttest maakte per test een portaal aan met `WebApplicationFactory<Program>`, deed er een verzoek
+door de aanmeldketen op, en ruimde het weer op. Gemeten over zes volle runs van `Soratus.Portal.Tests`:
+**drie keer rood met vijftien tot eenentwintig gevallen tests op `/api/uren`** — allemaal een `401` waar
+een `400` of een `422` hoorde te staan. Dezelfde zes runs op de onveranderde boom: **zes keer groen**.
+Het was dus van mij, en het stond al opgeschreven: `Urenapihost` documenteert dat een
+`SymmetricSecurityKey` zijn eigen `CryptoProviderFactory` met een cache draagt en dat validaties van een
+tweede host stukgaan "zodra de eerste host was opgeruimd".
+
+Wat het **niet** was, gemeten: twee tests die na twee seconden omvielen zonder een portaal aan te maken
+deden niets, en twee tests die een portaal aanmaakten en netjes opruimden zonder erdoorheen te verzoeken
+deden ook niets. Het was de combinatie. Er is nu één portaal per testproces dat nooit wordt opgeruimd —
+hetzelfde wat `Urenapicollectie` met een collectiefixture doet, en om dezelfde reden. Zes runs daarna:
+zes keer groen.
+
+**En de les die breder is dan deze test.** De eerste keer dat dit langskwam, stond het in een
+mutatiemeting: één mutatie leverde "22 rood" op en de volgende "2 rood", met exact dezelfde code. Wie de
+eerste uitslag had opgeschreven, had een mutatie gerapporteerd die vier keer zoveel dekking leek te
+hebben dan hij had. **Een mutatiemeting die meer rood oplevert dan de mutatie kan verklaren, is een
+meting om te herhalen en niet om op te schrijven** — en de vorm die het verraadt is dat de extra rode
+tests niets met de gemuteerde regel te maken hebben.
+
+### 44.12 Wat er níet is gemeten, en dat hoort erbij
+
+**Er is niets naar Cosmos geschreven en er is niets in Azure gewijzigd.** De nieuwe database bestaat niet;
+de Bicep-wijziging staat in `infra/portal/portal-rg.bicep` met een `what-if` ernaast en wacht op een
+besluit. Dat betekent dat het volgende **niet** is gemeten en alleen is beredeneerd:
+
+- dat de dataplane-verlening op `/dbs/platform-telemetry` werkelijk schrijfrecht geeft op die database en
+  niet op `telemetry`. De vorm is dezelfde als die van de bestaande verlening op `platform`, die wél is
+  uitgerold en werkt, dus de vorm is niet nieuw — de scope is dat wel;
+- dat de telemetriebibliotheek naar een database schrijft die met deze Bicep is aangemaakt. Dat de
+  containernamen kloppen is uit de code afgeleid (`CosmosContainerNames`) en niet gezien;
+- de RU-kosten van twee agents die elke dertig seconden een registratie upserten. Dat is per dag
+  ongeveer 5 800 upserts van een klein document, en dat is niet gemeten maar geschat.
+
+**En de leeskant is niet end-to-end gezien.** Dat `/klant/soratus/agents` de twee agents toont, volgt uit
+de bestaande leescode die zeven klanten al zo toont; wat er nieuw aan is, is uitsluitend de locatie. Er is
+geen scherm bekeken met echte documenten erin, want die documenten bestaan niet.
 
 ---
+
+### 44.13 De vierde manier waarop een meting kan liegen: "groen als hij alleen staat"
+
+De drie eerdere vormen in dit document gaan over een test die **groen blijft mét de fout**. Deze is de
+spiegel: een test die **rood gaat zónder fout**, en alleen onder belasting. Twee gevallen, en ze zijn
+allebei van mij.
+
+**Geval 1 — een assertie op een volgorde die het ontwerp niet belooft.**
+`GeherbergdeAgentsTests` eiste dat het láátste registratiedocument van een agent `StoppedCleanly` zegt.
+Dat viel om in een volledige run vanuit de wortel en was los groen. De oorzaak is niet dat de leegloop
+nog niet klaar was — die is dat wél, `TelemetryWriter.StopAsync` wacht de pompen af — maar dat de
+afsluitregistratie **buiten de buffer om** wordt geschreven (`WriteRegistrationDirectAsync`) terwijl er
+nog hartslagen in het kanaal kunnen staan. De registratiedienst stopt vóór de schrijver, dus die directe
+schrijfactie kan vóór een eerder ingelegde hartslag landen. Onder belasting loopt de pomp achter en
+gebeurt dat vaker.
+
+Let op de richting van het bewijs, want die maakt de diagnose hard: *als* de leegloop onvolledig was,
+zou deze test juist **groen** zijn — dan ontbreken de hartslagen en is `StoppedCleanly` wél de laatste.
+Rood betekent dus dat er ná de directe schrijfactie nog iets is bijgekomen, en dat is volgorde en geen
+onvolledigheid.
+
+De reparatie is de invariant in plaats van het gevolg: er is **precies één** document met
+`StoppedCleanly` per agent, want `WriteFinalAsync` staat achter een `Interlocked.Exchange`. Dat is
+volgorde-onafhankelijk en niet van een klok afhankelijk. Dezelfde reparatie is toegepast op drie tests
+van dit punt zelf, die met `Last(…)` het afsluitdocument zochten en dus dezelfde wankelheid hadden —
+gevonden bij het opruimen en niet door een falen.
+
+**Geval 2 — een tijdslimiet als correctheidsgrens.** `BeheeragentsTests` startte de achtergronddienst en
+wachtte met een grens van twee seconden tot de lus zich meldde. Dat hield het niet toen er een
+mutatieronde van een andere sessie naast liep: één van de twee tests viel om in één van de vier volledige
+runs. Twee seconden is honderden malen het echte pad, en dat is precies het misleidende ervan.
+
+**Waarom een ruimere wachttijd geen reparatie is**, en dit is de kern van deze paragraaf: een grens die
+groot genoeg is voor déze machine onder déze belasting is een gok over elke andere machine en elke andere
+belasting. Hij faalt bovendien in de verkeerde richting — hij maakt de test *langzamer* in het geval dat
+hij zou moeten falen (een weggehaalde aanroep hangt dan tot de grens), dus de prijs van veiligheid is
+precies de traagheid die de volgende sessie weer omlaag brengt. Een wachttijd verplaatst het probleem
+naar de tragere machine en verandert de aard ervan niet.
+
+Wat er in de plaats is gekomen: de twee stappen die iets betekenen — aanmelden en de volgende run melden
+— zijn `internal` en worden rechtstreeks aangeroepen. Geen thread, geen klok, geen grens. Dat is dezelfde
+vorm die dit project al voor `RunAsync` gebruikt ("internal en met een uitkomst, zodat een test één run
+kan doen zonder tot 04:00 te wachten"), en de testdubbels zijn van hun `TaskCompletionSource`-vlaggen
+ontdaan zodat niemand de oude vorm terugzet.
+
+**Wat dat kost, eerlijk:** er is geen test meer die meet dát `ExecuteAsync` deze twee stappen aanroept.
+Dat is een bewuste ruil — de vorige poging om dat te meten was juist de wankele — en het gat is twee
+regels in dezelfde klasse. Gemeld en niet gedicht.
+
+**En de regel die eruit volgt:** een test die op de lus van een `BackgroundService` wacht, meet de
+planner mee. Wie zo'n test schrijft, heeft twee eerlijke opties: de stap onder de lus rechtstreeks
+aanroepen, of de dienst starten en **stoppen** en dán meten — `StopAsync` wacht de `ExecuteTask` af en is
+daarmee een echte samenkomst zonder klok. Een tijdslimiet is de derde optie en die is er geen.
 
 ## 45. De sprint komt uit de datums van een iteratie, en het veld dat je daarvoor zou willen gebruiken bestaat en liegt
 
@@ -4373,454 +4317,510 @@ wat het DevOps-token van die ontwikkelaar mocht ophalen.
 
 ---
 
-## 44. Het platform meldt zichzelf: een geherbergde agent mag een klok hebben, en zijn volgende run is een mededeling en geen herberekening
+## 46. De supportdraad staat bij de klant, en het antwoord van de eerstelijn is een verwijzing en geen tekst
 
-**Spec:** §4 (de beheeragents van Soratus als interne klant) en §7 fase 6, "het platform meldt zichzelf".
-Punt 38 bouwde de kostencollector in het portaal, punt 43 de storingsmelder, en 43.13 meldde wat er
-toen niet gebeurde: *"De storingsmelder publiceert zelf geen telemetrie … het gevolg vandaag: de melder
-staat niet in het portaal, dus dat hij stil is gevallen is alleen in het log te zien."* Dit punt sluit
-dat gat voor beide.
+**Spec:** §3.8 en de acceptatie-eis van fase 5 — *de agent beantwoordt statusvragen, urenvragen en
+factuurvragen zonder te verzinnen, en escaleert als hij het niet zeker weet.*
 
-Gemeten vóór dit werk: `Soratus.Portal` verwees alleen naar `Soratus.Agents.Contracts`. Het portaal
-*las* documentvormen en schreef ze niet. Het gevolg is scherper dan het klinkt: **de storingsmelder kon
-niet melden dat de storingsmelder stuk was**, en dat de collector vannacht niet had gedraaid stond
-alleen in een logregel.
+De code staat in `Soratus.Portal/Support/`, met vier razorbestanden onder
+`Components/Pages/Klant/` (`Support.razor`, `CustomerSupport.razor`, `OperatorSupport.razor`,
+`SupportThread.razor` + `.razor.css`) en de tests in `Soratus.Portal.Tests/Support/`. De
+berichtendraad is gebouwd; de AI-eerstelijnsagent is **een naad zonder implementatie**, en dat is de
+kern van dit punt.
 
-### 44.1 De ontwerpvraag, en waarom geen van de twee bestaande vormen paste
+### 46.1 Waarom de naad leeg blijft, en wat er dan wél is opgeleverd
 
-De integratie van punt 42 is gebouwd voor agents die draaien **wanneer ze worden aangeroepen**: een run
-begint bij een inkomend verzoek. De collector en de melder draaien op een **klok**, en dan is de grens
-van een run een tik van die timer. Drie vormen waren kandidaat.
+De moeilijke eis van fase 5 is niet "laat een model antwoorden" maar "laat het niets verzinnen". Dat
+is geen implementatievraag maar een ontwerpvraag, en hij is niet op te lossen met een betere
+instructie aan een model: een agent die vrij over de gegevens mag praten, kan een getal noemen dat
+hij niet heeft gekregen. Een verzonnen factuurbedrag is erger dan geen antwoord, want het klinkt
+hetzelfde als een echt antwoord en de klant kan het verschil niet zien.
 
-**`AddSoratusAgent<TAgent>` — één agent per proces met een cron. Valt af, en dat is te meten en niet te
-beredeneren.** Die vorm zet één `AgentIdentity`, één `AgentSchedule` en één `AgentLifecycleState` als
-singleton neer en leest één `SORATUS_AGENT__SCHEDULE`; een tweede aanroep komt langs
-`if (services.Any(d => d.ServiceType == typeof(AgentIdentity))) return builder;` en doet dus **niets**.
-Het portaal is één proces met twee agents en straks meer (§4 noemt er vijf), dus de tweede zou stil
-verdwijnen — en twee verschillende schema's zijn in één configuratiesleutel niet uit te drukken.
-Daarnaast verschuift de betekenis: dan is het *portaal* de agent, terwijl het de host is waarin agents
-wonen. Er is bovendien een harde blokkade: `AddSoratusAgent` en `AddSoratusHostedAgents` werpen op
-elkaar, met opzet (punt 42).
+Wat er daarom is opgeleverd is de **vorm waarin een antwoord moet passen**. Dezelfde zet als bij
+`IMonthlyStatementFigures` in §29, met één verschil: daar was de naad een bedragenbron en zat de
+grens in het retourtype; hier zit de grens aan beide kanten.
 
-**`AddSoratusHostedAgents` — meerdere agents in één host. Past op alles behalve het plan.** Het
-*runbegrip* past wél: `ISoratusHostedAgent.RunAsync(trigger, body, ct)` neemt elk lijf aan, niet alleen
-een verzoek. Dat de aanroepkant van punt 42 in `Soratus.Agents.AspNetCore` staat is een *bron* van
-agents en geen eigenschap van de laag — de documentatie van `IHostedAgentSource` zegt het zelf: een
-wachtrijhost heeft exact dezelfde vorm. Een tik van een timer is gewoon een derde soort aanroeper.
+### 46.2 De vorm: `SupportAnswer` heeft geen tekstveld
 
-Wat die vorm **niet** kon uitdrukken is het plan. `HostedAgentDeclaration.Validate()` weigerde
-`TriggerKind.Timer` categorisch, en `HostedAgentsRegistrationService.BuildRegistration` zette
-`Schedule = null` en `NextRunAt = null` met de reden erbij: bij een dienst op aanvraag is er geen
-volgende run om te voorspellen.
+`ISupportFirstLine.AnswerAsync(SupportEnquiry) → Task<SupportAnswer?>`. Twee typen, en beide zijn zo
+smal gemaakt dat de fout niet uit te drukken is.
 
-**En een plan is hier geen versiering.** Dat is het hele punt van deze opdracht. Zonder gepubliceerd
-plan is "laatste run 26 uur geleden" niet te beoordelen: er staat nergens hoe vaak deze agent hoort te
-draaien. Het plan is de maat waaraan stilte wordt afgelezen. De derde weg — de agents met een oneerlijke
-trigger aankondigen (`manual` betekent "alleen met de hand gestart") of met `timer` zonder cron — valt
-af om de reden die punt 42 al opschreef: dan staat er in het portaal een agent op schema zonder schema,
-en het scherm rendert dat als `op trigger · timer` met een lege volgende run. Een tegenspraak die de
-lezer moet oplossen in plaats van de bouwer.
+**De ingang.** `SupportEnquiry` draagt precies twee dingen: de vraag van de klant, en `Grounds` — de
+verzameling grondslagen waarop een antwoord mag rusten. Er staat géén klantslug op, geen scope, geen
+verbinding met de opslag, geen contract, geen adres. De eerstelijn krijgt dus geen sleutel waarmee
+hij iets kán opvragen; hij krijgt de gegevens die hij mag gebruiken en verder niets.
 
-**Besluit: de aankondiging van een geherbergde agent mag een plan dragen, en `TriggerKind.Timer` is
-toegestaan precies dan.** Beide kanten werpen: een timer zonder plan én een plan zonder timer. Dat
-tweede is de spiegel die er eerst niet was — een plan bij een dienst die op een aanroep draait levert
-een "volgende run" op waar niets gebeurt.
+**De uitgang.** `SupportAnswer` is factory-only — geen constructor, geen publieke setter, twee
+fabrieksmethoden — dezelfde constructie als `HoursQuery` (§3.6) en om dezelfde reden: zo bestaat de
+toestand "geen van beide gevuld" niet.
 
-### 44.2 `Soratus.Agents.Contracts` is niet aangeraakt, en dat is een bevinding en geen voorzorg
-
-**Er is geen contractwijziging nodig geweest.** `AgentRegistration.Schedule`, `AgentRegistration.NextRunAt`
-en `TriggerKind.Timer` bestonden al en betekenen al precies dit; wat ontbrak zat in de *bibliotheek*, in
-de vorm van een weigering die voor de ene soort geherbergde agent juist was en voor de andere niet. Er is
-geen veld bijgekomen, geen enumwaarde, en de contractversie blijft 1 — een document van deze twee agents
-is voor het portaal niet te onderscheiden van dat van een klantagent met een schema, en dat is precies de
-bedoeling: ze staan in hetzelfde overzicht met dezelfde statusregel.
-
-**De twee gaten die punt 42 meldde, zijn hier niet nodig, en dat is het aardige van dit geval.** Gat 1
-was "er is geen verwachting van aanroep": bij een agent op aanvraag valt stilte niet te beoordelen. Bij
-een klok-agent *is* die verwachting er — dat is de cron — dus wat daar een contractuitbreiding zou
-vragen, is hier een bestaand veld. Gat 2 (`RunResult` mist "de aanroeper haakte af") gaat over een
-gebruiker die zijn tabblad sluit en bestaat bij een timer niet.
-
-### 44.3 De correctie op punt 42 die het meten opleverde: `nextRunAt` was géén detector van een gemiste run
-
-Punt 42 schreef: *"bij een agent met een schema zegt hij dat wél, want daar is een gemiste run zichtbaar
-doordat `nextRunAt` in het verleden ligt."* **Dat is onwaar zoals het gebouwd was**, en het is het soort
-bewering dat redelijk klinkt en niet is nagerekend.
-
-`AgentRegistrationService.BuildRegistration` zet `NextRunAt = schedule.GetNextOccurrence(DateTimeOffset.UtcNow)`
-— bij *elke* hartslag opnieuw uitgerekend vanaf **nu**. Die waarde ligt dus per constructie in de
-toekomst. Een planlus die is doodgevallen terwijl het proces vrolijk doorklopt, levert daarmee een
-`nextRunAt` op die er volstrekt gezond uitziet. De enige manier waarop dat veld in het verleden komt te
-liggen, is als de hártslag ook stopt — en dan is `Degraded` het signaal en niet de volgende run.
-
-Daarom is de volgende run bij een geherbergde klok-agent **een mededeling van de host**:
-`ISoratusHostedAgent.ReportNextRun(moment)`. De lus meldt het moment waarop hij wérkelijk wacht, vlak
-voordat hij gaat wachten. Schuift dat moment niet meer op terwijl de hartslag doorloopt, dan staat er in
-het portaal een volgende run in het verleden — en dat is het enige spoor dat een stilgevallen klok-agent
-in een levend proces achterlaat.
-
-Dat de bibliotheek dat *niet zelf uitrekent* is dus geen luiheid maar de hele eigenschap. Er staat een
-test op die de invariant vastpint en niet zijn gevolg: hij meldt een moment uit **2020** en eist dat het
-document dat toont. Met de mutatie die het veld weer uit de cron berekent — de fout die vandaag in het
-pad met één agent staat — vallen 3 van de 103 tests om, waaronder die ene.
-
-Bij een agent zonder plan wordt een gemeld moment **niet** gepubliceerd. Anders staat er een `nextRunAt`
-naast een `triggerKind` die zegt dat deze dienst op een aanroep draait, en dat is dezelfde tegenspraak
-die `Validate()` weigert, nu via een omweg.
-
-### 44.4 De klok blijft van de host, en dat is de belangrijkste keuze van dit punt
-
-De bibliotheek *kan* de klok overnemen — dat doet ze bij `IScheduledAgent`. Hier niet, en de reden is de
-afhankelijkheidsrichting: dan zou de kostencollector niet meer meten zodra de telemetrie niet is
-ingericht. Telemetrie mag het werk nooit omleggen, en **werk dat zonder telemetrie helemaal niet meer
-gebeurt is de scherpste vorm daarvan**. Een cron met een typefout zou dan de storingsmelder uitzetten.
-
-De collector en de melder houden dus hun eigen `BackgroundService` en hun eigen lus; wat de bibliotheek
-erbij doet is de run vastleggen en het plan publiceren. `ISoratusHostedAgents` is een **optionele**
-afhankelijkheid (een constructorparameter met standaardwaarde `null`): staat hij niet in de container,
-dan meet de collector precies hetzelfde en legt hij niets vast. Er staat een test op dat beide diensten
-uit de container van het échte portaal te bouwen zijn terwijl die dienst er niet in staat — want zou
-`ActivatorUtilities` daar de standaardwaarde níet voor gebruiken, dan start het portaal in productie
-niet.
-
-**Wat dat kost, en hoe dat is opgelost.** Als de host plant en de bibliotheek publiceert, kan de
-gepubliceerde cron uit de pas gaan lopen met de lus — precies wat `AgentRegistration.Schedule` verbiedt
-("de expressie waarmee daadwerkelijk wordt gepland, niet een losse beschrijving"). De reparatie zit in
-het **type**: `HostedAgentDeclaration.Schedule` is geen `string` maar een `SoratusSchedule`, en de lus
-wacht op precies het object dat hij aankondigt. Eén expressie, één evaluatie, geen tweede berekening om
-uit de pas te lopen. Vandaar dat `SoratusSchedule` publiek is; het parseren en uitrekenen van een cron
-staat nu op één plek, en `AgentSchedule` (het pad met één agent) is er een aanroeper van geworden in
-plaats van een tweede implementatie.
-
-### 44.5 Waar de telemetrie van het platform heen gaat: een eigen database, en dat is een veiligheidsgrens
-
-De interne beheerklant `soratus` heeft geen eigen telemetrie-endpoint en wees naar het standaardaccount
-`cosmos-soratus-prod`, database `telemetry`. **Daar mag het portaal met opzet niet schrijven**
-(`infra/portal/portal-rg.bicep`: een Cosmos Data Reader accountbreed, en schrijfrecht alléén op
-`platform`). Die grens is niet weggenomen en mocht niet worden weggenomen: het portaal is het ding waar
-klanten op inloggen, en een gecompromitteerd portaal dat in de telemetriedatabase kan schrijven kan
-telemetrie **verzinnen** — een agent die "alles in orde" meldt terwijl hij stilstaat. Dat is een ergere
-eigenschap dan de blindheid die dit punt komt wegnemen.
-
-**Cosmos-dataplane-rollen zijn per account, database of container te scopen en nooit per partitie.** De
-gereserveerde partitie `$portal` — waar de dagclaim van punt 38 en de markeringen van punt 43.5 in staan
-— is dus geen rechtengrens. Vandaar: een **eigen database** `platform-telemetry` op hetzelfde account,
-met de drie containers uit het contract (`agents` zonder verval, `runs` 400 dagen, `logs` 30 dagen — in
-Bicep letterlijk dezelfde `containers`-variabele als `telemetry`, want het is hetzelfde contract), en
-één dataplane-verlening van Data Contributor met `scope: '${cosmos.id}/dbs/platform-telemetry'`. Na die
-verlening kan het portaal overal lezen en op precies twee databases schrijven: `platform` en
-`platform-telemetry`. Zelfde argument als waarom de urenregels in `customers` bleven en waarom de
-MBV-telemetrie een eigen account kreeg: de grens ligt waar de rol hem kan leggen.
-
-**Er is een tweede, gemeten reden die het besluit alleen al zou dragen.** In `telemetry` staat onder
-klant `soratus` geseede demodata mét een agent `storingsmelder` en een agent `kosten-collector`
-(`tools/seed/telemetry.json`). Het registratiedocument heeft `agentName` als id **en** als
-partitiesleutel. Het portaal zou die twee documenten dus hebben overschreven: het echte werk en de demo
-zouden hetzelfde document zijn.
-
-**Eén sectie voedt beide kanten, en dat is geen ordelijkheid.** `PlatformTelemetry` zegt waar het
-portaal zijn eigen agents heen schrijft (via de sleutels die `Soratus.Agents.Telemetry` zélf leest) en
-waar de interne beheerklant ze vandaan leest (`CustomerDirectory`). Waren dat twee configuraties, dan
-bestaat de toestand "het portaal publiceert netjes in de ene database en het scherm kijkt in de andere",
-en die levert **geen fout op maar een leeg overzicht** — de klasse storing die zich voordoet als
-werkende functionaliteit.
-
-**En er is geen tussenstand.** De terugval van de interne klant hangt aan `IsConfigured` en niet aan
-`IsInternal` alleen: zolang `PlatformTelemetry__AccountEndpoint` niet is gezet, blijft die klant naar
-`telemetry` kijken. Die app-setting komt uit dezelfde uitrol die de database aanmaakt, dus de code kan
-vóór de infrastructuur worden uitgerold zonder dat de interne klant naar een database wijst die nog niet
-bestaat. Een uitdrukkelijke waarde op het klantdocument wint nog steeds — dat is de plek waar straks een
-eigen account komt te staan, en een configuratiesectie hoort niet stil te overrulen wat iemand heeft
-vastgelegd.
-
-**Wat het kost, en het is zichtbaar:** wat er vandaag in `telemetry` onder `soratus` staat verdwijnt van
-`/klant/soratus/agents`. Voor de vijf geseede beheeragents is dat de bedoeling. Voor de échte registratie
-van `heartbeat-demo` is het een gemis: die agent hoort in de nieuwe database thuis — hij is van ons en
-niet van een klant — en dat is één regel in zijn eigen configuratie (`SORATUS_TELEMETRY__DATABASE`).
-Gemeld en niet gedaan: dat is een andere lane.
-
-### 44.6 Hoe telemetrie het portaal niet kan omleggen, ook niet bij het opstarten
-
-Dit is waar de val zat. De bibliotheek belooft dat telemetrie een agent nooit omlegt, en dat klopt voor
-het *schrijven*: `TelemetryWriter` schrijft met een niet-blokkerende `TryWrite` in een begrensd kanaal en
-`WithRetryAsync` vangt élke uitzondering af — er komt niets uit die pompen. Maar bij het **opstarten**
-geldt die belofte niet: `AddSoratusHostedAgents` **werpt** bij een ontbrekende endpoint, een verkeerde
-URL of een gezette `SORATUS_AGENT__SCHEDULE`. Voor een agent is dat het juiste gedrag — daar is de
-telemetrie de hele opdracht en een agent die niets meldt bestaat niet. Hier is het andersom, en een
-uitzondering in de opstartcode is de hardste manier om `/` te raken: dan start de app niet, geeft
-`/healthz` geen 200, en rolt de pijplijn terug om iets dat het portaal had kunnen overleven.
-
-`PlatformAgents.AddSoratusPlatformAgents` werpt daarom niet, voor geen enkele configuratie. Wat er
-gebeurt is een uitkomst met een niveau en een reden, die ná `Build()` als één regel wordt gelogd —
-`app.Logger` bestaat op het moment van aansluiten nog niet. Dat het een uitkomst is en geen stilte is het
-punt: een leeg beheeroverzicht is anders niet van een kapotte inrichting te onderscheiden.
-
-**Dat een mislukte aansluiting geen halve registratie achterlaat, is gemeten en geen aanname over
-andermans code.** `AddSoratusHostedAgents` doet al zijn controles — de twee contractasserties, de
-schemasleutel, de identiteit en de opties — vóór de eerste `AddSingleton`. Er staat een test op die de
-container voor en na telt bij een mislukte aansluiting; de halve toestand is wat een `try` om een reeks
-registraties gevaarlijk zou maken.
-
-En de lus zelf: `Announce` staat buiten de `try` van `ExecuteAsync`, dus een uitzondering daaruit zou de
-host meenemen. Hij vangt daarom af en levert `null`, waarna de dienst onverstoord doorwerkt zonder
-zichtbaarheid. Om dezelfde reden **klemt** `PlatformAgentPlans` zijn invoer in plaats van te valideren:
-op `PortalCosts` en `PortalAlerts` staan `Range`-annotaties zónder `ValidateOnStart`, dus de eerste keer
-dat zo'n annotatie wordt gelezen is binnen een achtergronddienst — en dat is exact de fout die het
-portaal op 21 augustus heeft platgelegd. Er staat een test op dat `-1`, `0`, `99` en `int.MaxValue` alle
-vier een geldig plan opleveren.
-
-**`GetOrAdd` en niet `Find`, en dat is de derde plek waar de startvolgorde bijt.** `Find` zou afhangen
-van de vraag of de registratiedienst zijn eerste ronde al heeft gedraaid. `GetOrAdd` maakt de agent aan
-als hij er nog niet is en levert dezelfde als de aankondigingsbron dezelfde waarden heeft — vandaar dat
-`SoratusSchedule` waardegelijkheid heeft en niet die van een referentie. Zonder die gelijkheid leest de
-registry twee keer dezelfde aankondiging als een *conflict* en waarschuwt hij over een verschil dat er
-niet is.
-
-**En de registratie hangt niet aan de lus.** Beide agents staan ook als `IHostedAgentSource` in de
-container, dus `HostedAgentsRegistrationService` publiceert ze in zijn eigen `StartAsync` — vóór de
-eerste tik en onafhankelijk van de planlus. Een net uitgerold portaal toont dus meteen twee agents, met
-een lege volgende run tot de lus die een fractie later meldt.
-
-### 44.7 Wat er zichtbaar wordt, en wat een operator eruit mag concluderen
-
-Op `/klant/soratus/agents` staan `kosten-collector` (type Cost Management, plan `0 4 * * *`) en
-`storingsmelder` (type Monitoring, plan `* * * * *`) — de namen en typen van §4, en dezelfde als in de
-seed. Per agent: een registratie met een hartslag van het portaalproces, een plan, een volgende run, en
-**één run per tik van de klok**. Het aantal verwerkte items is voor de collector het aantal vastgelegde
-maanden en voor de melder het aantal verstuurde meldingen; een ronde zonder storingen is dus een run met
-nul items en resultaat `ok`, en dat is de juiste uitkomst — er was werk (kijken) en er was niets te
-melden.
-
-**Bijkomend, en het is meer dan het lijkt:** een gewone `ILogger`-aanroep binnen een lopende run belandt
-automatisch op naam van de juiste agent, met de runId erbij. Alle `warn`- en `error`-regels die punt 38
-en punt 43 in de hostlog zetten — `api.retry`, een onleesbaar antwoord, een onbruikbare ontvanger, een
-ronde die omvalt — staan daarmee op het logtabblad van de agent in het portaal. Dat was de plek waar ze
-hoorden en niet konden komen.
-
-**Wat een run mislukt maakt.** Alleen een uitzondering die uit de ronde ontsnapt; dan doet de bibliotheek
-de rest en staat de agent op `Failed`. Een `429` is géén mislukte run (punt 38, regel 1 — anders zou de
-collector permanent amber staan) en een klant zonder scope ook niet. Een onleesbaar antwoord is dat
-evenmin: dat is één maand van één klant, en één slechte maand hoort de hele collector niet rood te
-maken. Het staat als `error` op het logtabblad.
-
-**Wat een operator uit een grijze `Idle`-stip op deze twee mag concluderen** — en dit is dezelfde
-beperking als in punt 42, met één verschil:
-
-- het portaalproces leeft en heeft in de laatste twee minuten iets weggeschreven;
-- er liep op dat moment geen tik;
-- de laatst afgeronde tik is niet mislukt.
-
-Wat er **wél** bijkomt tegenover punt 42: er staat een plan naast, en een laatste run. "Laatste run 26
-uur geleden" bij een plan van `0 4 * * *` is dus te beoordelen, en "volgende run in het verleden" is een
-feit dat op het scherm staat.
-
-**Wat een operator er niet uit mag concluderen: dat de status het voor hem uitrekent.** Dat doet hij
-niet, en dat is de eerlijke helft van dit punt — zie 44.8.
-
-### 44.8 Wat er werkelijk gebeurt als een collector stilvalt, in drie gevallen
-
-Dit is het hele punt van de opdracht, dus het staat hier uitgesplitst in plaats van samengevat.
-
-**Geval 1 — het proces ligt stil (uitrol, crash, App Service laadt uit).** De hartslag van beide agents
-stopt tegelijk; na `AgentStatusThresholds.Degraded` (twee minuten) staan ze op `Degraded`, na tien
-minuten is er meldplicht. Eén proces betekent één `startedAt` en dus één groep (punt 43.5), dus daar
-hoort één mail over te gaan. **Maar de melder die dat zou doen is precies wat stilligt.** Op één instantie
-is dat een harde beperking: *dat de storingsmelder stuk is, is niet met de storingsmelder te melden.* Wat
-er wél is veranderd: de toestand staat nu in de opslag in plaats van alleen in een logregel, dus elk
-scherm dat die database kan lezen ziet hem — en op meer dan één instantie mailt de andere instantie wél.
-
-**Geval 2 — de ronde valt om terwijl het proces leeft.** De run staat op `failed`, de agent op `Failed`,
-en `ShouldAlert` meldt bij `Failed` meteen. De vólgende ronde leest die mislukking en mailt erover: **de
-melder meldt over de melder, en dat werkt** — zolang de ronde daarna nog loopt en het mailen zelf heel
-is. De ontdubbeling houdt het binnen de perken: één markering per agent, dus geen zestig mails per uur
-over dezelfde mislukte ronde. Dit is de kringloop die 43.13 aankondigde, nu bestaand en beschreven in
-plaats van stil. Voor de collector geldt hetzelfde: een kostenrun die omvalt was een logregel en is nu
-een `Failed` met een mail erachter.
-
-**Geval 3 — de planlus valt stil terwijl het proces leeft.** De hartslag komt van de host en blijft dus
-komen; de levensfase is `IdleWaiting`; de status blijft `Idle`, rang 1. **Er gaat geen mail en er kleurt
-geen rij.** Wat er wél gebeurt: de volgende run schuift niet meer op en komt daarmee in het verleden te
-liggen, naast een laatste run die veroudert en een plan dat zegt hoe vaak het had moeten gebeuren. Het is
-**te zien** en het wordt niet **gemeld**.
-
-Dat laatste is een besluit en geen omissie. Er over mailen zou vragen dat `AgentStatusCalculator` een
-zesde regel krijgt ("een plan is verstreken zonder run"), en dat is de statusregel die scherm en melder
-delen — de ene plek waar een wijziging twee schermen tegelijk verandert, en dus een besluit voor de
-eigenaar van het contract en niet voor deze sessie. **Gemeld als openstaand punt**, met de aantekening
-dat de gegevens er nu voor het eerst zijn: vóór dit punt bestond er geen `nextRunAt` van het platform om
-op te letten. Wat de goedkope tussenstap zou zijn: het scherm laten zien dát een volgende run in het
-verleden ligt (nu staat er alleen een tijdstip), want dat verandert de statusregel niet.
-
-En hoe waarschijnlijk geval 3 is, eerlijk: klein. Beide lussen vangen élke uitzondering af en gaan
-verder, dus er is geen pad waarlangs de lus zichzelf beëindigt behalve het afsluiten van de host. Wat het
-geval wél dekt is een tik die blijft hángen — een aanroep aan Cost Management die niet terugkomt, een
-query die niet afrondt — en dat is precies het geval waarin de gegevens de enige aanwijzing zijn.
-
-### 44.9 Kleinere besluiten, met de reden
-
-**Geen derde rij "het portaal".** Zijn hartslag zou per constructie gelijk zijn aan die van de twee, dus
-die rij voegt een regel toe zonder een feit toe te voegen. Zelfde afweging als bij de webhost van punt
-42. De hostidentiteit bestaat wel — hij levert klant, versie, omgeving en `startedAt` — en wordt niet
-gepubliceerd.
-
-**Alleen `Soratus.Agents.Telemetry` als projectreferentie, niet `Soratus.Agents.AspNetCore`.** Die tweede
-bestaat om inkomende verzoeken als run vast te leggen, en deze twee agents draaien op een klok. Het
-portaal is een webapplicatie, dus de `FrameworkReference` van punt 42 speelt hier geen rol — maar de
-referentie erbij zetten zou een aanroeplaag binnenhalen die niets doet.
-
-**Het plan van de melder is een cron, en een cron kent geen halve minuten.** `PortalAlerts:IntervalSeconds`
-staat op zestig (§4: "elke minuut") en dat is exact `* * * * *`. Een gevraagd interval dat geen heel
-aantal minuten is, kan een cron niet uitdrukken — dat is een gat in het contract (`Schedule` is getypeerd
-als cron-expressie) en geen keuze van deze code. Van de twee mogelijke antwoorden — een plan publiceren
-dat niet klopt, of afronden op wat een cron kán zeggen en op dat afgeronde plan draaien — is het tweede
-het eerlijke: dan is wat er op het scherm staat wat er werkelijk gebeurt. Negentig seconden wordt dus
-twee minuten, en de melder logt bij het opstarten dát hij afrondt. Sub-minuutintervallen worden één
-minuut. **Punt van twijfel, en het derde contractgat dat hier is opgeschreven.**
-
-**De `PeriodicTimer` van de melder is vervangen door hetzelfde plan.** Niet uit netheid: met een timer
-hier en een cron-expressie daar is "het document zegt waarop wordt gepland" een afspraak in plaats van
-een eigenschap.
-
-**De markeringen en de dagclaim blijven in `platform`.** Ze staan in de gereserveerde partitie `$portal`
-van `customers` en verhuizen niet mee: het is Soratus-eigen boekhouding over onze eigen meldingen, geen
-telemetrie, en er hangt geen bewaartermijn aan.
-
-### 44.10 De mutatieronde
-
-**Twintig mutaties: negentien werden meteen rood, één maakte niets rood.** De ronde liep in twee vensters
-en is aangekondigd; wat hieronder staat is buiten elk venster van een andere sessie gemeten.
-
-Op de bibliotheek (van de 103 tests in `Soratus.Agents.Telemetry.Tests`):
-
-| Mutatie | Rood |
+| | |
 |---|---|
-| `NextRunAt` wordt niet gepubliceerd | 2 |
-| **`NextRunAt` weer uit de cron gerekend vanaf nu** — de fout die vandaag in het pad met één agent staat | **3** |
-| `Schedule` wordt niet gepubliceerd | 2 |
-| de controle "geen plan, dus geen volgende run" valt weg | 1 |
-| timer zonder plan mag | 1 |
-| plangelijkheid op referentie in plaats van op waarde | 1 |
-| geen `ToUniversalTime` op het volgende moment | 1 |
-| het volgende moment vervalt op het pad met één agent | 1 |
-| de cron wordt niet meer gepubliceerd op dat pad | 1 |
-| een onleesbare cron wordt stil genegeerd op dat pad | 1 |
+| `SupportAnswer.GroundedIn(ground)` | een antwoord, dat op precies één aangewezen grondslag rust |
+| `SupportAnswer.Escalate(reason)` | geen antwoord; de vraag gaat naar een mens |
 
-Op het portaal (van de tests in `Soratus.Portal.Tests`): de collector meldt zich nooit aan (3 rood), de
-volgende run wordt niet gemeld (2), het gemelde moment is niet het gewachte moment (2), het plan wordt
-niet uit één bron gehaald (compileerfout, dus gemeten met een afwijkend draaiuur: 2), de aankondigingen
-verdwijnen uit de container (4), de vlag `Enabled` wordt genegeerd (1), de terugval van de interne klant
-valt weg (2), `IsConfigured` wordt genegeerd (1), het plan geldt voor élke klant (2).
+**Er is nergens een tekstveld.** Dat is het hele ontwerp in één regel. De eerstelijn mag niet praten,
+hij mag *wijzen*. De zin die de klant leest wordt door `SupportText` samengesteld uit
+`SupportGround.Fact` — een tekst die het portaal zelf heeft opgemaakt uit zijn eigen klantweergaven,
+met dezelfde opmaakfuncties (`HourText`, `BillingText`, `StatusVisuals`, `TimeFormat`) als het scherm
+waarnaar de bronregel verwijst. Een verzonnen bedrag heeft geen veld om in te reizen. Er staat een
+reflectietest op dat `SupportAnswer` geen enkele `string`-eigenschap heeft.
 
-**De mutatie die niets rood maakte**, en die hier hoort te staan: de tekst van de opstartregels van de
-collector en de melder. Er staat geen test op logteksten. Dat is dezelfde bewuste afweging als bij punt
-41 en 43.10 — de regel leeft in het gedrag en niet in een logregel — maar met een scherpe kant die de
-andere gevallen niet hadden: de melding "hij publiceert zich wel/niet als agent" is voor een operator de
-enige plek waar staat óf de zichtbaarheid aan is. Dat de *uitkomst* wordt gemeten en de *tekst* niet, is
-hier dus krapper dan elders. Genoteerd, niet gerepareerd.
+En **"ik weet het niet" is de andere helft van het type en geen zin die het model kiest.** Een model
+dat niets weet kan niet in de verleiding komen om toch iets te zeggen, want de vorm waarin "toch iets
+zeggen" past bestaat niet.
 
-### 44.11 Twee metingen die logen, en de tweede was van mij
+### 46.3 Waarom een grondslag buiten het portaal niet te máken is
 
-**De eerste is de bekende vorm, voor de vierde keer.** Direct na `StartAsync` van een
-`BackgroundService` geteld hoeveel agents er waren aangekondigd: **nul**. Een fractie later: één. Het
-lijf van `ExecuteAsync` is dus niet gelopen als `StartAsync` terugkomt, ook niet op .NET 10 en ook niet
-als er vóór de eerste `await` code staat. Mijn eerste testversie leunde daarop en was daarmee een test
-die van de planner afhing. Wat er nu op `StartAsync` mag rusten, rust dat ook — de *registratie* van
-beide agents komt van de aankondigingsbron en niet van de lus — en wat er op zich laat wachten is alleen
-het moment van de volgende run. De test wacht daarop met een `TaskCompletionSource` in plaats van te
-pollen.
+`SupportGround` is een `public sealed record` met een **`internal` constructor**. Buiten
+`Soratus.Portal` bestaat er dus geen manier om er een te maken, en omdat het type `sealed` is, is de
+kopieconstructor die `with` nodig heeft privé — er valt ook geen gewijzigde variant van te maken. Een
+implementatie van `ISupportFirstLine` kan alleen een grondslag teruggeven die zij van het portaal
+heeft gekregen.
 
-**De tweede heeft mij anderhalf uur gekost en het is mijn eigen fout.** Mijn eerste versie van de
-opstarttest maakte per test een portaal aan met `WebApplicationFactory<Program>`, deed er een verzoek
-door de aanmeldketen op, en ruimde het weer op. Gemeten over zes volle runs van `Soratus.Portal.Tests`:
-**drie keer rood met vijftien tot eenentwintig gevallen tests op `/api/uren`** — allemaal een `401` waar
-een `400` of een `422` hoorde te staan. Dezelfde zes runs op de onveranderde boom: **zes keer groen**.
-Het was dus van mij, en het stond al opgeschreven: `Urenapihost` documenteert dat een
-`SymmetricSecurityKey` zijn eigen `CryptoProviderFactory` met een cache draagt en dat validaties van een
-tweede host stukgaan "zodra de eerste host was opgeruimd".
+Dat dekt niet alles: zij zou er een kunnen bewaren uit een *vorige* aanroep, van een andere klant.
+Daarom is er een tweede slot, en dat is een gewone waardevergelijking:
+`CosmosSupportStore.Accept(enquiry, answer)` neemt een antwoord alleen aan als de grondslag erin ook
+in `enquiry.Grounds` van dít verzoek staat. Zo niet, dan wordt het geen antwoord maar een escalatie.
 
-Wat het **niet** was, gemeten: twee tests die na twee seconden omvielen zonder een portaal aan te maken
-deden niets, en twee tests die een portaal aanmaakten en netjes opruimden zonder erdoorheen te verzoeken
-deden ook niets. Het was de combinatie. Er is nu één portaal per testproces dat nooit wordt opgeruimd —
-hetzelfde wat `Urenapicollectie` met een collectiefixture doet, en om dezelfde reden. Zes runs daarna:
-zes keer groen.
+Waardegelijkheid en niet referentiegelijkheid, met opzet: bij een naad over een procesgrens komt er
+nooit dezelfde instantie terug, dus een `ReferenceEquals` zou elke echte implementatie afwijzen. Er
+staat een test op die keuze, want een mutatie naar `ReferenceEquals` maakt niets anders rood.
 
-**En de les die breder is dan deze test.** De eerste keer dat dit langskwam, stond het in een
-mutatiemeting: één mutatie leverde "22 rood" op en de volgende "2 rood", met exact dezelfde code. Wie de
-eerste uitslag had opgeschreven, had een mutatie gerapporteerd die vier keer zoveel dekking leek te
-hebben dan hij had. **Een mutatiemeting die meer rood oplevert dan de mutatie kan verklaren, is een
-meting om te herhalen en niet om op te schrijven** — en de vorm die het verraadt is dat de extra rode
-tests niets met de gemuteerde regel te maken hebben.
+**En de grondslagen komen uit de klantviewmodellen, niet uit de documenten.** `SupportGrounds` heeft
+drie fabrieken en die nemen `CustomerAgentsView`, `CustomerHoursView` en `CustomerBillingView` — de
+types waar de rolgrens al in zit. Een grondslag kan daardoor geen omgevingsdetail, geen
+fiatteringsstroom, geen dienstuitsplitsing en geen beheeropslag dragen: de bron die hij leest heeft
+die velden niet. Zou hier uit `HourEntryDocument` of `MonthlyCharge` worden gelezen, dan was die
+eigenschap weg en moest er een woordenlijstcontrole voor in de plaats komen. Er staat een test op de
+signatuur van die drie fabrieken.
 
-### 44.13 De vierde manier waarop een meting kan liegen: "groen als hij alleen staat"
+**Eén grondslag per antwoord, en dat is een besluit met een prijs.** De eerste opzet liet er meerdere
+toe (`GroundedIn(ground, params more)`) en die is afgewezen toen bleek wat hij oplevert: de bubbel
+draagt één bronregel, dus een tekst die uit drie feiten is opgebouwd zou onder één bron staan die
+maar een derde ervan dekt. Dan is de bronregel geen bron meer maar een suggestie — precies de fout
+die het merkteken van §3.8 moet uitsluiten. De prijs blijkt geen prijs: §3.8 noemt de antwoorden zelf,
+en het zijn er vier — agentstatus met uitleg en runs, uren tegen bundel, laatste factuur met
+betaalstatus, open sprintitems — en elk daarvan is één gegeven.
 
-De drie eerdere vormen in dit document gaan over een test die **groen blijft mét de fout**. Deze is de
-spiegel: een test die **rood gaat zónder fout**, en alleen onder belasting. Twee gevallen, en ze zijn
-allebei van mij.
+### 46.4 De bubbel: het merkteken en de bron zijn hetzelfde type
 
-**Geval 1 — een assertie op een volgorde die het ontwerp niet belooft.**
-`GeherbergdeAgentsTests` eiste dat het láátste registratiedocument van een agent `StoppedCleanly` zegt.
-Dat viel om in een volledige run vanuit de wortel en was los groen. De oorzaak is niet dat de leegloop
-nog niet klaar was — die is dat wél, `TelemetryWriter.StopAsync` wacht de pompen af — maar dat de
-afsluitregistratie **buiten de buffer om** wordt geschreven (`WriteRegistrationDirectAsync`) terwijl er
-nog hartslagen in het kanaal kunnen staan. De registratiedienst stopt vóór de schrijver, dus die directe
-schrijfactie kan vóór een eerder ingelegde hartslag landen. Onder belasting loopt de pomp achter en
-gebeurt dat vaker.
+`SupportBubble` is een abstracte record met een `private protected` constructor en precies drie
+vormen:
 
-Let op de richting van het bewijs, want die maakt de diagnose hard: *als* de leegloop onvolledig was,
-zou deze test juist **groen** zijn — dan ontbreken de hartslagen en is `StoppedCleanly` wél de laatste.
-Rood betekent dus dat er ná de directe schrijfactie nog iets is bijgekomen, en dat is volgorde en geen
-onvolledigheid.
+| Vorm | Wat er in mag |
+|---|---|
+| `SupportSaidBubble` | vrije tekst van een mens, met een naam. Geen merkteken, geen bron |
+| `SupportAnswerBubble` | het merkteken **én** `GroundLabel` en `GroundPath`, beide niet-nullable en in de constructor op leegheid gecontroleerd |
+| `SupportHandoffBubble` | het merkteken en géén enkel gegeven: geen bedrag, geen urenstand, geen bron, geen reden |
 
-De reparatie is de invariant in plaats van het gevolg: er is **precies één** document met
-`StoppedCleanly` per agent, want `WriteFinalAsync` staat achter een `Interlocked.Exchange`. Dat is
-volgorde-onafhankelijk en niet van een klok afhankelijk. Dezelfde reparatie is toegepast op drie tests
-van dit punt zelf, die met `Last(…)` het afsluitdocument zochten en dus dezelfde wankelheid hadden —
-gevonden bij het opruimen en niet door een falen.
+Daarmee is *"elke AI-bubbel toont de bron waarop het antwoord is gebaseerd"* geen afspraak die iemand
+in de markup kan vergeten. Er bestaat geen instantie van het antwoordtype zonder bronregel, dus er
+staat in `SupportThread.razor` geen `@if (bubble.Ground is not null)`; de `switch` gaat over het
+**type**. Zou er één bubbeltype zijn met een nullable bron, dan was de eis een regel in plaats van een
+eigenschap.
 
-**Geval 2 — een tijdslimiet als correctheidsgrens.** `BeheeragentsTests` startte de achtergronddienst en
-wachtte met een grens van twee seconden tot de lus zich meldde. Dat hield het niet toen er een
-mutatieronde van een andere sessie naast liep: één van de twee tests viel om in één van de vier volledige
-runs. Twee seconden is honderden malen het echte pad, en dat is precies het misleidende ervan.
+**Is de escalatiebubbel dan een uitzondering op die eis?** Nee, en dat is het interessante deel. De
+eis gaat over *antwoorden*: een bubbel die iets beweert draagt een bron, en een bubbel zonder bron kan
+niets beweren. Die twee zijn niet in elkaar te veranderen. De tussentoestand waar de eis van fase 5
+over gaat — een antwoord dat klinkt als een antwoord en op niets rust — heeft geen type.
 
-**Waarom een ruimere wachttijd geen reparatie is**, en dit is de kern van deze paragraaf: een grens die
-groot genoeg is voor déze machine onder déze belasting is een gok over elke andere machine en elke andere
-belasting. Hij faalt bovendien in de verkeerde richting — hij maakt de test *langzamer* in het geval dat
-hij zou moeten falen (een weggehaalde aanroep hangt dan tot de grens), dus de prijs van veiligheid is
-precies de traagheid die de volgende sessie weer omlaag brengt. Een wachttijd verplaatst het probleem
-naar de tragere machine en verandert de aard ervan niet.
+Het merkteken zelf staat als constante (`SupportText.FirstLineBadge`) en komt op precies één plek in
+de markup voor: in de twee AI-takken van `SupportThread.razor`. Er staat een broncodetest op dat de
+letterlijke tekst nergens in de markup voorkomt en dat de constante nergens anders wordt gebruikt —
+het geval dat dat dekt is iemand die het merkteken in een kaartkop of een tooltip zet, waar geen
+bronregel naast staat.
 
-Wat er in de plaats is gekomen: de twee stappen die iets betekenen — aanmelden en de volgende run melden
-— zijn `internal` en worden rechtstreeks aangeroepen. Geen thread, geen klok, geen grens. Dat is dezelfde
-vorm die dit project al voor `RunAsync` gebruikt ("internal en met een uitkomst, zodat een test één run
-kan doen zonder tot 04:00 te wachten"), en de testdubbels zijn van hun `TaskCompletionSource`-vlaggen
-ontdaan zodat niemand de oude vorm terugzet.
+### 46.5 Waar de draad staat, en waarom daar
 
-**Wat dat kost, eerlijk:** er is geen test meer die meet dát `ExecuteAsync` deze twee stappen aanroept.
-Dat is een bewuste ruil — de vorige poging om dat te meten was juist de wankele — en het gat is twee
-regels in dezelfde klasse. Gemeld en niet gedicht.
+Container `customers`, partitiesleutel de klantslug, `kind: "supportMessage"`. Dezelfde plek als de
+urenregels, en de afweging is opnieuw gemaakt en niet gekopieerd. De drie argumenten van
+`HourEntryDocument` gaan hier alle drie op, en er komt één bij:
 
-**En de regel die eruit volgt:** een test die op de lus van een `BackgroundService` wacht, meet de
-planner mee. Wie zo'n test schrijft, heeft twee eerlijke opties: de stap onder de lus rechtstreeks
-aanroepen, of de dienst starten en **stoppen** en dán meten — `StopAsync` wacht de `ExecuteTask` af en is
-daarmee een echte samenkomst zonder klok. Een tijdslimiet is de derde optie en die is er geen.
+1. **Bewaartermijn.** `infra/portal/portal-rg.bicep` geeft precies één reden om containers te
+   splitsen: verschillende bewaartermijnen. Een supportbericht verloopt niet — "wat hebben jullie mij
+   in maart geantwoord" is een vraag die in september komt, net als bij een factuurdiscussie. Geen
+   TTL, dus geen eigen container.
+2. **Partitiesleutel.** Een draad wordt altijd van één klant gelezen en nooit over klanten heen. De
+   klantslug is dus precies de goede sleutel en er bestaat geen query die erbuiten hoeft.
+3. **Eén partitie is één lezing.** De escalatie moet de SLA noemen, en die staat op
+   `ContractDocument.Sla` — in dezelfde partitie. Het scherm leest de draad en de SLA dus zonder
+   fan-out, en er hoeft nergens een tweede kopie van de SLA te staan.
+4. **En het argument dat bij uren de prijs was, valt hier de goede kant op.** Zolang dit document in
+   `customers` staat, kan geen tweede identiteit schrijfrecht op de draad krijgen zonder óók
+   schrijfrecht op de `AccessDocument`'s — de autorisatiebron van het portaal. Bij uren was dat een
+   prijs (de MCP-server en `devops-sync` moeten daardoor via het portaal schrijven). Hier is het
+   precies wat we willen: **de AI-eerstelijnsagent hoort niet bij Cosmos te kunnen.** Hij hoort een
+   antwoord terug te geven aan het portaal, en het portaal hoort te beslissen of daar een bericht van
+   wordt.
 
-### 44.12 Wat er níet is gemeten, en dat hoort erbij
+**De documentsleutel sorteert chronologisch, en daarin wijkt hij bewust af van
+`PortalDocumentIds.HourEntry`.** Daar staat met zoveel woorden dat de sleutel géén ordening mag
+suggereren, omdat er nooit op gesorteerd wordt. Bij een berichtendraad is de ordening juist het hele
+ding: een draad ís een volgorde. `CosmosSupportStore` sorteert daarom met `ORDER BY c.id DESC` — geen
+tie-break nodig, want de sleutel is uniek — en bladert met `c.id < @before`. Dat is de enige plek in
+dit portaal waar wél in de query wordt gesorteerd; de indexeringspolitiek van de container staat op
+`/*`, dus het vraagt geen uitrol. Dat is nagekeken in de Bicep en niet aangenomen — het is precies
+het bezwaar dat `CosmosPortalHoursStore` tegen een `ORDER BY` maakt.
 
-**Er is niets naar Cosmos geschreven en er is niets in Azure gewijzigd.** De nieuwe database bestaat niet;
-de Bicep-wijziging staat in `infra/portal/portal-rg.bicep` met een `what-if` ernaast en wacht op een
-besluit. Dat betekent dat het volgende **niet** is gemeten en alleen is beredeneerd:
+De sleutel doet daarnaast wat hij bij uren ook doet: een tweede verzending van hetzelfde formulier
+binnen dezelfde milliseconde krijgt dezelfde sleutel en loopt op een `409`. Het portaal is static SSR,
+dus er is geen JavaScript dat de knop uitzet.
 
-- dat de dataplane-verlening op `/dbs/platform-telemetry` werkelijk schrijfrecht geeft op die database en
-  niet op `telemetry`. De vorm is dezelfde als die van de bestaande verlening op `platform`, die wél is
-  uitgerold en werkt, dus de vorm is niet nieuw — de scope is dat wel;
-- dat de telemetriebibliotheek naar een database schrijft die met deze Bicep is aangemaakt. Dat de
-  containernamen kloppen is uit de code afgeleid (`CosmosContainerNames`) en niet gezien;
-- de RU-kosten van twee agents die elke dertig seconden een registratie upserten. Dat is per dag
-  ongeveer 5 800 upserts van een klein document, en dat is niet gemeten maar geschat.
+**Er is geen bladervorm die "alles" zegt.** `SupportThreadQuery` heeft twee vormen — `Newest()` en
+`Before(id)` — en geen derde, dezelfde constructie als `HoursQuery`. Waarom er hier wél een tweede
+vorm is: bij uren is de grens een maand of een jaar en die kiest de gebruiker zelf; bij een draad
+bestaat zo'n natuurlijke grens niet, en zonder `Before` zou een lange draad zijn oudste berichten stil
+onbereikbaar maken. Bij een gesprek over een factuur is dat precies het deel waar de vraag over gaat.
 
-**En de leeskant is niet end-to-end gezien.** Dat `/klant/soratus/agents` de twee agents toont, volgt uit
-de bestaande leescode die zeven klanten al zo toont; wat er nieuw aan is, is uitsluitend de locatie. Er is
-geen scherm bekeken met echte documenten erin, want die documenten bestaan niet.
+**Er is geen methode die een bestaand bericht wijzigt of verwijdert.** Geen `ReplaceItemAsync`, geen
+`Upsert`, geen `Delete` in `CosmosSupportStore`. Een draad is een verslag; "dit hebben jullie mij
+geantwoord" is een vraag die maanden later komt, en een antwoord dat achteraf te wijzigen is maakt van
+dat verslag een bewering zonder bron. Dezelfde regel als bij een gefiatteerde urenregel, waar een
+correctie ertegenover komt in plaats van dat de eerste verdwijnt.
+
+### 46.6 Het rolverschil is een typeverschil, op vier plekken
+
+§3.8 legt één rolverschil vast: *in de operatorrol antwoordt een mens en springt de agent er niet
+tussen.* Dat is hier geen filter en er staat geen `@if` op een rol in de markup — er staat een
+broncodetest op dat `IsInRole`, `AuthorizeView`, `isOperator` en `PortalRoles` in geen van de drie
+weergavecomponenten voorkomen.
+
+1. **De weergavetypen.** `ISupportViews` heeft twee overloads met dezelfde naam en een andere scope;
+   een `CustomerScope` levert `CustomerSupportView`, een `CustomerWriteScope` levert
+   `OperatorSupportView`. `CustomerSupportView` heeft geen escalatieredenen en geen onbruikbare
+   berichten. `OperatorSupportView` heeft géén `SupportFirstLineState`, géén uitweg naar een mens en
+   géén vraagformulier — er is niets te verbergen, want er is niets.
+2. **De code die bestaat.** `SupportDesk` — de enige plek die de eerstelijn aanroept — heeft geen
+   methode die een `CustomerWriteScope` neemt. Een operatorbericht kán de eerstelijn dus niet wakker
+   maken; die aanroep is niet te schrijven. De operator schrijft rechtstreeks met
+   `ISupportStore.PostReplyAsync`.
+3. **De componenten.** `CustomerSupport.razor` en `OperatorSupport.razor` nemen elk precies één
+   parameter, van hun eigen roltype. Er staat een reflectietest op dat het één parameter is —
+   dezelfde controle als bij `MonthlyStatementCard` (§29.9).
+4. **De afzender is nergens een parameter.** `PostQuestionAsync` schrijft altijd
+   `SupportAuthor.Customer`, `PostReplyAsync` altijd `Soratus` met de naam uit de scope, en
+   `RecordFirstLineAsync` is de enige die `FirstLine` kan zetten. Er bestaat dus geen aanroep waarmee
+   een klant een bericht van Soratus in zijn draad zet, geen aanroep waarmee een operator zich als de
+   eerstelijn voordoet, en geen aanroep waarmee de eerstelijn vrije tekst plaatst. Dezelfde vorm als
+   het ontbrekende statusveld op `HourBooking`.
+
+**Wat de twee rollen wél delen is de bubbel, en dat is geen inconsistentie.** Dezelfde afweging als
+bij de runtabel (§14): daar staat één tabel omdat het enige verschil in één tooltip zat. Hier is de
+bubbel voor beide rollen letterlijk hetzelfde — een klant hóórt te zien wat de eerstelijn hem
+antwoordde, en een operator hoort dat óók te zien, anders kan hij niet nakijken wat er namens Soratus
+is gezegd. Dat is de eis dat een mens de eerstelijn kan overnemen.
+
+**En elke "de klant ziet dit niet" heeft een spiegel.** De klantprojectie laat twee soorten berichten
+weg: één met een niet toe te wijzen afzender, en een antwoord van de eerstelijn waarvan de bron niet
+meer te bepalen is. Zonder spiegel zou dat weglaten stil zijn — en een bericht dat verdwijnt zonder
+dat iemand het merkt is erger dan een bericht dat er vreemd uitziet. Ze staan daarom op
+`OperatorSupportView.Unusable`, met de documentsleutel en de reden. **De tékst staat er niet**: de
+reden dat het wordt weggelaten is juist dat we niet weten wie het schreef, en dan hoort het niet met
+onze stem op een scherm te komen. De sleutel is genoeg om het in de opslag te vinden.
+
+### 46.7 De uitweg naar een mens, en de SLA
+
+§3.8 vraagt *"Toch een mens van Soratus spreken"*. Dat is een echte handeling geworden en geen link
+naar een mailadres: een `POST` die een gewoon klantbericht in de draad zet met een vaste tekst. Het
+pad loopt langs `ISupportStore.PostQuestionAsync` en **niet** langs `SupportDesk`, dus er komt per
+definitie geen antwoord van de eerstelijn op — een klant die om een mens vraagt hoort geen agent te
+krijgen die hem uitlegt dat hij een agent is. Er staat een test op dat dit pad geen enkele AI-bubbel
+oplevert, en de tegenhanger ernaast dat een gewone vraag wél aan de eerstelijn wordt voorgelegd.
+
+Een `POST` en geen `GET`, om de reden die §29.9 uitlegt: een `GET` wordt aangeroepen door een
+prefetch, een linkchecker, een spamfilter dat elke URL in een bericht opent en een tabblad dat na een
+herstart zijn adressen opnieuw bezoekt. De enige queryparameter op dit scherm is `?voor=` en die
+kiest een deel van een lijst; er staat een test op dat een `GET` op dit scherm niets schrijft en de
+eerstelijn niet wekt.
+
+**De reactietermijn komt uit het contract en wordt niet omgerekend.** §3.8 zegt "escaleren gebeurt
+naar het team binnen de SLA", en het contract heeft daar één veld voor: `ContractDocument.Sla`, één
+regel tekst (`Reactie 4 werkuren · herstel 1 werkdag`). Die tekst gaat door, via
+`MessageTruncation.Cut` omdat het vrije tekst uit onze eigen administratie is. Is er geen contract of
+geen SLA, dan staat dát er en niet "binnen 24 uur" — punt 15 in woorden: een afspraak die ontbreekt is
+geen afspraak met een standaardwaarde.
+
+De SLA staat **niet** in de tekst van het bericht maar als aparte regel op de weergave. Dat is een
+afweging tegen §29.6, waar de bedragen wél op de bevestiging worden bewaard: een bedrag is een meting
+die verandert, een SLA is een contractterm. Stond hij in elke berichttekst, dan lag er in elk bericht
+een kopie van een contractafspraak en was "welke SLA gold er" op twee plekken te beantwoorden.
+
+### 46.8 Wat er in een bericht kan sluipen dat er niet in hoort — nu in twee richtingen
+
+Punt 13 (`msg`), punt 14 (`errorType`), de omschrijving van een urenregel en §29.4 gaan alle vier over
+tekst die wíj schrijven en die een klant leest. Een supportdraad heeft **beide** richtingen in
+hetzelfde veld, en dat is nieuw.
+
+**Van ons naar de klant.** Hier wordt met opzet *niet* op de eerste regelovergang geknipt.
+`MessageTruncation.Cut` hoort bij een veld dat één zin moet zijn; een antwoord aan een klant is proza
+met alinea's, en die knip zou de tweede alinea van een operator stil weggooien. Er wordt daarom
+`MessageTruncation.Shorten` gebruikt: dezelfde bibliotheek, dezelfde grafeemveilige knip, maar de vorm
+die regelovergangen juist bewaart. De opmerkingen bij die twee functies zeggen met zoveel woorden dat
+ze niet "consistent" gemaakt moeten worden; dit is het geval waarvoor dat geldt.
+
+**Van de klant naar ons.** Twee dingen zijn mechanisch te sluiten en dat gebeurt.
+
+*Onzichtbare breedteloze tekens* (U+200B, U+FEFF). Ze doen in proza niets en ze doen iets in een
+controle: een woordgrens is met een breedteloze ruimte erin te verbergen, en dit portaal heeft
+controles die op woordgrenzen zoeken (`KlantVangnetTests`). Een teken dat niets toevoegt en een
+controle kan omzeilen hoort er niet te staan.
+
+*Tekens die de leesrichting omkeren* (U+061C, U+200E/200F, U+202A–202E, U+2066–2069) — de klasse waar
+"Trojan Source" over gaat, en in een berichtendraad is die concreet. **De omkering loopt door tot het
+einde van het tekstblok.** Een klant die een right-to-left override in zijn bericht zet, beïnvloedt
+dus niet alleen hoe zijn eigen tekst wordt gerenderd maar ook hoe de regels eronder eruitzien — onze
+regels, op ons scherm. En een pad, een bestandsnaam of een adres kan er anders uitzien dan hij is
+(`‮txt.exe` leest als `exe.txt`). Dat is geen vals-positief-risico en geen netheid: het is de enige
+plek in deze map die werkelijk over veiligheid gaat.
+
+ZWJ (U+200D) en ZWNJ (U+200C) staan er **niet** bij, en dat is een keuze: die houden een samengestelde
+emoji één teken, en ze weghalen haalt een gezinsemoji uiteen in drie losse mensen. Ze zijn onzichtbaar
+maar niet misleidend.
+
+Daarbij: `\r\n` en losse `\r` worden `\n`, een tab wordt een spatie (niet weggehaald — dan plakken twee
+woorden aan elkaar), meer dan één lege regel achter elkaar wordt één, en de lengtegrens wordt
+*geweigerd* en niet stil afgekapt. Dat laatste is dezelfde keuze en dezelfde reden als bij
+`HourLimits.ValidateNote`: hier zit een mens aan het toetsenbord, en wat eraf valt kan de vraag zelf
+zijn.
+
+**Het schonen staat op twee plekken**, bij het schrijven en in de projectie naar de bubbel. Punt 13
+zegt dat een knip op twee van de drie plekken geen knip is; de tweede dekt hier wat de eerste niet
+kan — een document dat langs een ander pad in de container terecht is gekomen, en de identiteit van
+het portaal heeft schrijfrecht op de hele container `customers`. Dat de tweede plek werkt is door de
+mutatieronde gevonden en niet aangenomen; zie §46.10.
+
+**Wat er níet gesloten is, en dat is het eerlijkste deel.** Een operator kan een stacktrace, een pad,
+een interne codenaam of de naam van een ándere klant in zijn antwoord typen. Daar is aan deze kant
+niets tegen te doen, en een inhoudsheuristiek ("ziet dit uit als een stacktrace") is in dit project al
+twee keer afgewezen. Wat er in de plaats staat is een ontwerpregel: **niets in dit portaal vult het
+antwoordveld met machinetekst.** Geen knop die een logregel invoegt, geen voorvulling uit een run,
+geen foutmelding die in het formulier belandt. Dat is het verschil met punt 13 en 14, waar de tekst
+dóór een machine was geschreven en geen mens hem had gelezen voordat de klant hem zag. Er staat een
+broncodetest op dat deze map nergens `StackTrace`, `Exception.Message`, `exception.Message`,
+`ex.Message` of `ErrorCode` in een berichttekst zet — met één uitzondering die genoemd staat:
+`SupportDesk` logt de uitzondering van de naad mét stacktrace, en dat hoort, want dat gaat naar de
+operator.
+
+En de derde richting die er niet is: **geen mailpad raakt de draad.** Dat is §29.4 punt 3 in deze map
+— de urenspecificatie staat niet in de mail omdat een mail de enige plek is waar vrije tekst buiten
+het bereik van een operator komt. Een supportbericht is precies zulke tekst. Er staat een
+broncodetest op `Mail/` dat daar niets van de supportkant in voorkomt, zodat wie er ooit een
+mailmelding bij een nieuw bericht wil, hier langskomt en de reden leest.
+
+### 46.9 De afwezige naad is een eigen toestand op het scherm, en geen plaatshouder
+
+`ISupportFirstLine` staat **niet** in `Program.cs`. `SupportDesk` haalt hem met `GetService` op en niet
+met `GetRequiredService`. Dat is het besluit uit §29 letterlijk toegepast: daar is een plaatshouder
+achter de naad afgewezen omdat hij "niets gemeten" antwoordt, en dat niet te onderscheiden is van een
+echte "niets gemeten". Hier zou een plaatshouder altijd escaleren, en dat is niet te onderscheiden van
+een eerstelijn die het niet weet — een storing die zich voordoet als werkende functionaliteit.
+
+De afwezigheid is daarom een **eersteklas toestand**: `SupportFirstLineState`, met `NotConfigured` als
+eerste enumwaarde. Een klant leest dan dat een mens antwoordt, en dat is waar. Zonder eerstelijn komt
+er ook géén escalatiebubbel — een bericht met het merkteken van een agent die niet bestaat zou een
+agent suggereren die er is.
+
+**De volgorde in `SupportDesk.AskAsync` is het ontwerp: eerst de vraag vastleggen, dan de eerstelijn.**
+Dezelfde regel als §29.1 (de claim gaat vóór de mail) en om dezelfde reden — de duurste fout bepaalt de
+ordening. Hier is de duurste fout een vraag die verdwijnt: valt de eerstelijn om, duurt hij te lang of
+gooit hij een uitzondering, dan staat de vraag er nog en ziet een mens hem. De andere volgorde
+verliest bij dezelfde storing de vraag zelf, en dan wacht een klant op een antwoord dat niemand heeft
+gezien.
+
+Alles wordt daar opgevangen (`catch (Exception) when (not OperationCanceledException)`), en dat is hier
+verdedigbaar: achter die naad hangt code die wij niet hebben geschreven, en de vraag staat al in de
+draad. Doorgooien zou een 500 opleveren op een pagina waar de handeling van de klant is geslaagd — dan
+denkt hij dat zijn vraag niet is aangekomen en stuurt hij hem opnieuw. `OperationCanceledException`
+gaat wél door; anders dan bij de mail (§29.3) valt daar niets weg door niets te doen.
+
+**Er staat geen modelnaam in deze map en die hoort er ook niet in te komen**: dat is een
+configuratiewaarde. De marketingsite heeft daar een eigen afspraak over in `handoff/CLAUDE.md` — daar
+staat één model vast en het wisselen ervan vraagt overleg — en die afspraak geldt voor die site en niet
+voor dit portaal. Wat hier vastligt is vormvrij: welk model er ook onder deze naad hangt, hij kan geen
+getal terugsturen. Om dezelfde reden staat er geen modelnaam en geen versie op een bericht; wie welk
+model heeft gedraaid hoort in de logregel, bij de operator.
+
+### 46.10 De mutatieronde: achtentwintig mutaties, waarvan zes bewust stil en twee echte gaten
+
+Per mutatie: productiecode breken, alleen de supporttests draaien, terugzetten, en verifiëren dat de
+terugzetting byte-voor-byte gelijk is aan het origineel. Het script staat in
+`tools/mutatie-support.py`.
+
+| | Mutatie | Rood |
+|---|---|---|
+| M1 | `Accept` neemt elke grondslag aan | 3 |
+| M2 | `Accept` toetst alleen de soort en niet de maand | 2 |
+| M3 | `Accept` vergelijkt op instantie in plaats van op waarde | 1 |
+| M4 | `SupportText.Answer` verzint een zin in plaats van het feit te nemen | 1 |
+| M5 | de vraag wordt pas ná de eerstelijn vastgelegd | 1 |
+| M6 | de uitzondering van de naad wordt niet opgevangen | 1 |
+| M7 | zonder eerstelijn komt er tóch een escalatiebubbel | 2 |
+| M8 | `SupportAuthor.Customer` wordt de standaardwaarde | 1 |
+| M9 | de projectie zet de grondslag vóór de escalatie | 2 |
+| M10 | een antwoord zonder bron valt terug op een escalatiebubbel | 1 |
+| M11 | een bericht met onbekende afzender komt tóch op het klantscherm | 1 |
+| M12 | `Cut` in plaats van `Shorten` | 4 |
+| M13 | de bidi-tekens blijven staan | 1 |
+| M14 | de documentsleutel draagt geen datum meer | 1 |
+| M15 | de constructor van `SupportGround` wordt publiek | 1 |
+| M16 | het klanttype krijgt de escalatieredenen erbij | 1 |
+| M17 | de AI-bubbel verliest zijn bronregel, het merkteken blijft | 1 |
+| M18 | de `PageTitle` staat buiten de rolcontrole | 1 |
+| M19 | de uitweg naar een mens loopt langs de balie | 1 |
+| M20 | de rolvolgorde omgedraaid: de operator krijgt de klantweergave | 5 |
+| M21 | het schonen slaat de projectie over | **0 → 1** |
+| M22 | de draad wordt nieuwste-eerst gelezen (`Reverse` eruit) | **0 → 1** |
+
+**Twee echte gaten, en ze zijn gedicht.**
+
+*M21.* Het schonen staat op twee plekken en de tweede had geen test: elke test zette een bericht neer
+dat al schoon was, dus een mutatie die de projectie oversloeg maakte niets rood. Dat is punt 13 in
+zijn eigen woorden — een knip op twee van de drie plekken is geen knip — en de test die het nu dekt
+zet een bericht met een RTL-override en vier `\r\n` achter elkaar rechtstreeks in de opslag.
+
+*M22.* De gedragstest op de ordening draait op `Vasteportaalopslag`, en die heeft zijn eigen kopie van
+die ordening; `page.Reverse()` uit `CosmosSupportStore` halen maakte niets rood. De echte opslag is
+zonder Cosmos niet te oefenen. Wat er nu staat is een broncodecontrole op de drie helften van die
+ordening (`ORDER BY c.id DESC`, `c.id < @before`, `page.Reverse()`). **Dat is zwakker dan gedrag en het
+staat hier als zodanig:** het dekt de mutatie — iemand die er een weghaalt — en niet een fout die erin
+blijft zitten.
+
+**Zes mutaties die met opzet niets rood maakten.** Ze staan in het script als `S1`–`S6` zodat ze niet
+opnieuw als vondst worden gemeld.
+
+- **S1** — de Nederlandse zin van de escalatie anders formuleren. Copy is geen invariant; wat wél een
+  invariant is, is dat de zin voor alle vier de redenen dezelfde is, en dát wordt gemeten.
+- **S2** — de grens op het aantal aangeboden grondslagen van 60 naar 5. Een afkapping valt de goede
+  kant op: een grondslag die niet is aangeboden kan niet worden gekozen, en dan volgt een escalatie.
+- **S3** — de paginagrootte van 50 naar 7. De bladertest gebruikt de constante symbolisch, met opzet:
+  de waarde is een afstemming en geen invariant.
+- **S4** — de berichtgrens van 4000 naar 400. Zelfde reden, en er staat bij `SupportLimits` expliciet
+  dat dit getal een hygiënegrens is en niet gemeten. Punt 13 heeft definitief gemaakt dat een
+  lengtegrens hier geen verdediging is.
+- **S5** — de klantbubbel van kant wisselen. Opmaak, geen bevoegdheid; er staat geen test op de CSS.
+- **S6** — het `maxlength`-attribuut van het invoerveld halen. De grens ligt aan de schrijfkant en
+  `SupportBody.Validate` weigert het alsnog; het attribuut is een gemak en geen slot.
+
+**En één ding over de mutatieronde zelf, dat een halve ronde van een andere sessie heeft gekost.** M5
+raakt drie plekken in hetzelfde bestand en moet dus in één keer worden toegepast. De eerste opzet deed
+hem in stukken; toen compileerde de tussenstand niet en las de meting als *groen*, want het script
+keek alleen naar `error CS` in de testuitvoer en die kwam er niet uit. Dat is dezelfde klasse fout als
+§36: een groen signaal over de verkeerde verzameling.
+
+Dat het er achtentwintig zijn en niet negenentwintig komt uit diezelfde fout: M5 stond een tijd als
+twee mutaties in de lijst, en twee helften van één wijziging tellen als één mutatie. Het aantal in een
+eerdere versie van dit punt was dus één te hoog.
+
+**Het meetinstrument is naar aanleiding hiervan samengevoegd.** Drie sessies hadden elk hun eigen
+kopie van de meetlaag, en alle drie hadden ze er een andere fout in. Er staat nu één
+`tools/mutatie.py` met de meetlaag en zonder mutatielijst; de lijsten blijven per lane in eigen
+bestanden, want die zijn lane-specifiek en verouderen zodra de code schuift. De drie meetvallen die
+erin zijn gerepareerd staan bovenaan dat bestand: "compileert niet" gelezen als een resultaat terwijl
+een ándere lane de boom had gebroken, "compileert niet" gelezen als groen, en een testnaam die tot de
+eerste witruimte werd gelezen zodat een theorie een lege lijst opleverde. Een mutatie is daar nu
+één ondeelbare wijziging over één of meer plekken, zodat het geval van M5 niet meer uit te drukken is;
+`tools/mutatie-support-m5.py` is daarmee vervallen.
+
+### 46.11 Wat er níet gemeten is
+
+- **`CosmosSupportStore` is niet tegen Cosmos gemeten.** Anders dan bij de urenopslag (§43 en het slot
+  van dit document) is er geen verificatie op `cosmos-soratus-prod` gedaan; de opdracht sloot
+  schrijfacties in Azure uit. Wat daarmee aanname is: dat `ORDER BY c.id DESC` binnen één
+  partitiesleutel inderdaad geen composite index vraagt (de politiek staat op `/*`, dus er is geen
+  reden om iets anders te verwachten), en de RU-kosten van de bladerquery. De eerste echte draad op een
+  klantpartitie is het moment om dat te meten.
+- **Dat de `POST` een `POST` met een antiforgery-token is**, volgt uit de vorm (`FormCard` met een
+  `FormName`, dezelfde vorm als de drie formulieren op het urenscherm) en niet uit een meting. bUnit
+  rendert een `EditForm` als `<form blazor:onsubmit="1">`; dat is de renderer van bUnit en niet die van
+  static SSR. Dezelfde beperking die §29.9 benoemt.
+- **De agentgrondslagen komen in de tests uit `VastePortaalweergaven` en niet uit de echte
+  agentprojectie.** `Vastetelemetriestore.GetAgentsAsync` weigert met een `NotSupportedException` en
+  zegt er zelf bij dat hij alleen het agentdetail bedient; die uitzondering viel in het catch-blok van
+  `SupportDesk` en leverde een escalatie op, dus elke test over een aangenomen antwoord stond rood om
+  een reden die niets met het onderwerp te maken had. Dát de fabriek een klantviewmodel neemt — en dus
+  geen omgevingsdetail kan dragen — staat wel vast, met een reflectietest op de signatuur.
+- **Er is geen enkele echte AI-aanroep gedaan** en er staat geen sleutel in code of configuratie. De
+  naad is geoefend met twee dubbels: één die teruggeeft wat een test opdraagt, en één die een
+  uitzondering gooit met een pad en een HTTP-status erin — juist om te meten dat die tekst nergens in
+  de draad belandt.
+
+### 46.12 Punten van twijfel
+
+1. **`PostQuestionAsync` neemt een `CustomerScope`, en dat is de eerste schrijfactie in dit portaal die
+   op een leesrecht rust.** §2 geeft de klant bij Support wél iets ("bericht sturen: ✓") en het is de
+   enige regel in de rolmatrix waar een klant iets mag veranderen. Waarom een leesrecht genoeg bewijs
+   is: het enige dat die methode kan wegschrijven is een bericht van de klant zelf, in zijn eigen
+   partitie, met de afzender vast. **Wat het openlaat:** een operator krijgt van `ResolveAsync` óók een
+   `CustomerScope` — dat is de rol — dus de aanroep is door een operator te doen, en dan staat er een
+   bericht in de draad met de afzender "klant" en zijn naam eronder. Het scherm doet dat niet (de
+   operatortak heeft geen vraagformulier, en dat is een typeverschil), maar de aanroep is te schrijven.
+   Een eigen scope-type zou een tweede plek zijn waar bepaald wordt wie bij welke klant mag, en dat is
+   de duurdere fout; vandaar deze keuze en deze melding.
+2. **Een klant zonder ingerichte telemetrie-opslag heeft geen supportscherm.** `CustomerScope` bestaat
+   alleen voor een klant met opslag, en dat is precies de klant in onboarding — degene die vragen
+   heeft. Dit is niet nieuw: het urenscherm en het facturatiescherm van de klant hebben dezelfde
+   grens. Het is wél wrijvender bij support dan bij uren, en het hoort in één keer opgelost te worden
+   voor alle drie en niet hier apart.
+3. **`SupportDocumentKeys` staat in `Support/` en hoort bij `PortalDocumentKinds`.** Zelfde
+   werkomstandigheid en zelfde melding als bij `StatementDocumentKeys` in §29: drie sessies in
+   `Data/` is een gegarandeerde botsing. De tussentijd is veilig doordat er een test is die alle
+   `kind`-waarden op dubbelen toetst.
+4. **`SupportGroundKind` heeft geen waarde voor een sprintitem**, terwijl §3.8 open sprintitems als
+   antwoordbron noemt. Die kant wordt door een andere sessie aangelegd en er is vandaag geen weergave
+   om een grondslag uit te bouwen; een enumwaarde die bestaat en nooit wordt gevuld is punt 11. Hij
+   komt erbij als er iets is om hem mee te vullen, en dan hoort er in dezelfde wijziging een fabriek
+   bij te staan.
+5. **De naad krijgt geen gesprek, alleen de ene vraag.** Dat maakt de eerstelijn dommer: hij ziet niet
+   dat de klant hetzelfde drie berichten eerder al vroeg. Bewust zo gelaten — de draad bevat vrije
+   tekst van een operator, en dat is precies de soort tekst waarvan punt 13 en 14 zeggen dat er interne
+   dingen in kunnen staan. Wie de historie erbij wil, moet eerst bedenken wat een oude operatorregel in
+   een prompt doet.
+6. **Een gekaapte of slecht werkende eerstelijn kan de *verkeerde* grondslag kiezen**: op een vraag
+   over juli de bubbel van juni. Dat is een fout die een klant kan zien — de bronregel noemt de maand
+   en verwijst naar het scherm — en dat is het verschil met een verzonnen getal, dat er hetzelfde
+   uitziet als een echt getal. Kleiner, en niet nul.
+7. **De internalsgrens is de vertrouwensgrens.** Een implementatie van `ISupportFirstLine` die in
+   `Soratus.Portal` zelf zou komen, kan wél een grondslag maken en er een verzonnen feit in zetten.
+   Dat is precies de reden dat de naad buiten deze assembly hoort te worden geïmplementeerd, en het
+   hoort in de wijziging te staan die hem toevoegt.
+8. **Twee escapefouten in mijn eigen testbestanden hebben een build tweemaal rood gezet en een
+   mutatieronde van een andere sessie gekost.** De oorzaak is het waard om op te schrijven: de tekens
+   die deze tests toetsen zijn juist tekens die je in een editor niet ziet, en een script dat ze
+   verwerkt kan een escape-reeks in een lítteraal teken veranderen zonder dat het opvalt. Ze staan nu
+   overal als `\uXXXX`, met die reden erbij in `SupportBody` en in de tests. Een bron waarin het
+   verschil tussen "het teken" en "de escape" onzichtbaar is, is niet te reviewen.
+
+### 46.13 Wat er in `Program.cs` bij moet
+
+Twee regels, en de eerstelijn staat er met opzet niet bij.
+
+```csharp
+// ── Support (§3.8) ────────────────────────────────────────────────────────────────────────────
+// De draad staat in de container customers, naast klant, contract, urenregels en de
+// verzendbevestigingen. Scoped, net als IPortalHoursStore en IStatementStore en om dezelfde reden:
+// geen hosted service heeft hem nodig, en dan is scoped de standaard.
+builder.Services.AddScoped<ISupportStore, CosmosSupportStore>();
+builder.Services.AddScoped<ISupportViews, SupportProjection>();
+
+// Het schrijfpad van de klantkant. Concrete klasse en geen interface: er is één schrijfpad en het
+// heeft geen tweede implementatie, en een interface met één implementatie die nergens wordt
+// vervangen is een laag zonder werk.
+builder.Services.AddScoped<SupportDesk>();
+
+// En hier staat met opzet GEEN registratie van ISupportFirstLine.
+//
+// Dat is §29 van de fase-0-afwijkingen toegepast: daar is een plaatshouder achter een naad afgewezen
+// omdat hij "niets gemeten" antwoordt en dat niet te onderscheiden is van een echte "niets gemeten".
+// Hier zou een plaatshouder altijd escaleren, en dat is niet te onderscheiden van een eerstelijn die
+// het niet weet — een storing die zich voordoet als werkende functionaliteit.
+//
+// SupportDesk haalt de naad daarom met GetService op en niet met GetRequiredService, en de
+// afwezigheid is een eigen toestand met een eigen tekst op het scherm (SupportFirstLineState). Een
+// klant leest dan dat een mens antwoordt, en dat is waar. Wie hier een implementatie neerzet, hoort
+// die buiten Soratus.Portal te laten leven: binnen deze assembly is een SupportGround te construeren
+// en dan is het slot op een verzonnen bron weg. Zie punt 46.
+```
 
 ---
 
