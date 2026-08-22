@@ -40,6 +40,18 @@
       Platform/PlatformAgents.cs.
     -->
     <ProjectReference Include="..\Soratus.Agents.Telemetry\Soratus.Agents.Telemetry.csproj" />
+    <!--
+      De AI-eerstelijn van §3.8. De verwijzing loopt deze kant op en niet de andere, en dat is de kern
+      van het ontwerp: dat project kent SupportGround niet, dus het kan geen grondslag maken en geen
+      feit teruggeven. Het krijgt regels tekst en het geeft een geheel getal terug — de plaats van het
+      gekozen feit in de lijst die het van ons kreeg.
+
+      Beide richtingen tegelijk (het model buiten de assembly én de registratie in Program.cs, zoals
+      §46.13 voorschreef) is niet te bouwen: MSBuild weigert een circulaire projectverwijzing met
+      MSB4006, ook met ReferenceOutputAssembly="false". Gemeten; zie §47.1 van
+      docs/agent-portal/fase-0-afwijkingen.md.
+    -->
+    <ProjectReference Include="..\Soratus.Support.FirstLine\Soratus.Support.FirstLine.csproj" />
   </ItemGroup>
 
   <ItemGroup>

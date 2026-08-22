@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>Soratus.Support.FirstLine</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Azure.Core en niet Azure.Identity: dit project máákt geen credential. Het krijgt de
+      TokenCredential van het portaal geïnjecteerd — dezelfde managed identity die Cosmos en de
+      Communication Service al gebruiken. Een tweede DefaultAzureCredential zou een tweede
+      tokencache en een tweede plek zijn waar de identiteit wordt gekozen.
+
+      1.53.0 is de versie die Azure.Identity 1.21.0 in Soratus.Portal al binnenhaalt, gemeten in
+      obj/project.assets.json. Twee versies van Azure.Core in één proces is geen fout maar het is
+      een verschil dat niemand heeft besloten.
+    -->
+    <PackageReference Include="Azure.Core" Version="1.53.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <!--
+      Voor section.Get<FirstLineOptions>() in de registratie. Die lezing moet vóór Build() gebeuren,
+      want dan is nog te bepalen of er iets geregistreerd moet worden; IOptions bestaat op dat moment
+      niet. Zie AddSoratusFirstLine voor waarom dat geen tweede besluit is.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <!-- Voor AddHttpClient/IHttpClientFactory; een klassenbibliotheek krijgt die niet uit het Web-SDK. -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      GEEN ProjectReference naar Soratus.Portal, en dat is de hele opzet van dit project.
+
+      Dit project kent SupportGround niet en kan er dus geen maken, geen wijzigen en geen noemen.
+      Wat het krijgt zijn regels tekst die het portaal heeft opgemaakt, en wat het teruggeeft is een
+      geheel getal: de plaats in die lijst. Een verzonnen feit is daarmee niet "afgeschermd" maar
+      niet uit te drukken — er is in geen enkele richting een tekstveld voor een feit.
+
+      De verwijzing loopt de andere kant op: Soratus.Portal verwijst naar dit project om het te
+      registreren. Beide richtingen tegelijk is geen ontwerpkeuze maar onmogelijk; zie §47 van
+      docs/agent-portal/fase-0-afwijkingen.md voor de meting (MSB4006).
+    -->
+    <InternalsVisibleTo Include="Soratus.Support.FirstLine.Tests" />
+  </ItemGroup>
+
+</Project>

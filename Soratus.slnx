@@ -14,6 +14,8 @@
   <Project Path="Soratus.Mcp.Uren/Soratus.Mcp.Uren.csproj" />
   <Project Path="Soratus.Portal.Tests/Soratus.Portal.Tests.csproj" />
   <Project Path="Soratus.Portal/Soratus.Portal.csproj" />
+  <Project Path="Soratus.Support.FirstLine.Tests/Soratus.Support.FirstLine.Tests.csproj" />
+  <Project Path="Soratus.Support.FirstLine/Soratus.Support.FirstLine.csproj" />
   <Project Path="Soratus.Web.Tests/Soratus.Web.Tests.csproj" />
   <Project Path="Soratus.Web/Soratus.Web.csproj" />
 </Solution>

@@ -15,6 +15,7 @@ using Soratus.Portal.Security;
 using Soratus.Portal.Sprints;
 using Soratus.Portal.Support;
 using Soratus.Portal.Views;
+using Soratus.Support.FirstLine;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -321,6 +322,36 @@ builder.Services.AddScoped<SupportDesk>();
 // afwezigheid is een eigen toestand met een eigen tekst op het scherm. Een klant leest dan dat een
 // mens antwoordt, en dat is waar. Zie punt 46.
 
+// ── De AI-eerstelijn (§3.8, fase 5) ──────────────────────────────────────────────────────────
+// Ná de TokenCredential hierboven, en dat is geen stijl: de kiezer vraagt hem om een token voor
+// aoai-soratus-prod, met dezelfde managed identity als voor Cosmos en de Communication Service. Er is
+// nergens een api-key en er is ook geen veld om er een in te zetten.
+//
+// Deze aanroep bindt PortalFirstLine en registreert de kiezer dan en slechts dan als er een endpoint
+// én een deployment staat, Enabled aan is, en dit geen Development is. Geen ValidateOnStart en geen
+// uitzondering, om dezelfde reden als bij PortalData, PortalMail, PortalCosts en PortalAlerts: een
+// inrichtingsfout die het opstarten tegenhoudt neemt /healthz mee en rolt de uitrol terug.
+var firstLine = builder.AddSoratusFirstLine();
+
+// En hier zit de schakelaar. Staat de eerstelijn niet aan, dan is er geen ISupportFirstLine, en dan
+// leest de klant op het supportscherm dat een mens antwoordt — en dat is waar. Dat is punt 46.9
+// letterlijk: een geregistreerde eerstelijn die niets vraagt zou op elke vraag escaleren terwijl het
+// scherm zegt dat er een agent meekijkt, en dat is een storing die zich voordoet als werkende
+// functionaliteit.
+//
+// De standaard is uit, net zoals PortalMail:DryRun standaard aan staat en om dezelfde reden: een
+// aanroep aan een taalmodel kost geld en gaat naar een externe dienst, en de onveilige stand hoort
+// iets te zijn dat iemand aanzet. Waarom hij niet in Development draait staat in FirstLineOptions en
+// het is een andere reden dan bij de collectors: geen vervuiling van klantgegevens, maar capaciteit
+// van productie die opgaat aan een lokale klik, en klantgegevens die vanaf een laptop het proces
+// verlaten.
+//
+// Scoped, net als ISupportStore, ISupportViews en SupportDesk: dit hangt aan één vraag van één mens.
+if (firstLine.IsReady)
+{
+    builder.Services.AddScoped<ISupportFirstLine, ChoosingFirstLine>();
+}
+
 // ── De sprintcollector (§3.4, fase 5) ────────────────────────────────────────────────────────
 // Geen ValidateOnStart, om dezelfde reden als bij PortalData, PortalMail en PortalCosts.
 builder.Services.AddOptions<SprintOptions>()
@@ -418,6 +449,12 @@ var app = builder.Build();
 // Wat er van het aansluiten als agent-host terecht is gekomen. Hier en niet in de opstartcode: daar
 // bestaat de logger nog niet. Eén regel per start, met de reden erbij.
 app.Logger.Log(platformAgents.Level, "{Explanation}", platformAgents.Explanation);
+
+// Wat er van het aansluiten van de eerstelijn terecht is gekomen. Hier en niet in de opstartcode:
+// daar bestaat de logger nog niet. Eén regel per start, met de reden erbij — een eerstelijn die niet
+// is aangesloten hoort dat te zeggen, want anders is een supportscherm zonder AI-antwoorden niet van
+// een kapotte inrichting te onderscheiden.
+app.Logger.Log(firstLine.Level, "{Explanation}", firstLine.Explanation);
 
 if (!app.Environment.IsDevelopment())
 {
