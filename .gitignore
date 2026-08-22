@@ -495,9 +495,21 @@ Soratus.Web/wwwroot/img/cases/*.orig.png
 # Python-cache van de campagnescripts
 handoff/social/__pycache__/
 
+# Python-cache van het meetgereedschap. Sinds tools/mutatie.py de gedeelde
+# meetlaag is, importeren de lanebestanden hem en laat Python er een cache naast
+# staan.
+tools/__pycache__/
+
 # Uitvoer van `az deployment ... what-if`. Werkmateriaal bij het schrijven van
 # Bicep, geen bron van waarheid.
 .whatif/
+
+# Uitvoer van `az bicep build`. Om dezelfde reden als .whatif/: de bron van
+# waarheid is het .bicep-bestand, en de gecompileerde ARM-vorm ernaast is een
+# tweede kopie die stil kan verouderen. Een regel op het patroon en niet op één
+# bestandsnaam: hij belandt in de map waar het commando wordt gedraaid, dus de
+# volgende keer heet hij anders.
+*.compiled.json
 
 # Persoonlijke Claude Code-instellingen. launch.json blijft er wel in: dat is de
 # startconfiguratie van de projecten en is voor iedereen hetzelfde.
